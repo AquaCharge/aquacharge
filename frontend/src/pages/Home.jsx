@@ -24,7 +24,7 @@ export default function Home() {
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold text-gray-900">AquaCharge</h1>
-          <p className="text-lg text-gray-600">Minimal Starter Dashboard</p>
+          <p className="text-lg text-gray-600">Home</p>
         </div>
 
         <Separator />
@@ -83,16 +83,7 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Footer */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <p className="text-sm text-blue-700">
-              💡 <strong>Development Tip:</strong> Edit{' '}
-              <code className="bg-blue-100 px-1 rounded">frontend/src/App.jsx</code> and{' '}
-              <code className="bg-blue-100 px-1 rounded">backend/app.py</code> to continue building.
-            </p>
-          </CardContent>
-        </Card>
+        
       </div>
     </div>
   )

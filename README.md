@@ -30,8 +30,6 @@ A minimal React + Flask starter for **AquaCharge** — an application exploring 
 - **Flask:** 3.0.x
 - **React:** 18.x
 
-> Tip: Don’t commit local environments. `.gitignore` should ignore `./backend/.venv` and `frontend/node_modules`.
-
 ---
 
 ## ▶️ Run the Backend (Flask) & Create Your Virtual Environment

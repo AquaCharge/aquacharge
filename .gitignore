@@ -1,0 +1,32 @@
+# --- Python virtual environments (macOS & Windows) ---
+.venv/
+venv/
+env/
+ENV/
+
+# If someone picked custom names like venv37, venv-win, etc.
+venv*/
+.venv*/
+
+# --- Python cache/artifacts ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Environment files ---
+.env
+.env.*
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# (Optional) Frontend deps/build — safe to ignore if present in this repo
+node_modules/
+dist/
+.vite/

@@ -1,25 +1,43 @@
+# AquaCharge
 
-# AquaCharge — Minimal Starter (React + Flask)
-
-A minimal starter for **AquaCharge**, with:
-- **frontend/**: React (Vite) using **Yarn**
-- **backend/**: Flask API
-
-This guide includes **Windows & macOS/Linux** setup and how to avoid committing your virtual environment (venv).
+A minimal React + Flask starter for **AquaCharge** — an application exploring EV V2G booking and monitoring.
 
 ---
 
-## Prerequisites
-- Node.js 18+ and **Yarn**
-- Python 3.10+ (3.11 recommended)
+## 👥 Developers
+
+- Aidan Foster
+- Alex Groom
+- Lucas Savoie
+- Gabe Vadureanu
 
 ---
 
-## Getting started
+## 🧰 Tech Stack
 
-### 1) Backend (Flask)
+- **Frontend:** React (Vite), Yarn
+- **Backend:** Python, Flask, Flask-CORS
+- **Dev Proxy:** Vite → Flask (`/api` proxied to `http://localhost:5050`)
+- **Tooling:** Git, virtualenv, Node.js/Yarn
 
-#### macOS / Linux
+---
+
+## ✅ Preferred Versions
+
+- **Python:** 3.11 (3.10+ OK)
+- **Node.js:** 18 or 20 LTS
+- **Yarn:** 1.x or 4.x (Berry) — team choice
+- **Flask:** 3.0.x
+- **React:** 18.x
+
+> Tip: Don’t commit local environments. `.gitignore` should ignore `./backend/.venv` and `frontend/node_modules`.
+
+---
+
+## ▶️ Run the Backend (Flask) & Create Your Virtual Environment
+
+### macOS / Linux
+
 ```bash
 cd backend
 python3 -m venv .venv
@@ -28,7 +46,10 @@ pip install -r requirements.txt
 flask --app app run --debug --port 5050
 ```
 
-#### Windows (PowerShell)
+Now available at **http://localhost:5050/api/health**
+
+### Windows (PowerShell)
+
 ```powershell
 cd backend
 py -3.11 -m venv .venv
@@ -37,70 +58,62 @@ pip install -r requirements.txt
 flask --app app run --debug --port 5050
 ```
 
-Your API should be available at: **http://localhost:5050/api/health**
+---
 
-### 2) Frontend (React + Vite with Yarn)
-Open a new terminal:
+## ▶️ Run the Frontend (React + Vite with Yarn)
 
 ```bash
 cd frontend
 yarn install
 yarn dev
 ```
-Your app is now at: **http://localhost:5173**
 
-The Vite dev server proxies **/api** to Flask on **http://localhost:5050** (see `frontend/vite.config.js`).
+Open **http://localhost:5173**.  
+Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite.config.js`).
 
 ---
 
-## Directory structure
+## 🤝 How to Contribute (Branch Flow)
+
+1. **Sync main**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+2. **Create a feature branch**
+   ```bash
+   git checkout -b feature/<short-description>
+   ```
+3. **Commit regularly**
+   ```bash
+   git add .
+   git commit -m "feat: add booking list component"
+   ```
+4. **Push and open a PR**
+   ```bash
+   git push -u origin feature/<short-description>
+   # then open a Pull Request in GitHub from your branch → main
+   ```
+5. **Reviews & merge**
+   - Keep PRs small and focused.
+   - Address comments, then squash/merge.
+
+---
+
+## 📂 Directory Structure
+
 ```
-.
+aquacharge/
 ├─ backend/
-│  ├─ app.py
+│  ├─ app.py                 # Flask app: /api/health, /api/sites
 │  └─ requirements.txt
-└─ frontend/
-   ├─ index.html
-   ├─ package.json
-   ├─ vite.config.js
-   └─ src/
-      ├─ main.jsx
-      └─ App.jsx
+├─ frontend/
+│  ├─ index.html
+│  ├─ package.json           # Yarn
+│  ├─ vite.config.js         # Proxies /api → http://localhost:5050
+│  └─ src/
+│     ├─ main.jsx
+│     └─ App.jsx
+├─ .gitignore
+└─ README.md
 ```
-
----
-
-## Avoid committing virtual environments and node_modules
-
-**Do NOT commit your local Python venv or node_modules; they are OS-specific and huge.**  
-We've added these to `.gitignore`, but if you already pushed them once, remove them from Git history.
-
-### Ensure ignored going forward
-These entries are in `.gitignore`:
-```
-.venv/
-venv/
-node_modules/
-```
-
-### If you accidentally committed a venv
-```bash
-git rm -r --cached .venv  # or 'venv' if that's your folder name
-git commit -m "Remove local venv from repo and ignore it"
-git push
-```
-
-> Need to purge it from the entire history? Consider `git filter-repo` or BFG Repo-Cleaner (history rewrite — coordinate with your team).
-
----
-
-## Making changes
-- Frontend: edit `frontend/src/App.jsx`
-- Backend: edit `backend/app.py` and restart Flask (or keep `--debug` for auto-reload)
-
----
-
-## Troubleshooting
-- **Frontend says "loading..."**: Make sure Flask is running on **port 5050** and you can GET `http://localhost:5050/api/health`.
-- **Proxy issues**: Check `frontend/vite.config.js` → proxy target is `http://localhost:5050`.
-- **Windows execution policy**: If activation is blocked, run PowerShell as admin and `Set-ExecutionPolicy RemoteSigned` (then retry activation).

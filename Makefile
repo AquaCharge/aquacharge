@@ -36,7 +36,7 @@ build:
 	@echo "Building frontend..."
 	cd $(FRONTEND_DIR) && yarn build
 	@echo "Building backend..."
-	cd $(BACKEND_DIR) && python setup.py build
+	cd $(BACKEND_DIR) && python app.py build
 
 lint:
 	@echo "Linting frontend..."

@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  Main:
+  frontend:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,14 +24,29 @@ jobs:
           corepack enable
           corepack prepare yarn@1.22.22 --activate
 
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: yarn run lint
+
+      - name: Test frontend
+        working-directory: ./frontend
+        run: yarn test --passWithNoTests
+
+  backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: yarn install --forzen-lockfile
 
       - name: Install backend dependencies
         working-directory: ./backend
@@ -39,17 +54,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lint frontend
-        working-directory: ./frontend
-        run: yarn run lint
-
       - name: Lint backend
         working-directory: ./backend
         run: flake8 .
 
-      - name: Test frontend
-        working-directory: ./frontend
-        run: yarn test --passWithNoTests
+  integration:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
       - name: Build Docker images
         run: |

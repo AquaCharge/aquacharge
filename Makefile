@@ -23,7 +23,7 @@ endif
 FRONTEND_DIR ?= frontend
 BACKEND_DIR ?= backend
 
-.PHONY: test build lint install run
+.PHONY: test build lint install run docker ci
 
 
 test:
@@ -71,3 +71,15 @@ run:
 	@echo "Running backend..."
 	cd $(BACKEND_DIR) && $(VENV_PYTHON) app.py
 endif
+
+docker:
+	@echo "Building and starting Docker containers..."
+	docker-compose up --build
+
+docker-down:
+	@echo "Stopping and removing Docker containers..."
+	docker-compose down
+
+ci:
+	@echo "Running CI/CD pipeline locally with act..."
+	act -W .github/workflows/branch.yml

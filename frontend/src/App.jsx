@@ -11,7 +11,7 @@ export default function App() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <main className="flex-1">
+          <main className="flex-1 p-2">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/stations" element={<Stations />} />

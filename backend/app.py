@@ -18,7 +18,6 @@ def sites():
         {"id": "site_2", "name": "City Center Lot", "city": "Saint John"}
     ])
 
-
 @app.get("/api/vessels")
 def vessels():
     return jsonify([

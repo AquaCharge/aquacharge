@@ -6,18 +6,17 @@ import uuid
 from typing import Optional, Dict, Any
 
 from backend.models.baseModel import BaseModel
+from backend.models.station import StationStatus
+
+class ChargerStatus(Enum):
+    ACTIVE = 1
+    MAINTENANCE = 2
+    INACTIVE = 3
 
 @dataclass
-class Vessel:
+class Charger(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    userId: str = ""
-    displayName: str = ""
-    vesselType: str = ""
+    chargingStationId: str = ""
     chargerType: str = ""
-    capacity: float = 0.0
-    maxChargeRate: float = 0.0
-    minChargeRate: float = 0.0
-    rangeMeters: float = 0.0
+    maxRate: float = 0.0
     active: bool = True
-    createdAt: datetime = field(default_factory=datetime.now)
-    updatedAt: Optional[datetime] = None

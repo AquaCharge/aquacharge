@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+from api import register_blueprints
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})

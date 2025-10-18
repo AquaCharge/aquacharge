@@ -57,6 +57,30 @@ else
 	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
 endif
 
+lint-format-backend:
+ifeq ($(OS),Windows_NT)
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+else
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+endif
+	@echo "Linting backend..."
+	cd $(BACKEND_DIR) && flake8
+
+lint-fix-backend:
+ifeq ($(OS),Windows_NT)
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+else
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+endif
+	@echo "Auto-formatting backend code with black..."
+	cd $(BACKEND_DIR) && black .
+	
+lint-all-backend: lint-format-backend lint-fix-backend
+
 ifeq ($(OS),Windows_NT)
 run:
 	@echo "Starting frontend and backend..."
@@ -83,3 +107,11 @@ docker-down:
 ci:
 	@echo "Running CI/CD pipeline locally with act..."
 	act -W .github/workflows/branch.yml
+
+test-backend:
+	@echo "Running pytest for backend..."
+ifeq ($(OS),Windows_NT)
+	cd $(BACKEND_DIR) && $(VENV_ACTIVATE) && python -m pytest
+else
+	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && python -m pytest
+endif

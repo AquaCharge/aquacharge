@@ -1,28 +1,26 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any
+from datetime import datetime
+import uuid
+
+from .baseModel import BaseModel
 
 
 @dataclass
-class Vessel:
-    id: str
-    user_id: str
-    name: str
-    vessel_type: str
-    battery_capacity: float
-    charger_compatibility: list[str]
-    registration_number: str
-    created_at: str
-    updated_at: Optional[str] = None
+class Vessel(BaseModel):
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    userId: str = ""
+    displayName: str = ""
+    vesselType: str = ""
+    chargerType: str = ""
+    capacity: float = 0.0
+    maxChargeRate: float = 0.0
+    minChargeRate: float = 0.0
+    rangeMeters: float = 0.0
+    active: bool = True
+    createdAt: datetime = field(default_factory=datetime.now)
+    updatedAt: Optional[datetime] = None
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "userId": self.user_id,
-            "name": self.name,
-            "vesselType": self.vessel_type,
-            "batteryCapacity": self.battery_capacity,
-            "chargerCompatibility": self.charger_compatibility,
-            "registrationNumber": self.registration_number,
-            "createdAt": self.created_at,
-            "updatedAt": self.updated_at,
-        }
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)

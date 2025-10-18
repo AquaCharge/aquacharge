@@ -107,3 +107,11 @@ docker-down:
 ci:
 	@echo "Running CI/CD pipeline locally with act..."
 	act -W .github/workflows/branch.yml
+
+test-backend:
+	@echo "Running pytest for backend..."
+ifeq ($(OS),Windows_NT)
+	cd $(BACKEND_DIR) && $(VENV_ACTIVATE) && python -m pytest
+else
+	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && python -m pytest
+endif

@@ -7,6 +7,107 @@ chargers_bp = Blueprint('chargers', __name__)
 # In-memory storage (replace with actual database)
 chargers_db: Dict[str, Charger] = {}
 
+# Initialize with sample data
+def init_sample_chargers():
+    if not chargers_db:  # Only initialize if empty
+        sample_chargers = [
+            # Marina Bay Charging Hub chargers
+            Charger(
+                id="charger-001",
+                chargingStationId="station-001",
+                chargerType="Type 2 AC",
+                maxRate=22.0,
+                active=True
+            ),
+            Charger(
+                id="charger-002",
+                chargingStationId="station-001",
+                chargerType="CCS DC",
+                maxRate=50.0,
+                active=True
+            ),
+            Charger(
+                id="charger-003",
+                chargingStationId="station-001",
+                chargerType="CHAdeMO",
+                maxRate=50.0,
+                active=True
+            ),
+            # Harbour View Electric Dock chargers
+            Charger(
+                id="charger-004",
+                chargingStationId="station-002",
+                chargerType="Type 2 AC",
+                maxRate=11.0,
+                active=True
+            ),
+            Charger(
+                id="charger-005",
+                chargingStationId="station-002",
+                chargerType="CCS DC",
+                maxRate=75.0,
+                active=True
+            ),
+            # Blue Water Marina Station chargers
+            Charger(
+                id="charger-006",
+                chargingStationId="station-003",
+                chargerType="Type 2 AC",
+                maxRate=22.0,
+                active=False
+            ),
+            Charger(
+                id="charger-007",
+                chargingStationId="station-003",
+                chargerType="Tesla Supercharger",
+                maxRate=120.0,
+                active=False
+            ),
+            # Nordic Fjord Charging Point chargers
+            Charger(
+                id="charger-008",
+                chargingStationId="station-004",
+                chargerType="Type 2 AC",
+                maxRate=22.0,
+                active=True
+            ),
+            Charger(
+                id="charger-009",
+                chargingStationId="station-004",
+                chargerType="CCS DC",
+                maxRate=100.0,
+                active=True
+            ),
+            # Mediterranean Charging Hub chargers
+            Charger(
+                id="charger-010",
+                chargingStationId="station-006",
+                chargerType="Type 2 AC",
+                maxRate=7.4,
+                active=True
+            ),
+            Charger(
+                id="charger-011",
+                chargingStationId="station-006",
+                chargerType="CCS DC",
+                maxRate=50.0,
+                active=True
+            ),
+            Charger(
+                id="charger-012",
+                chargingStationId="station-006",
+                chargerType="CHAdeMO",
+                maxRate=50.0,
+                active=True
+            )
+        ]
+        
+        for charger in sample_chargers:
+            chargers_db[charger.id] = charger
+
+# Initialize sample data when module is imported
+init_sample_chargers()
+
 @chargers_bp.route('', methods=['GET'])
 def get_chargers():
     """Get all chargers, optionally filtered by station"""

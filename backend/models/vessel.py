@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 from backend.models.baseModel import BaseModel
 
 @dataclass
-class Vessel:
+class Vessel(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     userId: str = ""
     displayName: str = ""
@@ -21,3 +21,7 @@ class Vessel:
     active: bool = True
     createdAt: datetime = field(default_factory=datetime.now)
     updatedAt: Optional[datetime] = None
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)

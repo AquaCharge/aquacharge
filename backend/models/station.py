@@ -22,3 +22,7 @@ class Station(BaseModel):
     provinceOrState: str = ""
     country: str = ""
     status: StationStatus = StationStatus.ACTIVE
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)

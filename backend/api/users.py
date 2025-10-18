@@ -9,6 +9,73 @@ users_bp = Blueprint('users', __name__)
 # In-memory storage (replace with actual database)
 users_db: Dict[str, User] = {}
 
+# Initialize with sample data
+def init_sample_users():
+    if not users_db:  # Only initialize if empty
+        sample_users = [
+            User(
+                id="user-001",
+                username="admin_user",
+                email="admin@aquacharge.com",
+                passwordHash=hashlib.sha256("admin123".encode()).hexdigest(),
+                role=UserRole.ADMIN.value,
+                active=True,
+                orgId="org-001",
+                createdAt=datetime(2024, 1, 15, 10, 30, 0),
+                updatedAt=datetime(2024, 2, 1, 14, 20, 0)
+            ),
+            User(
+                id="user-002",
+                username="marina_operator",
+                email="operator@blueharbor.com",
+                passwordHash=hashlib.sha256("operator456".encode()).hexdigest(),
+                role=UserRole.OPERATOR.value,
+                active=True,
+                orgId="org-002",
+                createdAt=datetime(2024, 2, 10, 9, 15, 0),
+                updatedAt=None
+            ),
+            User(
+                id="user-003",
+                username="boat_owner",
+                email="captain@oceanbreezes.com",
+                passwordHash=hashlib.sha256("user789".encode()).hexdigest(),
+                role=UserRole.USER.value,
+                active=True,
+                orgId=None,
+                createdAt=datetime(2024, 3, 5, 16, 45, 0),
+                updatedAt=datetime(2024, 3, 20, 11, 30, 0)
+            ),
+            User(
+                id="user-004",
+                username="yacht_club",
+                email="management@royalyacht.com",
+                passwordHash=hashlib.sha256("yacht2024".encode()).hexdigest(),
+                role=UserRole.USER.value,
+                active=True,
+                orgId="org-003",
+                createdAt=datetime(2024, 1, 20, 13, 10, 0),
+                updatedAt=None
+            ),
+            User(
+                id="user-005",
+                username="fleet_manager",
+                email="fleet@commercialmarine.com",
+                passwordHash=hashlib.sha256("fleet555".encode()).hexdigest(),
+                role=UserRole.USER.value,
+                active=False,
+                orgId="org-004",
+                createdAt=datetime(2024, 4, 1, 8, 0, 0),
+                updatedAt=datetime(2024, 4, 15, 17, 25, 0)
+            )
+        ]
+        
+        for user in sample_users:
+            users_db[user.id] = user
+
+# Initialize sample data when module is imported
+init_sample_users()
+
 @users_bp.route('', methods=['GET'])
 def get_users():
     """Get all users"""

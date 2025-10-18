@@ -57,6 +57,15 @@ else
 	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
 endif
 
+source:
+ifeq ($(OS),Windows_NT)
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+else
+	@echo "Activating virtual environment and installing backend dependencies..."
+	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && $(VENV_PIP) install -r requirements.txt
+endif
+
 ifeq ($(OS),Windows_NT)
 run:
 	@echo "Starting frontend and backend..."

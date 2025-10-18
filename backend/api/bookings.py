@@ -1,12 +1,119 @@
 from flask import Blueprint, jsonify, request
 from backend.models.booking import Booking, BookingStatus
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict
 
 bookings_bp = Blueprint('bookings', __name__)
 
 # In-memory storage (replace with actual database)
 bookings_db: Dict[str, Booking] = {}
+
+# Initialize with sample data
+def init_sample_bookings():
+    if not bookings_db:  # Only initialize if empty
+        base_time = datetime(2024, 10, 18, 8, 0, 0)  # Starting from today
+        
+        sample_bookings = [
+            # Completed bookings
+            Booking(
+                id="booking-001",
+                userId="user-003",
+                vesselId="vessel-001",
+                stationId="station-001",
+                startTime=base_time - timedelta(days=5, hours=2),
+                endTime=base_time - timedelta(days=5),
+                status=BookingStatus.COMPLETED,
+                chargerType="Type 2 AC",
+                createdAt=base_time - timedelta(days=7)
+            ),
+            Booking(
+                id="booking-002",
+                userId="user-004",
+                vesselId="vessel-003",
+                stationId="station-002",
+                startTime=base_time - timedelta(days=3, hours=3),
+                endTime=base_time - timedelta(days=3, hours=1),
+                status=BookingStatus.COMPLETED,
+                chargerType="Type 2 AC",
+                createdAt=base_time - timedelta(days=5)
+            ),
+            # Confirmed upcoming bookings
+            Booking(
+                id="booking-003",
+                userId="user-003",
+                vesselId="vessel-002",
+                stationId="station-001",
+                startTime=base_time + timedelta(hours=4),
+                endTime=base_time + timedelta(hours=6),
+                status=BookingStatus.CONFIRMED,
+                chargerType="CCS DC",
+                createdAt=base_time - timedelta(days=2)
+            ),
+            Booking(
+                id="booking-004",
+                userId="user-005",
+                vesselId="vessel-005",
+                stationId="station-004",
+                startTime=base_time + timedelta(days=1, hours=6),
+                endTime=base_time + timedelta(days=1, hours=8),
+                status=BookingStatus.CONFIRMED,
+                chargerType="CHAdeMO",
+                createdAt=base_time - timedelta(days=1)
+            ),
+            # Pending bookings
+            Booking(
+                id="booking-005",
+                userId="user-002",
+                vesselId="vessel-006",
+                stationId="station-001",
+                startTime=base_time + timedelta(days=2, hours=10),
+                endTime=base_time + timedelta(days=2, hours=12),
+                status=BookingStatus.PENDING,
+                chargerType="Type 2 AC",
+                createdAt=base_time - timedelta(hours=6)
+            ),
+            Booking(
+                id="booking-006",
+                userId="user-004",
+                vesselId="vessel-003",
+                stationId="station-006",
+                startTime=base_time + timedelta(days=3, hours=14),
+                endTime=base_time + timedelta(days=3, hours=16),
+                status=BookingStatus.PENDING,
+                chargerType="Type 2 AC",
+                createdAt=base_time - timedelta(hours=2)
+            ),
+            # Cancelled booking
+            Booking(
+                id="booking-007",
+                userId="user-005",
+                vesselId="vessel-004",
+                stationId="station-003",
+                startTime=base_time - timedelta(days=1, hours=10),
+                endTime=base_time - timedelta(days=1, hours=8),
+                status=BookingStatus.CANCELLED,
+                chargerType="CCS DC",
+                createdAt=base_time - timedelta(days=3)
+            ),
+            # More future bookings
+            Booking(
+                id="booking-008",
+                userId="user-003",
+                vesselId="vessel-001",
+                stationId="station-002",
+                startTime=base_time + timedelta(days=7, hours=9),
+                endTime=base_time + timedelta(days=7, hours=11),
+                status=BookingStatus.CONFIRMED,
+                chargerType="Type 2 AC",
+                createdAt=base_time - timedelta(hours=12)
+            )
+        ]
+        
+        for booking in sample_bookings:
+            bookings_db[booking.id] = booking
+
+# Initialize sample data when module is imported
+init_sample_bookings()
 
 @bookings_bp.route('', methods=['GET'])
 def get_bookings():

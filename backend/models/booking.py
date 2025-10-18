@@ -26,6 +26,10 @@ class Booking(BaseModel):
     status: BookingStatus = BookingStatus.PENDING
     chargerType: str = ""
     createdAt: datetime = field(default_factory=datetime.now)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)
 
 
 

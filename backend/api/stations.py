@@ -7,6 +7,78 @@ stations_bp = Blueprint('stations', __name__)
 # In-memory storage (replace with actual database)
 stations_db: Dict[str, Station] = {}
 
+# Initialize with sample data
+def init_sample_stations():
+    if not stations_db:  # Only initialize if empty
+        sample_stations = [
+            Station(
+                id="station-001",
+                displayName="Marina Bay Charging Hub",
+                longitude=-123.1207,
+                latitude=49.2827,
+                city="Vancouver",
+                provinceOrState="British Columbia",
+                country="Canada",
+                status=StationStatus.ACTIVE
+            ),
+            Station(
+                id="station-002",
+                displayName="Harbour View Electric Dock",
+                longitude=-122.4194,
+                latitude=37.7749,
+                city="San Francisco",
+                provinceOrState="California",
+                country="USA",
+                status=StationStatus.ACTIVE
+            ),
+            Station(
+                id="station-003",
+                displayName="Blue Water Marina Station",
+                longitude=-80.1918,
+                latitude=25.7617,
+                city="Miami",
+                provinceOrState="Florida",
+                country="USA",
+                status=StationStatus.MAINTENANCE
+            ),
+            Station(
+                id="station-004",
+                displayName="Nordic Fjord Charging Point",
+                longitude=10.7522,
+                latitude=59.9139,
+                city="Oslo",
+                provinceOrState="Oslo",
+                country="Norway",
+                status=StationStatus.ACTIVE
+            ),
+            Station(
+                id="station-005",
+                displayName="Sydney Harbour Electric",
+                longitude=151.2093,
+                latitude=-33.8688,
+                city="Sydney",
+                provinceOrState="New South Wales",
+                country="Australia",
+                status=StationStatus.INACTIVE
+            ),
+            Station(
+                id="station-006",
+                displayName="Mediterranean Charging Hub",
+                longitude=2.1734,
+                latitude=41.3851,
+                city="Barcelona",
+                provinceOrState="Catalonia",
+                country="Spain",
+                status=StationStatus.ACTIVE
+            )
+        ]
+        
+        for station in sample_stations:
+            stations_db[station.id] = station
+
+# Initialize sample data when module is imported
+init_sample_stations()
+
 @stations_bp.route('', methods=['GET'])
 def get_stations():
     """Get all stations, optionally filtered by city or status"""

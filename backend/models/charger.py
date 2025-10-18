@@ -20,3 +20,7 @@ class Charger(BaseModel):
     chargerType: str = ""
     maxRate: float = 0.0
     active: bool = True
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)

@@ -1,16 +1,16 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Dict, Any
 from enum import Enum
 import uuid
-from typing import Optional, Dict, Any
 
 from backend.models.baseModel import BaseModel
+
 
 class StationStatus(Enum):
     ACTIVE = 1
     MAINTENANCE = 2
     INACTIVE = 3
+
 
 @dataclass
 class Station(BaseModel):
@@ -22,7 +22,7 @@ class Station(BaseModel):
     provinceOrState: str = ""
     country: str = ""
     status: StationStatus = StationStatus.ACTIVE
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
         return cls(**data)

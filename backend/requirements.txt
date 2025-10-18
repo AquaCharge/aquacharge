@@ -2,3 +2,4 @@
 Flask==3.0.3
 Flask-Cors==4.0.1
 flake8==5.0.4
+black==25.9.0

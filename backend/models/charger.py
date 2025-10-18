@@ -1,17 +1,16 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Dict, Any
 from enum import Enum
 import uuid
-from typing import Optional, Dict, Any
 
 from backend.models.baseModel import BaseModel
-from backend.models.station import StationStatus
+
 
 class ChargerStatus(Enum):
     ACTIVE = 1
     MAINTENANCE = 2
     INACTIVE = 3
+
 
 @dataclass
 class Charger(BaseModel):
@@ -20,7 +19,7 @@ class Charger(BaseModel):
     chargerType: str = ""
     maxRate: float = 0.0
     active: bool = True
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
         return cls(**data)

@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 from datetime import datetime
-from enum import Enum
 import uuid
-from typing import Optional, Dict, Any
 
 from backend.models.baseModel import BaseModel
+
 
 @dataclass
 class Vessel(BaseModel):
@@ -21,7 +20,7 @@ class Vessel(BaseModel):
     active: bool = True
     createdAt: datetime = field(default_factory=datetime.now)
     updatedAt: Optional[datetime] = None
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
         return cls(**data)

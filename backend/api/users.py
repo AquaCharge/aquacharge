@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from backend.models.user import User, UserRole
+from models.user import User, UserRole
 from datetime import datetime
 from typing import Dict
 import hashlib

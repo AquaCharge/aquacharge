@@ -3,7 +3,7 @@ from typing import Dict, Any
 from enum import Enum
 import uuid
 
-from backend.models.baseModel import BaseModel
+from .baseModel import BaseModel
 
 
 class ChargerStatus(Enum):

@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from backend.models.vessel import Vessel
+from models.vessel import Vessel
 from datetime import datetime
 from typing import Dict
 

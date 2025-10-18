@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from backend.models.station import Station, StationStatus
+from models.station import Station, StationStatus
 from typing import Dict
 
 stations_bp = Blueprint("stations", __name__)

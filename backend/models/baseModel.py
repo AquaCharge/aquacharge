@@ -1,4 +1,4 @@
-# models/base.py
+
 from abc import ABC, abstractmethod
 from dataclasses import asdict
 from typing import Dict, Any

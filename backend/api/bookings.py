@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from backend.models.booking import Booking, BookingStatus
+from models.booking import Booking, BookingStatus
 from datetime import datetime, timedelta
 from typing import Dict
 

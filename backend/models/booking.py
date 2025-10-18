@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 import uuid
 
-from backend.models.baseModel import BaseModel
+from .baseModel import BaseModel
 
 
 # Enum for booking status

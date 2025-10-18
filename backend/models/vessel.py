@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
 
-from backend.models.baseModel import BaseModel
+from .baseModel import BaseModel
 
 
 @dataclass

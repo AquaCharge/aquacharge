@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from backend.models.charger import Charger
+from models.charger import Charger
 from typing import Dict
 
 chargers_bp = Blueprint("chargers", __name__)

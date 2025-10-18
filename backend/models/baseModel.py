@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict
 from typing import Dict, Any
 from datetime import datetime
+from enum import Enum
 import json
 
 
@@ -11,10 +12,12 @@ class BaseModel(ABC):
     def to_dict(self) -> Dict[str, Any]:
         """Convert model to dictionary for NoSQL storage"""
         data = asdict(self)
-        # Handle datetime serialization
+        # Handle datetime and enum serialization
         for key, value in data.items():
             if isinstance(value, datetime):
                 data[key] = value.isoformat()
+            elif isinstance(value, Enum):
+                data[key] = value.value
         return data
 
     @classmethod

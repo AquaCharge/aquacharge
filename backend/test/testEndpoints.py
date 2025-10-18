@@ -4,6 +4,7 @@ from api.bookings import bookings_bp
 from api.chargers import chargers_bp
 from api.stations import stations_bp
 from api.users import users_bp
+from api.vessels import vessels_bp
 
 
 @pytest.fixture
@@ -13,6 +14,7 @@ def client():
     app.register_blueprint(chargers_bp, url_prefix="/api/chargers")
     app.register_blueprint(stations_bp, url_prefix="/api/stations")
     app.register_blueprint(users_bp, url_prefix="/api/users")
+    app.register_blueprint(vessels_bp, url_prefix="/api/vessels")
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client

@@ -34,7 +34,6 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       // TODO: Replace with actual API call
-      /*
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -53,12 +52,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth-token', data.token)
       localStorage.setItem('user-data', JSON.stringify(data.user))
       setUser(data.user)
-      */
-      // Mock login for demo purposes
-      const data = { user: { id: 1, name: 'Demo User', email } }
-      setUser(data.user)
-      localStorage.setItem('auth-token', 'demo-token')
-      localStorage.setItem('user-data', JSON.stringify(data.user))
+      
       return { success: true, user: data.user }
     } catch (error) {
       return { success: false, error: error.message }

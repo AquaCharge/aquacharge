@@ -230,7 +230,7 @@ export default function Login() {
                   to="/register" 
                   className="font-medium text-blue-600 hover:text-blue-500"
                 >
-                  Sign up for free
+                  Sign up
                 </Link>
               </p>
             </div>

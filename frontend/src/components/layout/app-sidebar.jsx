@@ -96,7 +96,7 @@ export function AppSidebar() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {user?.username || 'Demo User'}
+                      {user?.displayName || 'Demo User'}
                     </p>
                     <p className="text-xs text-gray-500 truncate">
                       {user?.email || 'demo@aquacharge.com'}

@@ -157,7 +157,7 @@ def test_get_user_not_found(client):
 
 def test_create_user_and_delete(client):
     user = {
-        "username": "testuser",
+        "displayName": "testuser",
         "email": "test@example.com",
         "password": "password123",
     }

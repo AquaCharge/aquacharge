@@ -2,9 +2,8 @@ from functools import wraps
 from flask import request, jsonify
 import jwt
 
-# Configuration
-JWT_SECRET = "your-secret-key-change-in-production"  # Should match auth.py
-JWT_ALGORITHM = "HS256"
+# Import shared configuration
+from config import JWT_SECRET, JWT_ALGORITHM
 
 
 def decode_jwt_token(token: str):
@@ -59,8 +58,8 @@ def require_role(required_role):
 
             user_role = request.current_user.get("role")
 
-            # Role hierarchy: ADMIN (1) > OPERATOR (2) > USER (3)
-            role_hierarchy = {1: "ADMIN", 2: "OPERATOR", 3: "USER"}
+            # Role hierarchy: ADMIN (1) > USER (2)
+            role_hierarchy = {1: "ADMIN", 2: "USER"}
             required_role_value = None
 
             # Find required role value

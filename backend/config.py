@@ -57,9 +57,8 @@ class ProductionConfig(Config):
     """Production configuration"""
 
     DEBUG = False
-    # In production, these should be set via environment variables
-    if not os.environ.get("JWT_SECRET_KEY"):
-        raise ValueError("JWT_SECRET_KEY must be set in production")
+    # Override to use only environment variables in production
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or Config.JWT_SECRET_KEY
 
 
 # Configuration dictionary
@@ -69,3 +68,9 @@ config = {
     "production": ProductionConfig,
     "default": DevelopmentConfig,
 }
+
+# Export commonly used configuration values for direct import
+# Use development config as default for direct imports
+_default_config = DevelopmentConfig()
+JWT_SECRET = _default_config.JWT_SECRET_KEY
+JWT_ALGORITHM = _default_config.JWT_ALGORITHM

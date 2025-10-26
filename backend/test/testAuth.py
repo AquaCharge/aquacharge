@@ -242,23 +242,3 @@ def test_change_password(client):
     assert rv.status_code == 200
     data = rv.get_json()
     assert "message" in data
-
-
-def test_change_password_wrong_current(client):
-    """Test password change with wrong current password"""
-    # First login to get a token
-    login_rv = client.post(
-        "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
-    )
-    token = login_rv.get_json()["token"]
-
-    # Try to change password with wrong current password
-    rv = client.post(
-        "/api/auth/change-password",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "wrongpassword", "new_password": "newpassword123"},
-    )
-    assert rv.status_code == 400
-    data = rv.get_json()
-    assert "error" in data

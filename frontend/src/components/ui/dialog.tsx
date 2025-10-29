@@ -1,9 +1,48 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+interface DialogProps {
+  children: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+interface DialogTriggerProps {
+  children: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+interface DialogContentProps {
+  className?: string
+  children: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+interface DialogHeaderProps {
+  className?: string
+  [key: string]: any
+}
+
+interface DialogFooterProps {
+  className?: string
+  [key: string]: any
+}
+
+interface DialogTitleProps {
+  className?: string
+  [key: string]: any
+}
+
+interface DialogDescriptionProps {
+  className?: string
+  [key: string]: any
+}
+
 // Simple Dialog implementation to avoid Radix UI complexity
-const Dialog = ({ children, open, onOpenChange }) => {
+const Dialog: React.FC<DialogProps> = ({ children, open, onOpenChange }) => {
   return (
     <>
       {React.Children.map(children, child =>
@@ -13,7 +52,7 @@ const Dialog = ({ children, open, onOpenChange }) => {
   )
 }
 
-const DialogTrigger = ({ children, open, onOpenChange }) => {
+const DialogTrigger: React.FC<DialogTriggerProps> = ({ children, open, onOpenChange }) => {
   return (
     <div onClick={() => onOpenChange?.(true)}>
       {children}
@@ -21,7 +60,7 @@ const DialogTrigger = ({ children, open, onOpenChange }) => {
   )
 }
 
-const DialogContent = ({ className, children, open, onOpenChange }) => {
+const DialogContent: React.FC<DialogContentProps> = ({ className, children, open, onOpenChange }) => {
   if (!open) return null
 
   return (
@@ -50,7 +89,7 @@ const DialogContent = ({ className, children, open, onOpenChange }) => {
   )
 }
 
-const DialogHeader = ({ className, ...props }) => (
+const DialogHeader: React.FC<DialogHeaderProps> = ({ className, ...props }) => (
   <div
     className={cn(
       "flex flex-col space-y-1.5 text-center sm:text-left",
@@ -60,7 +99,7 @@ const DialogHeader = ({ className, ...props }) => (
   />
 )
 
-const DialogFooter = ({ className, ...props }) => (
+const DialogFooter: React.FC<DialogFooterProps> = ({ className, ...props }) => (
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
@@ -70,7 +109,7 @@ const DialogFooter = ({ className, ...props }) => (
   />
 )
 
-const DialogTitle = ({ className, ...props }) => (
+const DialogTitle: React.FC<DialogTitleProps> = ({ className, ...props }) => (
   <h2
     className={cn(
       "text-lg font-semibold leading-none tracking-tight",
@@ -80,7 +119,7 @@ const DialogTitle = ({ className, ...props }) => (
   />
 )
 
-const DialogDescription = ({ className, ...props }) => (
+const DialogDescription: React.FC<DialogDescriptionProps> = ({ className, ...props }) => (
   <p
     className={cn("text-sm text-gray-600", className)}
     {...props}

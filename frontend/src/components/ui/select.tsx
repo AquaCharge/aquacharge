@@ -2,11 +2,20 @@ import React, { useState, useRef, useEffect } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+interface SelectProps {
+  children: React.ReactNode
+  value?: string
+  onValueChange?: (value: string) => void
+  className?: string
+  id?: string
+  [key: string]: any
+}
+
 // Simple Select implementation without Radix UI
-const Select = ({ children, value, onValueChange, ...props }) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const [selectedValue, setSelectedValue] = useState(value || '')
-  const selectRef = useRef(null)
+const Select: React.FC<SelectProps> = ({ children, value, onValueChange, ...props }) => {
+  const [isOpen, setIsOpen] = useState<boolean>(false)
+  const [selectedValue, setSelectedValue] = useState<string>(value || '')
+  const selectRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setSelectedValue(value || '')

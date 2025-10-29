@@ -12,10 +12,12 @@ class UserRole(Enum):
     ADMIN = 1
     USER = 2
 
+
 # Enum for user types
 class UserType(Enum):
     VESSEL_OPERATOR = 1
     POWER_OPERATOR = 2
+
 
 @dataclass
 class User(BaseModel):

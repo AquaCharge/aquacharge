@@ -23,9 +23,9 @@ const vesselOperatorItems = [
     icon: Home,
   },
   {
-    title: "Find Chargers",
-    url: "/find-chargers",
-    icon: Search,
+    title: "Find Stations",
+    url: "/find-stations",
+    icon: MapPin,
   },
   {
     title: "My Bookings",
@@ -36,11 +36,6 @@ const vesselOperatorItems = [
     title: "My Vessels",
     url: "/my-vessels",
     icon: Ship,
-  },
-  {
-    title: "All Stations",
-    url: "/stations",
-    icon: MapPin,
   },
 ]
 

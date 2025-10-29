@@ -133,15 +133,6 @@ const MapView = ({
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Search and Filter Bar */}
-      <StationSearchFilters
-        stations={stations}
-        filters={filters}
-        onStationSelect={handleSearchStationSelect}
-        onLocationSelect={handleSearchLocationSelect}
-        onFilterChange={onFilterChange}
-      />
-
       {/* Map Container */}
       <div className="relative flex-1">
         <div ref={mapRef} className="w-full h-full" />

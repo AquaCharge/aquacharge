@@ -117,7 +117,7 @@ const ContractsManagement = () => {
 
   useEffect(() => {
     // Filter contracts based on search and status
-    let filtered = contracts.filter(contract => {
+    const filtered = contracts.filter(contract => {
       const matchesSearch = contract.vesselName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            contract.id.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesStatus = statusFilter === 'all' || contract.status === statusFilter

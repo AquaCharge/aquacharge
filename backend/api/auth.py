@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
-from models.user import User, UserRole
+from models.user import User, UserRole, UserType
 from datetime import datetime, timedelta
 from typing import Dict, Any
 import hashlib
@@ -43,6 +43,7 @@ def generate_jwt_token(user: User) -> str:
         "user_id": user.id,
         "email": user.email,
         "role": user.role,
+        "type": user.type,
         "exp": datetime.utcnow() + jwt_expiry,
         "iat": datetime.utcnow(),
     }
@@ -130,6 +131,7 @@ def login():
         # Return user data (without password) and token
         user_data = user.to_public_dict()
         user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
 
         return (
             jsonify(
@@ -153,12 +155,12 @@ def register():
         data = request.get_json()
 
         # Validate required fields
-        required_fields = ["username", "email", "password"]
+        required_fields = ["displayName", "email", "password"]
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({"error": f"{field} is required"}), 400
 
-        username = data["username"].strip()
+        displayName = data["displayName"].strip()
         email = data["email"].lower().strip()
         password = data["password"]
 
@@ -184,12 +186,12 @@ def register():
         for user in users_db.values():
             if user.email.lower() == email:
                 return jsonify({"error": "Email already registered"}), 409
-            if user.username.lower() == username.lower():
-                return jsonify({"error": "Username already taken"}), 409
+            if user.displayName.lower() == displayName.lower():
+                return jsonify({"error": "Display name already taken"}), 409
 
         # Create new user
         user = User(
-            username=username,
+            displayName=displayName,
             email=email,
             passwordHash=hash_password(password),
             role=UserRole.USER.value,  # Default role
@@ -213,6 +215,7 @@ def register():
         # Return user data (without password) and token
         user_data = user.to_public_dict()
         user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
 
         return (
             jsonify(
@@ -263,6 +266,7 @@ def verify_token():
         # Return user data
         user_data = user.to_public_dict()
         user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
 
         return jsonify({"user": user_data, "valid": True}), 200
 
@@ -563,6 +567,7 @@ def get_current_user():
         # Return user data
         user_data = user.to_public_dict()
         user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
 
         return jsonify(user_data), 200
 

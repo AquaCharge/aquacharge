@@ -11,16 +11,22 @@ from .baseModel import BaseModel
 class UserRole(Enum):
     ADMIN = 1
     USER = 2
-    OPERATOR = 3
+
+
+# Enum for user types
+class UserType(Enum):
+    VESSEL_OPERATOR = 1
+    POWER_OPERATOR = 2
 
 
 @dataclass
 class User(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    username: str = ""
+    displayName: str = ""
     email: str = ""
     passwordHash: str = ""
     role: int = UserRole.USER.value
+    type: int = UserType.VESSEL_OPERATOR.value
     active: bool = True
     orgId: Optional[str] = None
     createdAt: datetime = field(default_factory=datetime.now)
@@ -31,8 +37,8 @@ class User(BaseModel):
         return cls(**data)
 
     def validate(self) -> bool:
-        if not self.username or not self.email:
-            raise ValueError("Username and email are required")
+        if not self.displayName or not self.email:
+            raise ValueError("Display name and email are required")
         if "@" not in self.email:
             raise ValueError("Invalid email format")
         if self.role not in [e.value for e in UserRole]:

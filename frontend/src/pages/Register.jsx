@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export default function Register() {
   const [formData, setFormData] = useState({
-    username: '',
+    displayName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -48,7 +48,7 @@ export default function Register() {
     }
 
     const result = await register({
-      username: formData.username,
+      displayName: formData.displayName,
       email: formData.email,
       password: formData.password,
     })
@@ -104,13 +104,13 @@ export default function Register() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="displayName">Display Name</Label>
                 <Input
-                  id="username"
-                  name="username"
+                  id="displayName"
+                  name="displayName"
                   type="text"
-                  placeholder="boat_captain_123"
-                  value={formData.username}
+                  placeholder="Captain Smith"
+                  value={formData.displayName}
                   onChange={handleInputChange}
                   required
                   className="h-11"

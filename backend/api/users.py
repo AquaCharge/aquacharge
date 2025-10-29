@@ -16,7 +16,7 @@ def init_sample_users():
         sample_users = [
             User(
                 id="user-001",
-                displayName="admin_user",
+                displayName="Stacy Admin",
                 email="admin@aquacharge.com",
                 passwordHash=hashlib.sha256("admin123".encode()).hexdigest(),
                 role=UserRole.ADMIN.value,
@@ -28,7 +28,7 @@ def init_sample_users():
             ),
             User(
                 id="user-002",
-                displayName="marina_operator",
+                displayName="Joe Vessel-Operator",
                 email="operator@blueharbor.com",
                 passwordHash=hashlib.sha256("operator456".encode()).hexdigest(),
                 role=UserRole.ADMIN.value,
@@ -40,7 +40,7 @@ def init_sample_users():
             ),
             User(
                 id="user-003",
-                displayName="boat_owner",
+                displayName="John Vessel-Captain",
                 email="captain@oceanbreezes.com",
                 passwordHash=hashlib.sha256("user789".encode()).hexdigest(),
                 role=UserRole.USER.value,

@@ -9,6 +9,7 @@ import FindStations from '../../pages/vessel-operator/FindStations'
 
 // Import shared pages
 import Vessels from '../../pages/Vessels'
+import Profile from '../../pages/Profile'
 
 const VesselOperatorRoutes = () => {
   return (
@@ -21,6 +22,7 @@ const VesselOperatorRoutes = () => {
             <Route path="/find-stations" element={<FindStations />} />
             <Route path="/my-bookings" element={<MyBookings />} />
             <Route path="/my-vessels" element={<Vessels />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

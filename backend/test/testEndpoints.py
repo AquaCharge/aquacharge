@@ -19,7 +19,7 @@ def create_jwt_token(user_id, role=2, user_type=1, email="test@example.com"):
         "email": email,
         "role": role,  # 1=ADMIN, 2=USER
         "type": user_type,  # 1=VESSEL_OPERATOR, 2=POWER_OPERATOR
-        "exp": datetime.utcnow() + timedelta(hours=1)
+        "exp": datetime.utcnow() + timedelta(hours=1),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -214,21 +214,24 @@ def test_update_user(client):
 
 # --- Role-Based Route Separation Tests --- #
 
-def test_contracts_require_admin_role(client, vessel_operator_headers, power_operator_headers, admin_headers):
+
+def test_contracts_require_admin_role(
+    client, vessel_operator_headers, power_operator_headers, admin_headers
+):
     """Test that contracts endpoints require ADMIN role"""
-    
+
     # Test GET /api/contracts - should fail for vessel and power operators, succeed for admin
     rv = client.get("/api/contracts", headers=vessel_operator_headers)
     assert rv.status_code == 403
     assert "Insufficient permissions" in rv.get_json()["error"]
-    
+
     rv = client.get("/api/contracts", headers=power_operator_headers)
     assert rv.status_code == 403
     assert "Insufficient permissions" in rv.get_json()["error"]
-    
+
     rv = client.get("/api/contracts", headers=admin_headers)
     assert rv.status_code == 200
-    
+
     # Test POST /api/contracts - should fail for non-admin users
     contract_data = {
         "vesselId": "vessel-001",
@@ -237,76 +240,82 @@ def test_contracts_require_admin_role(client, vessel_operator_headers, power_ope
         "pricePerKwh": 0.15,
         "startTime": "2025-10-30T10:00:00",
         "endTime": "2025-10-30T18:00:00",
-        "terms": "Test contract terms"
+        "terms": "Test contract terms",
     }
-    
-    rv = client.post("/api/contracts", json=contract_data, headers=vessel_operator_headers)
+
+    rv = client.post(
+        "/api/contracts", json=contract_data, headers=vessel_operator_headers
+    )
     assert rv.status_code == 403
-    
-    rv = client.post("/api/contracts", json=contract_data, headers=power_operator_headers)
+
+    rv = client.post(
+        "/api/contracts", json=contract_data, headers=power_operator_headers
+    )
     assert rv.status_code == 403
-    
+
     rv = client.post("/api/contracts", json=contract_data, headers=admin_headers)
     assert rv.status_code == 201
 
 
 def test_authentication_required_for_protected_routes(client):
     """Test that protected routes require authentication"""
-    
+
     # Test contracts endpoints without auth
     rv = client.get("/api/contracts")
     assert rv.status_code == 401
     assert "Authentication required" in rv.get_json()["error"]
-    
+
     rv = client.post("/api/contracts", json={})
     assert rv.status_code == 401
     assert "Authentication required" in rv.get_json()["error"]
-    
+
     # Test with invalid token
     invalid_headers = {"Authorization": "Bearer invalid_token"}
     rv = client.get("/api/contracts", headers=invalid_headers)
     assert rv.status_code == 401
 
 
-def test_user_type_specific_functionality(client, vessel_operator_headers, power_operator_headers):
+def test_user_type_specific_functionality(
+    client, vessel_operator_headers, power_operator_headers
+):
     """Test that user types can access their appropriate resources"""
-    
+
     # Both user types should be able to access general endpoints
     rv = client.get("/api/stations", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     rv = client.get("/api/stations", headers=power_operator_headers)
     assert rv.status_code == 200
-    
+
     # Both should be able to access chargers
     rv = client.get("/api/chargers", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     rv = client.get("/api/chargers", headers=power_operator_headers)
     assert rv.status_code == 200
-    
+
     # Both should be able to access vessels (shared resource)
     rv = client.get("/api/vessels", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     rv = client.get("/api/vessels", headers=power_operator_headers)
     assert rv.status_code == 200
 
 
 def test_role_hierarchy_enforcement(client):
     """Test that role hierarchy is properly enforced"""
-    
+
     # Create tokens with different roles
     admin_token = create_jwt_token("admin-001", role=1, user_type=2)  # ADMIN role
-    user_token = create_jwt_token("user-001", role=2, user_type=1)    # USER role
-    
+    user_token = create_jwt_token("user-001", role=2, user_type=1)  # USER role
+
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     user_headers = {"Authorization": f"Bearer {user_token}"}
-    
+
     # Admin should have access to contracts
     rv = client.get("/api/contracts", headers=admin_headers)
     assert rv.status_code == 200
-    
+
     # Regular user should not have access to contracts
     rv = client.get("/api/contracts", headers=user_headers)
     assert rv.status_code == 403
@@ -315,18 +324,18 @@ def test_role_hierarchy_enforcement(client):
 
 def test_token_expiration_handling(client):
     """Test that expired tokens are properly rejected"""
-    
+
     # Create an expired token
     expired_payload = {
         "id": "user-001",
         "email": "test@example.com",
         "role": 2,
         "type": 1,
-        "exp": datetime.utcnow() - timedelta(hours=1)  # Expired 1 hour ago
+        "exp": datetime.utcnow() - timedelta(hours=1),  # Expired 1 hour ago
     }
     expired_token = jwt.encode(expired_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     expired_headers = {"Authorization": f"Bearer {expired_token}"}
-    
+
     rv = client.get("/api/contracts", headers=expired_headers)
     assert rv.status_code == 401
     assert "Token has expired" in rv.get_json()["error"]
@@ -334,13 +343,13 @@ def test_token_expiration_handling(client):
 
 def test_malformed_authorization_header(client):
     """Test handling of malformed authorization headers"""
-    
+
     # Test missing Bearer prefix
     malformed_headers = {"Authorization": "invalid_format_token"}
     rv = client.get("/api/contracts", headers=malformed_headers)
     assert rv.status_code == 401
     assert "Authentication required" in rv.get_json()["error"]
-    
+
     # Test empty authorization header
     empty_headers = {"Authorization": ""}
     rv = client.get("/api/contracts", headers=empty_headers)
@@ -350,35 +359,35 @@ def test_malformed_authorization_header(client):
 
 def test_user_context_in_protected_routes(client, admin_headers):
     """Test that user context is properly set in protected routes"""
-    
+
     # Make a request to a protected endpoint and verify it processes correctly
     rv = client.get("/api/contracts", headers=admin_headers)
     assert rv.status_code == 200
-    
+
     # The fact that we get a 200 response means the user context was properly set
     # and the role validation passed
 
 
 def test_vessel_operator_specific_access_patterns(client, vessel_operator_headers):
     """Test access patterns typical for vessel operators"""
-    
+
     # Vessel operators should be able to:
     # - View stations to find charging locations
     rv = client.get("/api/stations", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     # - View chargers to check availability
     rv = client.get("/api/chargers", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     # - Manage their vessels
     rv = client.get("/api/vessels", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     # - Create bookings
     rv = client.get("/api/bookings", headers=vessel_operator_headers)
     assert rv.status_code == 200
-    
+
     # - Should NOT be able to access admin-only contracts
     rv = client.get("/api/contracts", headers=vessel_operator_headers)
     assert rv.status_code == 403
@@ -386,20 +395,20 @@ def test_vessel_operator_specific_access_patterns(client, vessel_operator_header
 
 def test_power_operator_specific_access_patterns(client, power_operator_headers):
     """Test access patterns typical for power operators"""
-    
+
     # Power operators should be able to:
     # - View stations they manage
     rv = client.get("/api/stations", headers=power_operator_headers)
     assert rv.status_code == 200
-    
+
     # - Manage chargers at their stations
     rv = client.get("/api/chargers", headers=power_operator_headers)
     assert rv.status_code == 200
-    
+
     # - View bookings for their stations
     rv = client.get("/api/bookings", headers=power_operator_headers)
     assert rv.status_code == 200
-    
+
     # - Should NOT be able to access admin-only contracts (unless they're also admin)
     rv = client.get("/api/contracts", headers=power_operator_headers)
     assert rv.status_code == 403

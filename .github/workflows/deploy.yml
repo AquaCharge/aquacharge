@@ -40,9 +40,28 @@ jobs:
           echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_OUTPUT
           echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_OUTPUT
 
-      - name: Wait for instance to be ready
+      - name: Wait for SSM agent to be ready
         run: |
-          aws ssm wait instance-online --instance-ids ${{ steps.get-instance.outputs.INSTANCE_ID }}
+          echo "Waiting for SSM agent..."
+          for i in {1..30}; do
+            STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=${{ steps.get-instance.outputs.INSTANCE_ID }}" \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null || echo "NotFound")
+            
+            if [ "$STATUS" = "Online" ]; then
+              echo "✅ SSM agent is online"
+              break
+            fi
+            
+            echo "Attempt $i/30: Status=$STATUS, waiting..."
+            sleep 10
+          done
+
+          if [ "$STATUS" != "Online" ]; then
+            echo "❌ SSM agent did not come online"
+            exit 1
+          fi
 
       - name: Deploy application via S3
         run: |

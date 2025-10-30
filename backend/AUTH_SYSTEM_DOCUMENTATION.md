@@ -18,10 +18,10 @@
 
 #### 2. **Register** - `POST /api/auth/register`
 - **Purpose**: Create new user account
-- **Body**: `{ "username": "user123", "email": "user@example.com", "password": "password123" }`
+- **Body**: `{ "displayName": "user123", "email": "user@example.com", "password": "password123" }`
 - **Response**: JWT token and user data (auto-login)
 - **Features**:
-  - Email and username uniqueness validation
+  - Email and displayName uniqueness validation
   - Email format validation
   - Password strength validation (8+ chars, letters + numbers)
   - Automatic role assignment (USER)

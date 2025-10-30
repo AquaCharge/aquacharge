@@ -96,7 +96,10 @@ export function VesselOperatorSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="px-4 py-2 border-t">
-              <div className="flex items-center space-x-2 mb-2">
+              <Link 
+                to="/profile" 
+                className="flex items-center space-x-2 mb-2 p-2 hover:bg-gray-100 rounded-md transition-colors cursor-pointer"
+              >
                 <User className="w-4 h-4 text-gray-600" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">
@@ -106,7 +109,7 @@ export function VesselOperatorSidebar() {
                     {user?.email || ''}
                   </p>
                 </div>
-              </div>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 w-full px-2 py-1 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"

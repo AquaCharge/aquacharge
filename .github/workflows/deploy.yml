@@ -81,14 +81,7 @@ jobs:
           aws ssm send-command \
             --instance-ids ${{ steps.get-instance.outputs.INSTANCE_ID }} \
             --document-name "AWS-RunShellScript" \
-            --parameters commands=[
-              "cd /home/ec2-user/aquacharge",
-              "aws s3 cp s3://$BUCKET_NAME/deploy.tar.gz .",
-              "tar -xzf deploy.tar.gz",
-              "rm deploy.tar.gz",
-              "sudo docker-compose -f docker-compose.prod.yaml down",
-              "sudo docker-compose -f docker-compose.prod.yaml up -d --build"
-            ] \
+            --parameters 'commands=["cd /home/ec2-user/aquacharge","aws s3 cp s3://'"$BUCKET_NAME"'/deploy.tar.gz .","tar -xzf deploy.tar.gz","rm deploy.tar.gz","sudo docker-compose -f docker-compose.prod.yaml down","sudo docker-compose -f docker-compose.prod.yaml up -d --build"]' \
             --output text
 
           # Cleanup S3

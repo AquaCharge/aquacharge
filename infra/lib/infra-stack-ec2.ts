@@ -3,8 +3,6 @@ import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3assets from 'aws-cdk-lib/aws-s3-assets';
 
 export interface InfraStackProps extends cdk.StackProps {
   environmentName?: string;
@@ -27,7 +25,9 @@ export class InfraStack extends cdk.Stack {
     super(scope, id, props);
 
     const environmentName = props?.environmentName || 'dev';
-    const allowedIps = props?.allowedIpAddresses || [];
+    const allowedIps = props?.allowedIpAddresses && props.allowedIpAddresses.length > 0
+      ? props.allowedIpAddresses
+      : ['131.202.255.236/32']; // Default whitelisted IP if none provided
     const instanceTypeString = props?.instanceType || 't3.micro';
     const useExistingTables = props?.useExistingTables ?? true; // Default to true to use existing tables
     const keyPairName = props?.keyPairName || 'aquacharge-key';

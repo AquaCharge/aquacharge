@@ -7,6 +7,7 @@ import PowerDashboard from '../../pages/power-operator/PowerDashboard'
 import ContractsManagement from '../../pages/power-operator/ContractsManagement'
 import Analytics from '../../pages/power-operator/Analytics'
 import UserManagement from '../../pages/power-operator/UserManagement'
+import DemandResponse from '../../pages/power-operator/DemandResponse'
 
 // Import shared pages
 import Profile from '../../pages/Profile'
@@ -22,6 +23,7 @@ const PowerOperatorRoutes = () => {
             <Route path="/contracts" element={<ContractsManagement />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/users" element={<UserManagement />} />
+            <Route path="/demand-response" element={<DemandResponse />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

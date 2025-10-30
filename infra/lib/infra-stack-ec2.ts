@@ -25,7 +25,9 @@ export class InfraStack extends cdk.Stack {
     super(scope, id, props);
 
     const environmentName = props?.environmentName || 'dev';
-    const allowedIps = ['131.202.255.236/32']; // Hardcoded whitelisted IP
+    const allowedIps = props?.allowedIpAddresses && props.allowedIpAddresses.length > 0
+      ? props.allowedIpAddresses
+      : ['131.202.255.236/32']; // Default whitelisted IP if none provided
     const instanceTypeString = props?.instanceType || 't3.micro';
     const useExistingTables = props?.useExistingTables ?? true; // Default to true to use existing tables
     const keyPairName = props?.keyPairName || 'aquacharge-key';

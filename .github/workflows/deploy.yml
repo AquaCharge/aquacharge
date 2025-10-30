@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - SCRUM-51
 
 jobs:
   deploy:
@@ -12,6 +13,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Debug secrets
+        run: |
+          echo "AWS_ACCESS_KEY_ID exists: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}"
+          echo "AWS_SECRET_ACCESS_KEY exists: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}"
+          echo "SSH_PRIVATE_KEY exists: ${{ secrets.SSH_PRIVATE_KEY != '' }}"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

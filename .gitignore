@@ -10,6 +10,7 @@ venv*/
 
 # --- Python cache/artifacts ---
 __pycache__/
+*cache
 *.py[cod]
 *.pyo
 *.pyd

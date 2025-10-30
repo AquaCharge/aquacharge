@@ -248,6 +248,11 @@ export class InfraStack extends cdk.Stack {
           ec2.Port.tcp(443),
           `HTTPS access from whitelisted IP ${index + 1}`
         );
+        this.securityGroup.addIngressRule(
+          ec2.Peer.ipv4(ip),
+          ec2.Port.tcp(5050),
+          `Backend API access from whitelisted IP ${index + 1}`
+        );
       });
     } else {
       // If no IPs specified, allow from anywhere (not recommended for production)
@@ -265,6 +270,11 @@ export class InfraStack extends cdk.Stack {
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(443),
         'HTTPS access (WARNING: open to all)'
+      );
+      this.securityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(5050),
+        'Backend API access (WARNING: open to all)'
       );
     }
 

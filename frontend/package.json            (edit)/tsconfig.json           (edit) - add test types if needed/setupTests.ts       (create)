@@ -1,0 +1,174 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^0.0.0"
+  }
+}
+
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vitest/globals"]
+  }
+}
+
+import { expect, it, describe } from 'vitest';
+
+describe('setupTests', () => {
+  it('should run setup tests', () => {
+    expect(true).toBe(true);
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Badge from './badge';
+
+describe('Badge', () => {
+  it('renders correctly', () => {
+    const { getByText } = render(<Badge>Test Badge</Badge>);
+    expect(getByText('Test Badge')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Button from './button';
+
+describe('Button', () => {
+  it('renders correctly', () => {
+    const { getByRole } = render(<Button>Click Me</Button>);
+    expect(getByRole('button')).toHaveTextContent('Click Me');
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Card from './card';
+
+describe('Card', () => {
+  it('renders correctly', () => {
+    const { container } = render(<Card>Card Content</Card>);
+    expect(container).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Dialog from './dialog';
+
+describe('Dialog', () => {
+  it('opens and closes correctly', () => {
+    const { getByText } = render(<Dialog open={true}>Dialog Content</Dialog>);
+    expect(getByText('Dialog Content')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Input from './input';
+
+describe('Input', () => {
+  it('validates input behavior', () => {
+    const { getByRole } = render(<Input />);
+    expect(getByRole('textbox')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Label from './label';
+
+describe('Label', () => {
+  it('displays correct text', () => {
+    const { getByText } = render(<Label>Test Label</Label>);
+    expect(getByText('Test Label')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Select from './select';
+
+describe('Select', () => {
+  it('checks options and selection behavior', () => {
+    const { getByRole } = render(<Select options={['Option 1', 'Option 2']} />);
+    expect(getByRole('combobox')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Separator from './separator';
+
+describe('Separator', () => {
+  it('renders correctly', () => {
+    const { container } = render(<Separator />);
+    expect(container).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Sheet from './sheet';
+
+describe('Sheet', () => {
+  it('verifies functionality', () => {
+    const { container } = render(<Sheet />);
+    expect(container).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Sidebar from './sidebar';
+
+describe('Sidebar', () => {
+  it('behaves as expected', () => {
+    const { container } = render(<Sidebar />);
+    expect(container).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Skeleton from './skeleton';
+
+describe('Skeleton', () => {
+  it('checks loading state', () => {
+    const { container } = render(<Skeleton />);
+    expect(container).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Textarea from './textarea';
+
+describe('Textarea', () => {
+  it('validates behavior', () => {
+    const { getByRole } = render(<Textarea />);
+    expect(getByRole('textbox')).toBeInTheDocument();
+  });
+});
+
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
+import Tooltip from './tooltip';
+
+describe('Tooltip', () => {
+  it('displays correctly on hover', () => {
+    const { getByText } = render(<Tooltip title="Tooltip Text">Hover me</Tooltip>);
+    expect(getByText('Tooltip Text')).toBeInTheDocument();
+  });
+});

@@ -73,7 +73,8 @@ jobs:
             --exclude='.git'
 
           # Upload to S3 (temporary)
-          BUCKET_NAME="aquacharge-deploy-$(date +%s)"
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="aquacharge-deploy-${AWS_ACCOUNT_ID}-$(date +%s)"
           aws s3 mb s3://$BUCKET_NAME
           aws s3 cp deploy.tar.gz s3://$BUCKET_NAME/
 

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - SCRUM-51
 
 jobs:
   deploy:
@@ -25,54 +26,57 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Get instance IP
-        id: get-ip
+      - name: Get instance IP and ID
+        id: get-instance
         run: |
           INSTANCE_IP=$(aws cloudformation describe-stacks \
             --stack-name AquaChargeStack-dev \
             --query 'Stacks[0].Outputs[?OutputKey==`InstancePublicIp`].OutputValue' \
             --output text)
+          INSTANCE_ID=$(aws cloudformation describe-stacks \
+            --stack-name AquaChargeStack-dev \
+            --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
+            --output text)
           echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_OUTPUT
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_OUTPUT
 
-      - name: Setup SSH key
+      - name: Wait for instance to be ready
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/aquacharge-key.pem
-          chmod 400 ~/.ssh/aquacharge-key.pem
-          ssh-keyscan -H ${{ steps.get-ip.outputs.INSTANCE_IP }} >> ~/.ssh/known_hosts
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          aws ssm wait instance-online --instance-ids ${{ steps.get-instance.outputs.INSTANCE_ID }}
 
-      - name: Deploy application
+      - name: Deploy application via S3
         run: |
-          rsync -av --progress \
+          # Create deployment package
+          tar -czf deploy.tar.gz backend frontend docker-compose.prod.yaml \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='node_modules' \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.vscode' \
-            --exclude='*.log' \
-            --exclude='.DS_Store' \
-            --exclude='cdk.out' \
-            --exclude='infra' \
-            -e "ssh -i ~/.ssh/aquacharge-key.pem -o StrictHostKeyChecking=no" \
-            backend frontend docker-compose.prod.yaml \
-            ec2-user@${{ steps.get-ip.outputs.INSTANCE_IP }}:/home/ec2-user/aquacharge/
+            --exclude='.git'
 
-      - name: Restart containers
-        run: |
-          ssh -i ~/.ssh/aquacharge-key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ steps.get-ip.outputs.INSTANCE_IP }} << 'EOF'
-          cd /home/ec2-user/aquacharge
-          sudo docker-compose -f docker-compose.prod.yaml down
-          sudo docker-compose -f docker-compose.prod.yaml up -d --build
-          sleep 5
-          sudo docker-compose -f docker-compose.prod.yaml ps
-          EOF
+          # Upload to S3 (temporary)
+          BUCKET_NAME="aquacharge-deploy-$(date +%s)"
+          aws s3 mb s3://$BUCKET_NAME
+          aws s3 cp deploy.tar.gz s3://$BUCKET_NAME/
+
+          # Download and extract on EC2 via SSM
+          aws ssm send-command \
+            --instance-ids ${{ steps.get-instance.outputs.INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands=[
+              "cd /home/ec2-user/aquacharge",
+              "aws s3 cp s3://$BUCKET_NAME/deploy.tar.gz .",
+              "tar -xzf deploy.tar.gz",
+              "rm deploy.tar.gz",
+              "sudo docker-compose -f docker-compose.prod.yaml down",
+              "sudo docker-compose -f docker-compose.prod.yaml up -d --build"
+            ] \
+            --output text
+
+          # Cleanup S3
+          aws s3 rb s3://$BUCKET_NAME --force
 
       - name: Health check
         run: |
-          sleep 10
-          curl -f http://${{ steps.get-ip.outputs.INSTANCE_IP }}:5050/api/health || exit 1
+          sleep 15
+          curl -f http://${{ steps.get-instance.outputs.INSTANCE_IP }}:5050/api/health || exit 1
           echo "✅ Deployment successful!"

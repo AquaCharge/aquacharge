@@ -26,7 +26,9 @@ export const AuthProvider = ({ children }) => {
         setUser(parsedUser);
       } catch (error) {
         console.error("Error parsing user data:", error);
-        logout();
+        localStorage.removeItem("auth-token");
+        localStorage.removeItem("user-data");
+        setUser(null);
       }
     }
 

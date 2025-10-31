@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from models.user import User, UserRole
+from models.user import User, UserRole, UserType
 from datetime import datetime
 from typing import Dict
 import hashlib
@@ -16,10 +16,11 @@ def init_sample_users():
         sample_users = [
             User(
                 id="user-001",
-                username="admin_user",
+                displayName="Stacy Admin",
                 email="admin@aquacharge.com",
                 passwordHash=hashlib.sha256("admin123".encode()).hexdigest(),
                 role=UserRole.ADMIN.value,
+                type=UserType.POWER_OPERATOR.value,
                 active=True,
                 orgId="org-001",
                 createdAt=datetime(2024, 1, 15, 10, 30, 0),
@@ -27,10 +28,11 @@ def init_sample_users():
             ),
             User(
                 id="user-002",
-                username="marina_operator",
+                displayName="Joe Vessel-Operator",
                 email="operator@blueharbor.com",
                 passwordHash=hashlib.sha256("operator456".encode()).hexdigest(),
-                role=UserRole.OPERATOR.value,
+                role=UserRole.ADMIN.value,
+                type=UserType.POWER_OPERATOR.value,
                 active=True,
                 orgId="org-002",
                 createdAt=datetime(2024, 2, 10, 9, 15, 0),
@@ -38,10 +40,11 @@ def init_sample_users():
             ),
             User(
                 id="user-003",
-                username="boat_owner",
+                displayName="John Vessel-Captain",
                 email="captain@oceanbreezes.com",
                 passwordHash=hashlib.sha256("user789".encode()).hexdigest(),
                 role=UserRole.USER.value,
+                type=UserType.VESSEL_OPERATOR.value,
                 active=True,
                 orgId=None,
                 createdAt=datetime(2024, 3, 5, 16, 45, 0),
@@ -49,10 +52,11 @@ def init_sample_users():
             ),
             User(
                 id="user-004",
-                username="yacht_club",
+                displayName="yacht_club",
                 email="management@royalyacht.com",
                 passwordHash=hashlib.sha256("yacht2024".encode()).hexdigest(),
                 role=UserRole.USER.value,
+                type=UserType.VESSEL_OPERATOR.value,
                 active=True,
                 orgId="org-003",
                 createdAt=datetime(2024, 1, 20, 13, 10, 0),
@@ -60,14 +64,27 @@ def init_sample_users():
             ),
             User(
                 id="user-005",
-                username="fleet_manager",
+                displayName="fleet_manager",
                 email="fleet@commercialmarine.com",
                 passwordHash=hashlib.sha256("fleet555".encode()).hexdigest(),
                 role=UserRole.USER.value,
+                type=UserType.VESSEL_OPERATOR.value,
                 active=False,
                 orgId="org-004",
                 createdAt=datetime(2024, 4, 1, 8, 0, 0),
                 updatedAt=datetime(2024, 4, 15, 17, 25, 0),
+            ),
+            User(
+                id="user-006",
+                displayName="power_operator",
+                email="power@aquacharge.com",
+                passwordHash=hashlib.sha256("power123".encode()).hexdigest(),
+                role=UserRole.USER.value,
+                type=UserType.POWER_OPERATOR.value,
+                active=True,
+                orgId="org-001",
+                createdAt=datetime(2024, 10, 1, 9, 0, 0),
+                updatedAt=None,
             ),
         ]
 
@@ -101,20 +118,25 @@ def create_user():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ["username", "email", "password"]
+    required_fields = ["displayName", "email", "password"]
     for field in required_fields:
         if field not in data:
             return jsonify({"error": f"{field} is required"}), 400
 
     # Create user instance
     user = User(
-        username=data["username"],
+        displayName=data["displayName"],
         email=data["email"],
         passwordHash=hashlib.sha256(data["password"].encode()).hexdigest(),
         role=(
             UserRole[data.get("role", "USER")].value
             if "role" in data
             else UserRole.USER.value
+        ),
+        type=(
+            UserType[data.get("type", "VESSEL_OPERATOR")].value
+            if "type" in data
+            else UserType.VESSEL_OPERATOR.value
         ),
         orgId=data.get("orgId"),
     )
@@ -141,8 +163,8 @@ def update_user(user_id: str):
     user = users_db[user_id]
 
     # Update allowed fields
-    if "username" in data:
-        user.username = data["username"]
+    if "displayName" in data:
+        user.displayName = data["displayName"]
     if "email" in data:
         user.email = data["email"]
     if "role" in data:

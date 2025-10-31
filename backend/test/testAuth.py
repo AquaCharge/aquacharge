@@ -63,7 +63,7 @@ def test_register_success(client):
     rv = client.post(
         "/api/auth/register",
         json={
-            "username": "testuser123",
+            "displayName": "testuser123",
             "email": "testuser@example.com",
             "password": "password123",
         },
@@ -80,7 +80,7 @@ def test_register_duplicate_email(client):
     rv = client.post(
         "/api/auth/register",
         json={
-            "username": "testuser456",
+            "displayName": "testuser456",
             "email": "admin@aquacharge.com",  # Already exists
             "password": "password123",
         },
@@ -95,7 +95,7 @@ def test_register_weak_password(client):
     rv = client.post(
         "/api/auth/register",
         json={
-            "username": "testuser789",
+            "displayName": "testuser789",
             "email": "weak@example.com",
             "password": "123",  # Too weak
         },
@@ -110,7 +110,7 @@ def test_register_invalid_email(client):
     rv = client.post(
         "/api/auth/register",
         json={
-            "username": "testuser101",
+            "displayName": "testuser101",
             "email": "invalid-email",
             "password": "password123",
         },

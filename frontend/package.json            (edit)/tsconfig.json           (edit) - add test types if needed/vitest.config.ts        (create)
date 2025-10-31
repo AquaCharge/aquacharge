@@ -1,0 +1,144 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^0.0.0"
+  }
+}
+
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vitest/globals"]
+  }
+}
+
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+    },
+  },
+});
+
+import '@testing-library/jest-dom';
+
+test('hello world!', () => {
+  expect(true).toBe(true);
+});
+
+import { render, screen } from '@testing-library/react';
+import Badge from './Badge';
+
+test('renders Badge component', () => {
+  render(<Badge>Test Badge</Badge>);
+  expect(screen.getByText(/Test Badge/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Button from './Button';
+
+test('renders Button component', () => {
+  render(<Button>Click Me</Button>);
+  expect(screen.getByText(/Click Me/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Card from './Card';
+
+test('renders Card component', () => {
+  render(<Card>Card Content</Card>);
+  expect(screen.getByText(/Card Content/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Dialog from './Dialog';
+
+test('opens and closes Dialog component', () => {
+  render(<Dialog open={true}>Dialog Content</Dialog>);
+  expect(screen.getByText(/Dialog Content/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Input from './Input';
+
+test('renders Input component', () => {
+  render(<Input placeholder="Type here" />);
+  expect(screen.getByPlaceholderText(/Type here/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Label from './Label';
+
+test('renders Label component', () => {
+  render(<Label>Label Text</Label>);
+  expect(screen.getByText(/Label Text/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Select from './Select';
+
+test('renders Select component', () => {
+  render(<Select options={['Option 1', 'Option 2']} />);
+  expect(screen.getByText(/Option 1/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Separator from './Separator';
+
+test('renders Separator component', () => {
+  render(<Separator />);
+  expect(screen.getByRole('separator')).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Sheet from './Sheet';
+
+test('renders Sheet component', () => {
+  render(<Sheet>Sheet Content</Sheet>);
+  expect(screen.getByText(/Sheet Content/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Sidebar from './Sidebar';
+
+test('renders Sidebar component', () => {
+  render(<Sidebar>Sidebar Content</Sidebar>);
+  expect(screen.getByText(/Sidebar Content/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Skeleton from './Skeleton';
+
+test('renders Skeleton component', () => {
+  render(<Skeleton />);
+  expect(screen.getByText(/Loading/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Textarea from './Textarea';
+
+test('renders Textarea component', () => {
+  render(<Textarea placeholder="Type here" />);
+  expect(screen.getByPlaceholderText(/Type here/i)).toBeInTheDocument();
+});
+
+import { render, screen } from '@testing-library/react';
+import Tooltip from './Tooltip';
+
+test('renders Tooltip component', () => {
+  render(<Tooltip title="Tooltip Text">Hover me</Tooltip>);
+  expect(screen.getByText(/Hover me/i)).toBeInTheDocument();
+});

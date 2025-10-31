@@ -83,7 +83,7 @@ lint-all-backend: lint-format-backend lint-fix-backend
 
 ifeq ($(OS),Windows_NT)
 run:
-	@echo "Starting frontend and backend..."
+	@echo "Starting frontend and backend for Windows..."
 	@echo "Frontend will run in background, backend in foreground"
 	@echo "Press Ctrl+C to stop backend, then run 'taskkill /f /im node.exe' to stop frontend if needed"
 	cd $(FRONTEND_DIR) && start /b yarn run dev
@@ -115,3 +115,6 @@ ifeq ($(OS),Windows_NT)
 else
 	cd $(BACKEND_DIR) && . $(VENV_ACTIVATE) && python -m pytest
 endif
+
+venv:
+	$(VENV_ACTIVATE)

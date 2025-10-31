@@ -1,10 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AppSidebar } from '@/components/layout/app-sidebar'
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
-import Home from './pages/Home'
-import Stations from './pages/Stations'
-import Vessels from './pages/Vessels'
+import VesselOperatorRoutes from './routes/vessel-operator/VesselOperatorRoutes'
+import PowerOperatorRoutes from './routes/power-operator/PowerOperatorRoutes'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -21,23 +18,17 @@ const LoadingSpinner = () => (
   </div>
 )
 
-// Protected routes component
+// Protected routes component - Routes based on user type
 const ProtectedRoutes = () => {
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <main className="flex-1 p-2">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/stations" element={<Stations />} />
-            <Route path="/vessels" element={<Vessels />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
-  )
+  const { user } = useAuth()
+  
+  // Route users to appropriate application view based on their type
+  if (user?.type_name === 'POWER_OPERATOR') {
+    return <PowerOperatorRoutes />
+  }
+  
+  // Default to vessel operator view (includes VESSEL_OPERATOR and fallback)
+  return <VesselOperatorRoutes />
 }
 
 // Auth routes component

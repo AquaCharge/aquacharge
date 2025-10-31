@@ -48,8 +48,15 @@ npm install --silent
 
 echo ""
 echo "🏗️  Deploying infrastructure..."
-aws cloudformation delete-stack --stack-name $STACK_NAME 2>/dev/null || true
-aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME 2>/dev/null || true
+
+# Check if stack exists and delete if needed
+if aws cloudformation describe-stacks --stack-name $STACK_NAME &>/dev/null; then
+  echo "Found existing stack, deleting..."
+  aws cloudformation delete-stack --stack-name $STACK_NAME
+  echo "Waiting for stack deletion..."
+  aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME 2>/dev/null || true
+  echo "Stack deleted"
+fi
 
 npx cdk deploy \
   -c environment=$ENVIRONMENT \

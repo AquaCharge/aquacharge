@@ -280,7 +280,7 @@ export class InfraStack extends cdk.Stack {
 
     // ===== IAM Role for EC2 =====
     const ec2Role = new iam.Role(this, 'EC2Role', {
-      // Remove roleName to let CDK auto-generate unique name
+      roleName: `aquacharge-ec2-role-${environmentName}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager

@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - SCRUM-51
 
 jobs:
   deploy:
@@ -26,22 +25,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/aquacharge-key.pem
-          chmod 400 ~/.ssh/aquacharge-key.pem
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Run deployment script
-        working-directory: infra
-        run: |
-          chmod +x deploy-simple.sh
-          ./deploy-simple.sh
-
       - name: Get instance IP
-        id: get-instance
+        id: get-ip
         run: |
           INSTANCE_IP=$(aws cloudformation describe-stacks \
             --stack-name AquaChargeStack-dev \
@@ -49,13 +34,45 @@ jobs:
             --output text)
           echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_OUTPUT
 
-      - name: Deployment summary
-        if: success()
+      - name: Setup SSH key
         run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ DEPLOYMENT SUCCESSFUL!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Frontend: http://${{ steps.get-instance.outputs.INSTANCE_IP }}"
-          echo "Backend:  http://${{ steps.get-instance.outputs.INSTANCE_IP }}:5050/api/health"
-          echo ""
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/aquacharge-key.pem
+          chmod 400 ~/.ssh/aquacharge-key.pem
+          ssh-keyscan -H ${{ steps.get-ip.outputs.INSTANCE_IP }} >> ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy application
+        run: |
+          rsync -av --progress \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.vscode' \
+            --exclude='*.log' \
+            --exclude='.DS_Store' \
+            --exclude='cdk.out' \
+            --exclude='infra' \
+            -e "ssh -i ~/.ssh/aquacharge-key.pem -o StrictHostKeyChecking=no" \
+            backend frontend docker-compose.prod.yaml \
+            ec2-user@${{ steps.get-ip.outputs.INSTANCE_IP }}:/home/ec2-user/aquacharge/
+
+      - name: Restart containers
+        run: |
+          ssh -i ~/.ssh/aquacharge-key.pem -o StrictHostKeyChecking=no \
+            ec2-user@${{ steps.get-ip.outputs.INSTANCE_IP }} << 'EOF'
+          cd /home/ec2-user/aquacharge
+          sudo docker-compose -f docker-compose.prod.yaml down
+          sudo docker-compose -f docker-compose.prod.yaml up -d --build
+          sleep 5
+          sudo docker-compose -f docker-compose.prod.yaml ps
+          EOF
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -f http://${{ steps.get-ip.outputs.INSTANCE_IP }}:5050/api/health || exit 1
+          echo "✅ Deployment successful!"

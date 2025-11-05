@@ -5,7 +5,7 @@ import { InfraStack } from '../lib/infra-stack-ec2';
 const app = new cdk.App();
 
 // Get configuration from context or environment variables
-const environmentName = app.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'dev';
+const environmentName = app.node.tryGetContext('environment') || process.env.ENVIRONMENT || '';
 const allowedIps = app.node.tryGetContext('allowedIps') || process.env.ALLOWED_IPS || '';
 const instanceType = app.node.tryGetContext('instanceType') || process.env.INSTANCE_TYPE || 't3.micro';
 const useExistingTables = app.node.tryGetContext('useExistingTables') === 'true' || app.node.tryGetContext('useExistingTables') === true;

@@ -20,6 +20,7 @@ export class InfraStack extends cdk.Stack {
   public readonly chargersTable: dynamodb.ITable;
   public readonly vesselsTable: dynamodb.ITable;
   public readonly bookingsTable: dynamodb.ITable;
+  public readonly contractsTable: dynamodb.ITable;
 
   constructor(scope: Construct, id: string, props?: InfraStackProps) {
     super(scope, id, props);
@@ -64,7 +65,14 @@ export class InfraStack extends cdk.Stack {
         'BookingsTable',
         `aquacharge-bookings-${environmentName}`
       );
+    
+      this.contractsTable = dynamodb.Table.fromTableName(
+        this,
+        'ContractsTable',
+        `aquacharge-contracts-${environmentName}`
+      );
     } else {
+
       // Create new tables
       // Users Table
       const usersTable = new dynamodb.Table(this, 'UsersTable', {
@@ -204,6 +212,24 @@ export class InfraStack extends cdk.Stack {
       });
 
       this.bookingsTable = bookingsTable;
+
+      // Contracts Table
+      const contractsTable = new dynamodb.Table(this, 'ContractsTable', {
+        tableName: `aquacharge-contracts-${environmentName}`,
+        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        pointInTimeRecovery: true,
+      });
+      
+      contractsTable.addGlobalSecondaryIndex({
+        indexName: 'userId-index',
+        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+
+      this.contractsTable = contractsTable;
     }
 
     // ===== VPC (Simplified - only public subnets, no NAT Gateway) =====

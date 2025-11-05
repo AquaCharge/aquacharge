@@ -44,8 +44,8 @@ export default function DemandResponse() {
         id: 'dr-001',
         title: 'Peak Hour Demand Response',
         notes: 'High demand expected during evening peak hours',
-        startTime: '2025-10-30T17:00',
-        endTime: '2025-10-30T21:00',
+        startTime: '2025-11-03T17:00',
+        endTime: '2025-11-03T21:00',
         powerNeeded: 500,
         pricePerKwh: 0.25,
         location: 'Harbor District',
@@ -83,7 +83,7 @@ export default function DemandResponse() {
         priority: 'medium',
         status: 'completed',
         participatingVessels: 8,
-        committedPower: 180,
+        committedPower: 150,
         createdAt: '2025-10-27T16:45:00'
       },
       {
@@ -113,7 +113,7 @@ export default function DemandResponse() {
         priority: 'critical',
         status: 'completed',
         participatingVessels: 18,
-        committedPower: 420,
+        committedPower: 400,
         createdAt: '2025-10-24T12:45:00'
       },
       {
@@ -183,43 +183,31 @@ export default function DemandResponse() {
     setIsCreateDialogOpen(false)
   }
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'active':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Active</Badge>
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />Pending</Badge>
-      case 'completed':
-        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>
-      case 'cancelled':
-        return <Badge className="bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" />Cancelled</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
-  }
-
-  const getPriorityBadge = (priority) => {
-    switch (priority) {
-      case 'critical':
-        return <Badge variant="destructive">Critical</Badge>
-      case 'high':
-        return <Badge className="bg-orange-100 text-orange-800">High</Badge>
-      case 'medium':
-        return <Badge className="bg-blue-100 text-blue-800">Medium</Badge>
-      case 'low':
-        return <Badge className="bg-gray-100 text-gray-800">Low</Badge>
-      default:
-        return <Badge variant="secondary">{priority}</Badge>
-    }
-  }
-
   const formatDateTime = (dateTimeStr) => {
     return new Date(dateTimeStr).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit'
     })
+  }
+
+  const formatDateRange = (startDateTimeStr, endDateTimeStr) => {
+    const start = new Date(startDateTimeStr)
+    const end = new Date(endDateTimeStr)
+    return `
+    ${end.toLocaleString('en-US', {
+      day: 'numeric',
+      month: 'short',
+    })} •
+    ${start.toLocaleString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    })} - ${end.toLocaleString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })}
+    `
   }
 
   const calculateDuration = (start, end) => {
@@ -381,18 +369,15 @@ export default function DemandResponse() {
         {/* Active Events Section */}
         <div>
           <h1 className="text-2xl font-semibold">Active Events</h1>
-          <p className="text-muted-foreground">Currently running and pending demand response events</p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {activeEvents.map((event) => (
-            <Card key={event.id} className="border-l-4 border-l-blue-500">
+            <Card key={event.id} className="border-l">
             <CardContent>
-                <div className="flex items-start justify-between">
+                <div className="flex justify-between">
                 <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold">{formatDateTime(event.startTime)} - {formatDateTime(event.endTime)} • {event.powerNeeded} kWh</h3>
-                    {getStatusBadge(event.status)}
-                    {getPriorityBadge(event.priority)}
+                    <div className="flex justify-between">
+                      <h3 className="font-semibold">{formatDateRange(event.startTime, event.endTime)}</h3>
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   
@@ -402,7 +387,7 @@ export default function DemandResponse() {
                     </div>
                     <div className="flex items-center">
                         <Zap className="w-4 h-4 mr-1" />
-                        {event.powerNeeded} kWh needed
+                        {event.powerNeeded} kWh
                     </div>
                     <div className="flex items-center">
                         <DollarSign className="w-4 h-4 mr-1" />
@@ -461,19 +446,7 @@ export default function DemandResponse() {
                     <div className="font-medium flex items-center">
                         Forecast Timeline
                     </div>
-                    <span className="text-2xl font-bold text-purple-600">
-                        {(() => {
-                        const now = new Date()
-                        const created = new Date(event.createdAt)
-                        const start = new Date(event.startTime)
-                        if (now >= start) return 'Active'
-                        const remaining = start - now
-                        const remainingHours = Math.ceil(remaining / (1000 * 60 * 60))
-                        if (remainingHours < 24) return `${remainingHours}h`
-                        const remainingDays = Math.ceil(remainingHours / 24)
-                        return `${remainingDays}d`
-                        })()}
-                    </span>
+                  
                     </div>
                     <div className="space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -490,7 +463,7 @@ export default function DemandResponse() {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
-                        className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                        className="bg-black h-2 rounded-full transition-all duration-300" 
                         style={{ 
                             width: `${(() => {
                             const now = new Date()
@@ -505,7 +478,7 @@ export default function DemandResponse() {
                         ></div>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-purple-600 font-medium">
+                        <span className="text-black font-medium">
                         {(() => {
                             const now = new Date()
                             const created = new Date(event.createdAt)
@@ -526,12 +499,7 @@ export default function DemandResponse() {
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center space-x-4">
                     <div className="flex items-center">
-                    <DollarSign className="w-3 h-3 mr-1" />
-                    <span>Rate: ${event.pricePerKwh}/kWh</span>
-                    </div>
-                    <div className="flex items-center">
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    <span>Potential: ${(event.powerNeeded * event.pricePerKwh).toFixed(0)} max payout</span>
+                    ${(event.powerNeeded * event.pricePerKwh).toFixed(0)} max payout
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -560,90 +528,19 @@ export default function DemandResponse() {
         )}
         </div>
 
-      {/* Historical Metrics */}
-      <div className="grid gap-4 md:grid-cols-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Past Events</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{historicalMetrics.totalEvents}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Fulfillment</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{historicalMetrics.avgFulfillmentRate}%</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Power Delivered</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{historicalMetrics.totalPowerDelivered} kWh</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Historical Price</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${historicalMetrics.avgPricePerKwh > 0 ? historicalMetrics.avgPricePerKwh.toFixed(2) : '0.00'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Best Priority</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold capitalize">{historicalMetrics.mostSuccessfulPriority}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Participations</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{historicalMetrics.totalVesselParticipations}</div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Past Events Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Past Events</CardTitle>
-          <CardDescription>Historical demand response events and performance metrics</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <h1 className="text-2xl font-semibold">Past Events</h1>
           <div className="space-y-4">
             {pastEvents.map((event) => (
               <Card key={event.id} className="border-l-4 border-l-gray-500">
-                <CardContent className="pt-6">
+                <CardContent>
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold">{formatDateTime(event.startTime)} - {formatDateTime(event.endTime)} • {event.powerNeeded} kWh</h3>
-                        {getStatusBadge(event.status)}
-                        {getPriorityBadge(event.priority)}
+                        <h3 className="font-semibold">{formatDateRange(event.startTime, event.endTime)}</h3>
                       </div>
                       <p className="text-sm text-muted-foreground">{event.notes}</p>
                       <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          {formatDateTime(event.startTime)} - {formatDateTime(event.endTime)}
-                        </div>
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-1" />
                           {calculateDuration(event.startTime, event.endTime)}
@@ -702,8 +599,6 @@ export default function DemandResponse() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Home, BarChart3, Users, FileText, Zap, LogOut, User } from "lucide-react"
+import { Home, BarChart3, Users, Zap, LogOut, User } from "lucide-react"
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -21,11 +21,6 @@ const powerOperatorItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
-  },
-  {
-    title: "Smart Contracts",
-    url: "/contracts",
-    icon: FileText,
   },
   {
     title: "Analytics",

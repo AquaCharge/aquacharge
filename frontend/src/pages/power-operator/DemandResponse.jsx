@@ -25,6 +25,7 @@ import {
 export default function DemandResponse() {
   const [events, setEvents] = useState([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('active')
   const [formData, setFormData] = useState({
     title: '',
     notes: '',
@@ -219,7 +220,19 @@ export default function DemandResponse() {
   }
 
   // Separate active and past events
-  const activeEvents = events.filter(event => event.status === 'active' || event.status === 'pending')
+  const activeEvents = events.filter(event => {
+    const now = new Date()
+    const start = new Date(event.startTime)
+    const end = new Date(event.endTime)
+    return event.status === 'active' || (now >= start && now <= end)
+  })
+  
+  const upcomingEvents = events.filter(event => {
+    const now = new Date()
+    const start = new Date(event.startTime)
+    return event.status === 'pending' && now < start
+  })
+  
   const pastEvents = events.filter(event => event.status === 'completed' || event.status === 'cancelled')
 
   // Calculate historical metrics
@@ -366,7 +379,60 @@ export default function DemandResponse() {
         </Dialog>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b">
+        <div className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'active'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+            }`}
+          >
+            Active Events
+            {activeEvents.length > 0 && (
+              <span className="ml-2 bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
+                {activeEvents.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('upcoming')}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'upcoming'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+            }`}
+          >
+            Upcoming Events
+            {upcomingEvents.length > 0 && (
+              <span className="ml-2 bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 text-xs">
+                {upcomingEvents.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('past')}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'past'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+            }`}
+          >
+            Past Events
+            {pastEvents.length > 0 && (
+              <span className="ml-2 bg-gray-200 text-gray-700 rounded-full px-2 py-0.5 text-xs">
+                {pastEvents.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
         {/* Active Events Section */}
+        {activeTab === 'active' && (
+        <>
         <div>
           <h1 className="text-2xl font-semibold">Active Events</h1>
         </div>
@@ -380,17 +446,10 @@ export default function DemandResponse() {
                       <h3 className="font-semibold">{formatDateRange(event.startTime, event.endTime)}</h3>
                     </div>
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  
                     <div className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        {calculateDuration(event.startTime, event.endTime)}
-                    </div>
-                    <div className="flex items-center">
-                        <Zap className="w-4 h-4 mr-1" />
                         {event.powerNeeded} kWh
                     </div>
                     <div className="flex items-center">
-                        <DollarSign className="w-4 h-4 mr-1" />
                         ${event.pricePerKwh}/kWh
                     </div>
                     </div>
@@ -499,7 +558,7 @@ export default function DemandResponse() {
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center space-x-4">
                     <div className="flex items-center">
-                    ${(event.powerNeeded * event.pricePerKwh).toFixed(0)} max payout
+                    ${event.committedPower*event.pricePerKwh} current payout
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -527,8 +586,165 @@ export default function DemandResponse() {
             </div>
         )}
         </div>
+        </>
+        )}
+
+      {/* Upcoming Events Section */}
+      {activeTab === 'upcoming' && (
+        <>
+        <div>
+          <h1 className="text-2xl font-semibold">Upcoming Events</h1>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {upcomingEvents.map((event) => (
+            <Card key={event.id} className="border-l">
+            <CardContent>
+                <div className="flex justify-between">
+                <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <h3 className="font-semibold">{formatDateRange(event.startTime, event.endTime)}</h3>
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                    <div className="flex items-center">
+                        {event.powerNeeded} kWh
+                    </div>
+                    <div className="flex items-center">
+                        ${event.pricePerKwh}/kWh
+                    </div>
+                    </div>
+                </div>
+                
+                </div>
+                
+                <Separator className="my-4" />
+                
+                <div className="grid grid-cols-1 gap-6 text-sm">
+                
+
+                {/* Power Commitment Chart */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                    <div className="font-medium flex items-center">
+                        Power Committed
+                    </div>
+                    <span>{event.committedPower}/{event.powerNeeded} kWh</span>
+                    </div>
+                    <div className="space-y-1">
+                    
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                            event.powerNeeded > 0 && (event.committedPower / event.powerNeeded) >= 0.9 
+                            ? 'bg-green-600' 
+                            : event.powerNeeded > 0 && (event.committedPower / event.powerNeeded) >= 0.7 
+                            ? 'bg-yellow-500' 
+                            : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(100, event.powerNeeded > 0 ? (event.committedPower / event.powerNeeded) * 100 : 0)}%` }}
+                        ></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span className={`font-medium ${
+                        event.powerNeeded > 0 && (event.committedPower / event.powerNeeded) >= 0.9 
+                            ? 'text-green-600' 
+                            : event.powerNeeded > 0 && (event.committedPower / event.powerNeeded) >= 0.7 
+                            ? 'text-yellow-600' 
+                            : 'text-red-600'
+                        }`}>
+                        {event.powerNeeded > 0 ? Math.round((event.committedPower / event.powerNeeded) * 100) : 0}% fulfilled
+                        </span>
+                    </div>
+                    
+                    </div>
+                </div>
+
+                {/* Forecast Timeline Chart */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                    <div className="font-medium flex items-center">
+                        Forecast Timeline
+                    </div>
+                  
+                    </div>
+                    <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Created → Event Start</span>
+                        <span>
+                        {(() => {
+                            const created = new Date(event.createdAt)
+                            const start = new Date(event.startTime)
+                            const totalHours = (start - created) / (1000 * 60 * 60)
+                            if (totalHours < 24) return `${Math.round(totalHours)}h total`
+                            return `${Math.round(totalHours / 24)}d total`
+                        })()}
+                        </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                        className="bg-black h-2 rounded-full transition-all duration-300" 
+                        style={{ 
+                            width: `${(() => {
+                            const now = new Date()
+                            const created = new Date(event.createdAt)
+                            const start = new Date(event.startTime)
+                            if (now >= start) return 100 // Event has started
+                            const totalTime = start - created // Total forecast period
+                            const elapsed = now - created // Time since creation
+                            return Math.min(100, Math.max(0, (elapsed / totalTime) * 100))
+                            })()}%` 
+                        }}
+                        ></div>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-black font-medium">
+                        {(() => {
+                            const now = new Date()
+                            const created = new Date(event.createdAt)
+                            const start = new Date(event.startTime)
+                            if (now >= start) return 'Event started'
+                            const totalTime = start - created
+                            const elapsed = now - created
+                            const progress = Math.round((elapsed / totalTime) * 100)
+                            return `${progress}% to event start`
+                        })()}
+                        </span>
+                    </div>
+                    </div>
+                </div>
+                </div>
+
+                {/* Quick Stats Row */}
+                <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center space-x-4">
+                    <div className="flex items-center">
+                    ${event.committedPower*event.pricePerKwh} current payout
+                    </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <div className="flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    <div className="w-2 h-2 rounded-full mr-1 bg-yellow-600"></div>
+                    Pending
+                    </div>
+                </div>
+                </div>
+            </CardContent>
+            </Card>
+        ))}
+        
+        {upcomingEvents.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No upcoming demand response events.</p>
+            <p className="text-sm">Scheduled events will appear here.</p>
+            </div>
+        )}
+        </div>
+        </>
+        )}
 
       {/* Past Events Section */}
+      {activeTab === 'past' && (
+        <>
         <h1 className="text-2xl font-semibold">Past Events</h1>
           <div className="space-y-4">
             {pastEvents.map((event) => (
@@ -599,6 +815,8 @@ export default function DemandResponse() {
               </div>
             )}
           </div>
+        </>
+      )}
     </div>
   )
 }

@@ -15,7 +15,9 @@ def get_vessels():
         if user_id:
             vessels_data = db_client.get_vessels_by_user(user_id)
         else:
-            vessels_data = db_client.scan_table(db_client.vessels_table_name, limit=1000)
+            vessels_data = db_client.scan_table(
+                db_client.vessels_table_name, limit=1000
+            )
 
         vessels = [Vessel.from_dict(v).to_dict() for v in vessels_data]
         return jsonify(vessels), 200
@@ -28,7 +30,7 @@ def get_vessel(vessel_id: str):
     """Get a specific vessel by ID"""
     try:
         vessel_data = db_client.get_vessel_by_id(vessel_id)
-        
+
         if not vessel_data:
             return jsonify({"error": "Vessel not found"}), 404
 
@@ -45,7 +47,13 @@ def create_vessel():
         data = request.get_json()
 
         # Validate required fields
-        required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity"]
+        required_fields = [
+            "userId",
+            "displayName",
+            "vesselType",
+            "chargerType",
+            "capacity",
+        ]
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"{field} is required"}), 400
@@ -75,7 +83,7 @@ def update_vessel(vessel_id: str):
     """Update an existing vessel"""
     try:
         vessel_data = db_client.get_vessel_by_id(vessel_id)
-        
+
         if not vessel_data:
             return jsonify({"error": "Vessel not found"}), 404
 
@@ -96,7 +104,12 @@ def update_vessel(vessel_id: str):
 
         for field in update_fields:
             if field in data:
-                if field in ["capacity", "maxChargeRate", "minChargeRate", "rangeMeters"]:
+                if field in [
+                    "capacity",
+                    "maxChargeRate",
+                    "minChargeRate",
+                    "rangeMeters",
+                ]:
                     setattr(vessel, field, float(data[field]))
                 else:
                     setattr(vessel, field, data[field])
@@ -116,7 +129,7 @@ def delete_vessel(vessel_id: str):
     """Delete a vessel"""
     try:
         vessel_data = db_client.get_vessel_by_id(vessel_id)
-        
+
         if not vessel_data:
             return jsonify({"error": "Vessel not found"}), 404
 

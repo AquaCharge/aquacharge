@@ -25,7 +25,7 @@ def get_user(user_id: str):
     """Get a specific user by ID"""
     try:
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -89,7 +89,7 @@ def update_user(user_id: str):
     """Update an existing user"""
     try:
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -129,7 +129,7 @@ def delete_user(user_id: str):
     """Delete a user"""
     try:
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 

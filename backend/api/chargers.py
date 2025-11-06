@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, request
 from models.charger import Charger
 from typing import Dict
-from boto3 import dynamodb
 
 chargers_bp = Blueprint("chargers", __name__)
 

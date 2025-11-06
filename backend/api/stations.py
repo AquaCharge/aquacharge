@@ -37,7 +37,7 @@ def get_station(station_id: str):
     """Get a specific station by ID"""
     try:
         station_data = db_client.get_station_by_id(station_id)
-        
+
         if not station_data:
             return jsonify({"error": "Station not found"}), 404
 
@@ -94,7 +94,7 @@ def update_station(station_id: str):
     """Update an existing station"""
     try:
         station_data = db_client.get_station_by_id(station_id)
-        
+
         if not station_data:
             return jsonify({"error": "Station not found"}), 404
 
@@ -134,7 +134,7 @@ def delete_station(station_id: str):
     """Delete a station"""
     try:
         station_data = db_client.get_station_by_id(station_id)
-        
+
         if not station_data:
             return jsonify({"error": "Station not found"}), 404
 
@@ -157,13 +157,14 @@ def get_nearby_stations():
 
         # Get all stations from DynamoDB
         stations_data = db_client.scan_table(db_client.stations_table_name, limit=1000)
-        
+
         # Calculate distances
         nearby = []
         for station_data in stations_data:
             # Simplified distance calculation
             distance = (
-                (station_data["latitude"] - lat) ** 2 + (station_data["longitude"] - lng) ** 2
+                (station_data["latitude"] - lat) ** 2
+                + (station_data["longitude"] - lng) ** 2
             ) ** 0.5
             if distance <= radius:
                 station_dict = station_data.copy()
@@ -175,4 +176,7 @@ def get_nearby_stations():
 
         return jsonify(nearby), 200
     except Exception as e:
-        return jsonify({"error": "Failed to fetch nearby stations", "details": str(e)}), 500
+        return (
+            jsonify({"error": "Failed to fetch nearby stations", "details": str(e)}),
+            500,
+        )

@@ -21,7 +21,9 @@ def get_contracts():
         if vessel_id:
             contracts_data = db_client.get_contracts_by_vessel(vessel_id)
         else:
-            contracts_data = db_client.scan_table(db_client.contracts_table_name, limit=1000)
+            contracts_data = db_client.scan_table(
+                db_client.contracts_table_name, limit=1000
+            )
 
         # Filter by status if provided
         filtered_contracts = []
@@ -50,7 +52,7 @@ def get_contract(contract_id: str):
     """Get a specific contract by ID"""
     try:
         contract_data = db_client.get_contract_by_id(contract_id)
-        
+
         if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
@@ -134,7 +136,7 @@ def update_contract(contract_id: str):
     """Update a contract"""
     try:
         contract_data = db_client.get_contract_by_id(contract_id)
-        
+
         if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
@@ -175,7 +177,7 @@ def cancel_contract(contract_id: str):
     """Cancel a pending contract"""
     try:
         contract_data = db_client.get_contract_by_id(contract_id)
-        
+
         if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
@@ -209,7 +211,7 @@ def complete_contract(contract_id: str):
     """Mark a contract as completed"""
     try:
         contract_data = db_client.get_contract_by_id(contract_id)
-        
+
         if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
@@ -249,7 +251,7 @@ def delete_contract(contract_id: str):
     """Delete a contract (admin only)"""
     try:
         contract_data = db_client.get_contract_by_id(contract_id)
-        
+
         if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 

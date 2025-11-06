@@ -108,8 +108,13 @@ def login():
         try:
             user_data = db_client.get_user_by_email(email)
         except Exception as db_error:
-            return jsonify({"error": "Database connection error", "details": str(db_error)}), 500
-        
+            return (
+                jsonify(
+                    {"error": "Database connection error", "details": str(db_error)}
+                ),
+                500,
+            )
+
         if not user_data:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -249,7 +254,7 @@ def verify_token():
         # Get user from DynamoDB
         user_id = payload.get("user_id")
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -302,7 +307,7 @@ def refresh_token():
         # Get user from DynamoDB
         user_id = payload.get("user_id")
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -362,7 +367,9 @@ def forgot_password():
 
                 # TODO: Send email with reset link
                 # For now, we'll just log it (in production, integrate with email service)
-                reset_link = f"https://aquacharge.com/reset-password?token={reset_token}"
+                reset_link = (
+                    f"https://aquacharge.com/reset-password?token={reset_token}"
+                )
                 print(f"Password reset link for {email}: {reset_link}")
 
         return (
@@ -424,7 +431,7 @@ def reset_password():
         # Get user from DynamoDB
         user_id = token_data["user_id"]
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -485,7 +492,7 @@ def change_password():
         # Get user from DynamoDB
         user_id = payload.get("user_id")
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -543,7 +550,7 @@ def get_current_user():
         # Get user from DynamoDB
         user_id = payload.get("user_id")
         user_data = db_client.get_user_by_id(user_id)
-        
+
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 

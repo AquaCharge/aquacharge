@@ -16,7 +16,9 @@ def get_bookings():
         if user_id:
             bookings_data = db_client.get_bookings_by_user(user_id)
         else:
-            bookings_data = db_client.scan_table(db_client.bookings_table_name, limit=1000)
+            bookings_data = db_client.scan_table(
+                db_client.bookings_table_name, limit=1000
+            )
 
         bookings = [Booking.from_dict(b) for b in bookings_data]
 
@@ -37,7 +39,7 @@ def get_booking(booking_id: str):
     """Get a specific booking by ID"""
     try:
         booking_data = db_client.get_booking_by_id(booking_id)
-        
+
         if not booking_data:
             return jsonify({"error": "Booking not found"}), 404
 
@@ -82,9 +84,9 @@ def create_booking():
             db_client.bookings_table_name,
             filter_expression="stationId = :sid",
             expression_values={":sid": data["stationId"]},
-            limit=1000
+            limit=1000,
         )
-        
+
         for booking_data in station_bookings:
             booking = Booking.from_dict(booking_data)
             if booking.status in [BookingStatus.PENDING, BookingStatus.CONFIRMED]:
@@ -123,7 +125,7 @@ def update_booking(booking_id: str):
     """Update an existing booking"""
     try:
         booking_data = db_client.get_booking_by_id(booking_id)
-        
+
         if not booking_data:
             return jsonify({"error": "Booking not found"}), 404
 
@@ -160,7 +162,7 @@ def cancel_booking(booking_id: str):
     """Cancel a booking"""
     try:
         booking_data = db_client.get_booking_by_id(booking_id)
-        
+
         if not booking_data:
             return jsonify({"error": "Booking not found"}), 404
 
@@ -184,7 +186,7 @@ def delete_booking(booking_id: str):
     """Delete a booking"""
     try:
         booking_data = db_client.get_booking_by_id(booking_id)
-        
+
         if not booking_data:
             return jsonify({"error": "Booking not found"}), 404
 
@@ -205,12 +207,13 @@ def get_upcoming_bookings():
 
         bookings_data = db_client.get_bookings_by_user(user_id)
         current_time = datetime.now()
-        
+
         upcoming = [
             Booking.from_dict(b).to_dict()
             for b in bookings_data
             if datetime.fromisoformat(b["startTime"]) > current_time
-            and BookingStatus[b["status"]] in [BookingStatus.PENDING, BookingStatus.CONFIRMED]
+            and BookingStatus[b["status"]]
+            in [BookingStatus.PENDING, BookingStatus.CONFIRMED]
         ]
 
         # Sort by start time
@@ -218,4 +221,7 @@ def get_upcoming_bookings():
 
         return jsonify(upcoming), 200
     except Exception as e:
-        return jsonify({"error": "Failed to fetch upcoming bookings", "details": str(e)}), 500
+        return (
+            jsonify({"error": "Failed to fetch upcoming bookings", "details": str(e)}),
+            500,
+        )

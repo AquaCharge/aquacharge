@@ -7,6 +7,9 @@ import jwt
 import secrets
 import re
 
+# Import DynamoDB client
+from db.dynamodb import db_client
+
 auth_bp = Blueprint("auth", __name__)
 
 # In-memory storage for password reset tokens (replace with database in production)
@@ -101,18 +104,16 @@ def login():
         email = data["email"].lower().strip()
         password = data["password"]
 
-        # Import users database
-        from api.users import users_db
-
-        # Find user by email
-        user = None
-        for user_obj in users_db.values():
-            if user_obj.email.lower() == email:
-                user = user_obj
-                break
-
-        if not user:
+        # Find user by email from DynamoDB
+        try:
+            user_data = db_client.get_user_by_email(email)
+        except Exception as db_error:
+            return jsonify({"error": "Database connection error", "details": str(db_error)}), 500
+        
+        if not user_data:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        user = User.from_dict(user_data)
 
         # Check if user is active
         if not user.active:
@@ -127,6 +128,7 @@ def login():
 
         # Update last login time
         user.updatedAt = datetime.now()
+        db_client.update_user(user.id, user.to_dict())
 
         # Return user data (without password) and token
         user_data = user.to_public_dict()
@@ -179,15 +181,10 @@ def register():
                 400,
             )
 
-        # Import users database
-        from api.users import users_db
-
-        # Check if email already exists
-        for user in users_db.values():
-            if user.email.lower() == email:
-                return jsonify({"error": "Email already registered"}), 409
-            if user.displayName.lower() == displayName.lower():
-                return jsonify({"error": "Display name already taken"}), 409
+        # Check if email already exists in DynamoDB
+        existing_user = db_client.get_user_by_email(email)
+        if existing_user:
+            return jsonify({"error": "Email already registered"}), 409
 
         # Create new user
         user = User(
@@ -206,8 +203,8 @@ def register():
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
 
-        # Store user
-        users_db[user.id] = user
+        # Store user in DynamoDB
+        db_client.create_user(user.to_dict())
 
         # Generate JWT token for auto-login
         token = generate_jwt_token(user)
@@ -249,15 +246,14 @@ def verify_token():
         except ValueError as e:
             return jsonify({"error": str(e)}), 401
 
-        # Import users database
-        from api.users import users_db
-
-        # Get user from database
+        # Get user from DynamoDB
         user_id = payload.get("user_id")
-        if user_id not in users_db:
+        user_data = db_client.get_user_by_id(user_id)
+        
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        user = users_db[user_id]
+        user = User.from_dict(user_data)
 
         # Check if user is still active
         if not user.active:
@@ -303,15 +299,14 @@ def refresh_token():
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
 
-        # Import users database
-        from api.users import users_db
-
-        # Get user from database
+        # Get user from DynamoDB
         user_id = payload.get("user_id")
-        if user_id not in users_db:
+        user_data = db_client.get_user_by_id(user_id)
+        
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        user = users_db[user_id]
+        user = User.from_dict(user_data)
 
         # Check if user is still active
         if not user.active:
@@ -346,34 +341,29 @@ def forgot_password():
         if not validate_email(email):
             return jsonify({"error": "Invalid email format"}), 400
 
-        # Import users database
-        from api.users import users_db
-
-        # Find user by email
-        user = None
-        for user_obj in users_db.values():
-            if user_obj.email.lower() == email:
-                user = user_obj
-                break
+        # Find user by email from DynamoDB
+        user_data = db_client.get_user_by_email(email)
 
         # Always return success to prevent email enumeration
         # But only actually process if user exists
-        if user and user.active:
-            # Generate reset token
-            reset_token = secrets.token_urlsafe(32)
+        if user_data:
+            user = User.from_dict(user_data)
+            if user.active:
+                # Generate reset token
+                reset_token = secrets.token_urlsafe(32)
 
-            # Store reset token with expiry
-            password_reset_tokens[reset_token] = {
-                "user_id": user.id,
-                "email": user.email,
-                "expires_at": datetime.now() + timedelta(hours=2),  # 2 hours
-                "used": False,
-            }
+                # Store reset token with expiry
+                password_reset_tokens[reset_token] = {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "expires_at": datetime.now() + timedelta(hours=2),  # 2 hours
+                    "used": False,
+                }
 
-            # TODO: Send email with reset link
-            # For now, we'll just log it (in production, integrate with email service)
-            reset_link = f"https://aquacharge.com/reset-password?token={reset_token}"
-            print(f"Password reset link for {email}: {reset_link}")
+                # TODO: Send email with reset link
+                # For now, we'll just log it (in production, integrate with email service)
+                reset_link = f"https://aquacharge.com/reset-password?token={reset_token}"
+                print(f"Password reset link for {email}: {reset_link}")
 
         return (
             jsonify(
@@ -431,19 +421,19 @@ def reset_password():
         if token_data["used"]:
             return jsonify({"error": "Reset token has already been used"}), 400
 
-        # Import users database
-        from api.users import users_db
-
-        # Get user
+        # Get user from DynamoDB
         user_id = token_data["user_id"]
-        if user_id not in users_db:
+        user_data = db_client.get_user_by_id(user_id)
+        
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        user = users_db[user_id]
+        user = User.from_dict(user_data)
 
         # Update password
         user.passwordHash = hash_password(new_password)
         user.updatedAt = datetime.now()
+        db_client.update_user(user_id, user.to_dict())
 
         # Mark token as used
         token_data["used"] = True
@@ -492,15 +482,14 @@ def change_password():
                 400,
             )
 
-        # Import users database
-        from api.users import users_db
-
-        # Get user
+        # Get user from DynamoDB
         user_id = payload.get("user_id")
-        if user_id not in users_db:
+        user_data = db_client.get_user_by_id(user_id)
+        
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        user = users_db[user_id]
+        user = User.from_dict(user_data)
 
         # Verify current password
         if not verify_password(current_password, user.passwordHash):
@@ -518,6 +507,7 @@ def change_password():
         # Update password
         user.passwordHash = hash_password(new_password)
         user.updatedAt = datetime.now()
+        db_client.update_user(user_id, user.to_dict())
 
         return jsonify({"message": "Password has been changed successfully"}), 200
 
@@ -550,15 +540,14 @@ def get_current_user():
         except ValueError as e:
             return jsonify({"error": str(e)}), 401
 
-        # Import users database
-        from api.users import users_db
-
-        # Get user
+        # Get user from DynamoDB
         user_id = payload.get("user_id")
-        if user_id not in users_db:
+        user_data = db_client.get_user_by_id(user_id)
+        
+        if not user_data:
             return jsonify({"error": "User not found"}), 404
 
-        user = users_db[user_id]
+        user = User.from_dict(user_data)
 
         # Check if user is still active
         if not user.active:

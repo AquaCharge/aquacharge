@@ -1,201 +1,126 @@
 from flask import Blueprint, jsonify, request
 from models.vessel import Vessel
 from datetime import datetime
-from typing import Dict
+from db.dynamodb import db_client
 
 vessels_bp = Blueprint("vessels", __name__)
-
-# In-memory storage (replace with actual database)
-vessels_db: Dict[str, Vessel] = {}
-
-
-# Initialize with sample data
-def init_sample_vessels():
-    if not vessels_db:  # Only initialize if empty
-        sample_vessels = [
-            Vessel(
-                id="vessel-001",
-                userId="user-003",
-                displayName="Ocean Breeze",
-                vesselType="Sailing Yacht",
-                chargerType="Type 2 AC",
-                capacity=80.0,
-                maxChargeRate=22.0,
-                minChargeRate=3.7,
-                rangeMeters=185200.0,  # ~100 nautical miles
-                active=True,
-                createdAt=datetime(2024, 3, 6, 10, 0, 0),
-                updatedAt=datetime(2024, 3, 15, 14, 30, 0),
-            ),
-            Vessel(
-                id="vessel-002",
-                userId="user-003",
-                displayName="Sea Runner",
-                vesselType="Motor Yacht",
-                chargerType="CCS DC",
-                capacity=150.0,
-                maxChargeRate=50.0,
-                minChargeRate=7.0,
-                rangeMeters=370400.0,  # ~200 nautical miles
-                active=True,
-                createdAt=datetime(2024, 3, 8, 16, 45, 0),
-                updatedAt=None,
-            ),
-            Vessel(
-                id="vessel-003",
-                userId="user-004",
-                displayName="Royal Wind",
-                vesselType="Catamaran",
-                chargerType="Type 2 AC",
-                capacity=120.0,
-                maxChargeRate=11.0,
-                minChargeRate=3.7,
-                rangeMeters=277800.0,  # ~150 nautical miles
-                active=True,
-                createdAt=datetime(2024, 1, 25, 9, 15, 0),
-                updatedAt=datetime(2024, 2, 10, 11, 20, 0),
-            ),
-            Vessel(
-                id="vessel-004",
-                userId="user-005",
-                displayName="Fleet Alpha",
-                vesselType="Commercial Vessel",
-                chargerType="CCS DC",
-                capacity=300.0,
-                maxChargeRate=120.0,
-                minChargeRate=25.0,
-                rangeMeters=555600.0,  # ~300 nautical miles
-                active=False,
-                createdAt=datetime(2024, 4, 2, 8, 30, 0),
-                updatedAt=datetime(2024, 4, 10, 13, 45, 0),
-            ),
-            Vessel(
-                id="vessel-005",
-                userId="user-005",
-                displayName="Fleet Beta",
-                vesselType="Commercial Vessel",
-                chargerType="CHAdeMO",
-                capacity=250.0,
-                maxChargeRate=50.0,
-                minChargeRate=20.0,
-                rangeMeters=463000.0,  # ~250 nautical miles
-                active=True,
-                createdAt=datetime(2024, 4, 3, 12, 0, 0),
-                updatedAt=None,
-            ),
-            Vessel(
-                id="vessel-006",
-                userId="user-002",
-                displayName="Harbor Patrol",
-                vesselType="Work Boat",
-                chargerType="Type 2 AC",
-                capacity=60.0,
-                maxChargeRate=22.0,
-                minChargeRate=7.4,
-                rangeMeters=92600.0,  # ~50 nautical miles
-                active=True,
-                createdAt=datetime(2024, 2, 15, 7, 30, 0),
-                updatedAt=datetime(2024, 3, 1, 15, 10, 0),
-            ),
-        ]
-
-        for vessel in sample_vessels:
-            vessels_db[vessel.id] = vessel
-
-
-# Initialize sample data when module is imported
-init_sample_vessels()
 
 
 @vessels_bp.route("", methods=["GET"])
 def get_vessels():
     """Get all vessels, optionally filtered by userId"""
-    user_id = request.args.get("userId")
+    try:
+        user_id = request.args.get("userId")
 
-    if user_id:
-        vessels = [v.to_dict() for v in vessels_db.values() if v.userId == user_id]
-    else:
-        vessels = [v.to_dict() for v in vessels_db.values()]
+        if user_id:
+            vessels_data = db_client.get_vessels_by_user(user_id)
+        else:
+            vessels_data = db_client.scan_table(db_client.vessels_table_name, limit=1000)
 
-    return jsonify(vessels), 200
+        vessels = [Vessel.from_dict(v).to_dict() for v in vessels_data]
+        return jsonify(vessels), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch vessels", "details": str(e)}), 500
 
 
 @vessels_bp.route("/<vessel_id>", methods=["GET"])
 def get_vessel(vessel_id: str):
     """Get a specific vessel by ID"""
-    if vessel_id not in vessels_db:
-        return jsonify({"error": "Vessel not found"}), 404
+    try:
+        vessel_data = db_client.get_vessel_by_id(vessel_id)
+        
+        if not vessel_data:
+            return jsonify({"error": "Vessel not found"}), 404
 
-    return jsonify(vessels_db[vessel_id].to_dict()), 200
+        vessel = Vessel.from_dict(vessel_data)
+        return jsonify(vessel.to_dict()), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch vessel", "details": str(e)}), 500
 
 
 @vessels_bp.route("", methods=["POST"])
 def create_vessel():
     """Create a new vessel"""
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    # Validate required fields
-    required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity"]
-    for field in required_fields:
-        if field not in data:
-            return jsonify({"error": f"{field} is required"}), 400
+        # Validate required fields
+        required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity"]
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"{field} is required"}), 400
 
-    # Create vessel instance
-    vessel = Vessel(
-        userId=data["userId"],
-        displayName=data["displayName"],
-        vesselType=data["vesselType"],
-        chargerType=data["chargerType"],
-        capacity=float(data["capacity"]),
-        maxChargeRate=float(data.get("maxChargeRate", 0)),
-        minChargeRate=float(data.get("minChargeRate", 0)),
-        rangeMeters=float(data.get("rangeMeters", 0)),
-    )
+        # Create vessel instance
+        vessel = Vessel(
+            userId=data["userId"],
+            displayName=data["displayName"],
+            vesselType=data["vesselType"],
+            chargerType=data["chargerType"],
+            capacity=float(data["capacity"]),
+            maxChargeRate=float(data.get("maxChargeRate", 0)),
+            minChargeRate=float(data.get("minChargeRate", 0)),
+            rangeMeters=float(data.get("rangeMeters", 0)),
+        )
 
-    # Store vessel
-    vessels_db[vessel.id] = vessel
+        # Store vessel in DynamoDB
+        db_client.create_vessel(vessel.to_dict())
 
-    return jsonify(vessel.to_dict()), 201
+        return jsonify(vessel.to_dict()), 201
+    except Exception as e:
+        return jsonify({"error": "Failed to create vessel", "details": str(e)}), 500
 
 
 @vessels_bp.route("/<vessel_id>", methods=["PUT"])
 def update_vessel(vessel_id: str):
     """Update an existing vessel"""
-    if vessel_id not in vessels_db:
-        return jsonify({"error": "Vessel not found"}), 404
+    try:
+        vessel_data = db_client.get_vessel_by_id(vessel_id)
+        
+        if not vessel_data:
+            return jsonify({"error": "Vessel not found"}), 404
 
-    data = request.get_json()
-    vessel = vessels_db[vessel_id]
+        data = request.get_json()
+        vessel = Vessel.from_dict(vessel_data)
 
-    # Update allowed fields
-    update_fields = [
-        "displayName",
-        "vesselType",
-        "chargerType",
-        "capacity",
-        "maxChargeRate",
-        "minChargeRate",
-        "rangeMeters",
-        "active",
-    ]
+        # Update allowed fields
+        update_fields = [
+            "displayName",
+            "vesselType",
+            "chargerType",
+            "capacity",
+            "maxChargeRate",
+            "minChargeRate",
+            "rangeMeters",
+            "active",
+        ]
 
-    for field in update_fields:
-        if field in data:
-            if field in ["capacity", "maxChargeRate", "minChargeRate", "rangeMeters"]:
-                setattr(vessel, field, float(data[field]))
-            else:
-                setattr(vessel, field, data[field])
+        for field in update_fields:
+            if field in data:
+                if field in ["capacity", "maxChargeRate", "minChargeRate", "rangeMeters"]:
+                    setattr(vessel, field, float(data[field]))
+                else:
+                    setattr(vessel, field, data[field])
 
-    vessel.updatedAt = datetime.now()
+        vessel.updatedAt = datetime.now()
 
-    return jsonify(vessel.to_dict()), 200
+        # Update in DynamoDB
+        db_client.put_item(db_client.vessels_table_name, vessel.to_dict())
+
+        return jsonify(vessel.to_dict()), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to update vessel", "details": str(e)}), 500
 
 
 @vessels_bp.route("/<vessel_id>", methods=["DELETE"])
 def delete_vessel(vessel_id: str):
     """Delete a vessel"""
-    if vessel_id not in vessels_db:
-        return jsonify({"error": "Vessel not found"}), 404
+    try:
+        vessel_data = db_client.get_vessel_by_id(vessel_id)
+        
+        if not vessel_data:
+            return jsonify({"error": "Vessel not found"}), 404
 
-    del vessels_db[vessel_id]
-    return jsonify({"message": "Vessel deleted successfully"}), 200
+        db_client.delete_item(db_client.vessels_table_name, {"id": vessel_id})
+        return jsonify({"message": "Vessel deleted successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to delete vessel", "details": str(e)}), 500

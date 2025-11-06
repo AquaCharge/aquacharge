@@ -31,3 +31,6 @@ Thumbs.db
 node_modules/
 dist/
 .vite/
+
+# Extra stuff to ignore
+backend/test_data/*

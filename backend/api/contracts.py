@@ -2,83 +2,9 @@ from flask import Blueprint, jsonify, request
 from models.contract import Contract, ContractStatus
 from middleware.auth import require_auth, require_role
 from datetime import datetime
-from typing import Dict
+from db.dynamodb import db_client
 
 contracts_bp = Blueprint("contracts", __name__)
-
-# In-memory storage (replace with actual database)
-contracts_db: Dict[str, Contract] = {}
-
-
-# Initialize with sample contracts
-def init_sample_contracts():
-    if not contracts_db:  # Only initialize if empty
-
-        sample_contracts = [
-            Contract(
-                id="contract-001",
-                vesselId="vessel-001",
-                vesselName="Sea Breeze",
-                energyAmount=150.0,
-                pricePerKwh=0.15,
-                totalValue=22.50,
-                startTime=datetime(2025, 10, 27, 9, 0, 0),
-                endTime=datetime(2025, 10, 27, 17, 0, 0),
-                status=ContractStatus.ACTIVE.value,
-                terms="Standard vessel-to-grid energy transaction terms",
-                createdAt=datetime(2025, 10, 26, 10, 0, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-002",
-                vesselId="vessel-002",
-                vesselName="Ocean Explorer",
-                energyAmount=200.0,
-                pricePerKwh=0.18,
-                totalValue=36.00,
-                startTime=datetime(2025, 10, 28, 8, 0, 0),
-                endTime=datetime(2025, 10, 28, 18, 0, 0),
-                status=ContractStatus.PENDING.value,
-                terms="Peak hour energy transaction with premium rates",
-                createdAt=datetime(2025, 10, 26, 14, 30, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-003",
-                vesselId="vessel-003",
-                vesselName="Wave Runner",
-                energyAmount=75.0,
-                pricePerKwh=0.12,
-                totalValue=9.00,
-                startTime=datetime(2025, 10, 25, 14, 0, 0),
-                endTime=datetime(2025, 10, 25, 20, 0, 0),
-                status=ContractStatus.COMPLETED.value,
-                terms="Off-peak energy transaction",
-                createdAt=datetime(2025, 10, 25, 8, 0, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-004",
-                vesselId="vessel-004",
-                vesselName="Harbor Master",
-                energyAmount=300.0,
-                pricePerKwh=0.20,
-                totalValue=60.00,
-                startTime=datetime(2025, 10, 26, 6, 0, 0),
-                endTime=datetime(2025, 10, 26, 12, 0, 0),
-                status=ContractStatus.FAILED.value,
-                terms="High-capacity energy transfer agreement",
-                createdAt=datetime(2025, 10, 25, 18, 0, 0),
-                createdBy="user-001",
-            ),
-        ]
-
-        for contract in sample_contracts:
-            contracts_db[contract.id] = contract
-
-
-# Initialize sample data when module is imported
-init_sample_contracts()
 
 
 @contracts_bp.route("", methods=["GET"])
@@ -91,14 +17,17 @@ def get_contracts():
         status_filter = request.args.get("status")
         vessel_id = request.args.get("vesselId")
 
-        # Filter contracts
+        # Fetch contracts from DynamoDB
+        if vessel_id:
+            contracts_data = db_client.get_contracts_by_vessel(vessel_id)
+        else:
+            contracts_data = db_client.scan_table(db_client.contracts_table_name, limit=1000)
+
+        # Filter by status if provided
         filtered_contracts = []
-        for contract in contracts_db.values():
-            # Apply status filter
+        for contract_data in contracts_data:
+            contract = Contract.from_dict(contract_data)
             if status_filter and contract.status != status_filter:
-                continue
-            # Apply vessel filter
-            if vessel_id and contract.vesselId != vessel_id:
                 continue
             filtered_contracts.append(contract.to_public_dict())
 
@@ -120,10 +49,12 @@ def get_contracts():
 def get_contract(contract_id: str):
     """Get a specific contract by ID"""
     try:
-        if contract_id not in contracts_db:
+        contract_data = db_client.get_contract_by_id(contract_id)
+        
+        if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract_data)
         return jsonify(contract.to_public_dict()), 200
 
     except Exception as e:
@@ -179,8 +110,8 @@ def create_contract():
         # Validate contract data
         contract.validate()
 
-        # Store contract
-        contracts_db[contract.id] = contract
+        # Store contract in DynamoDB
+        db_client.create_contract(contract.to_dict())
 
         return (
             jsonify(
@@ -202,11 +133,13 @@ def create_contract():
 def update_contract(contract_id: str):
     """Update a contract"""
     try:
-        if contract_id not in contracts_db:
+        contract_data = db_client.get_contract_by_id(contract_id)
+        
+        if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
         data = request.get_json()
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract_data)
 
         # Update fields if provided
         if "status" in data:
@@ -219,6 +152,9 @@ def update_contract(contract_id: str):
 
         # Update timestamp
         contract.updatedAt = datetime.now()
+
+        # Update in DynamoDB
+        db_client.put_item(db_client.contracts_table_name, contract.to_dict())
 
         return (
             jsonify(
@@ -238,16 +174,21 @@ def update_contract(contract_id: str):
 def cancel_contract(contract_id: str):
     """Cancel a pending contract"""
     try:
-        if contract_id not in contracts_db:
+        contract_data = db_client.get_contract_by_id(contract_id)
+        
+        if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract_data)
 
         if contract.status != ContractStatus.PENDING.value:
             return jsonify({"error": "Only pending contracts can be cancelled"}), 400
 
         contract.status = ContractStatus.CANCELLED.value
         contract.updatedAt = datetime.now()
+
+        # Update in DynamoDB
+        db_client.put_item(db_client.contracts_table_name, contract.to_dict())
 
         return (
             jsonify(
@@ -267,10 +208,12 @@ def cancel_contract(contract_id: str):
 def complete_contract(contract_id: str):
     """Mark a contract as completed"""
     try:
-        if contract_id not in contracts_db:
+        contract_data = db_client.get_contract_by_id(contract_id)
+        
+        if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract_data)
 
         if contract.status not in [
             ContractStatus.PENDING.value,
@@ -283,6 +226,9 @@ def complete_contract(contract_id: str):
 
         contract.status = ContractStatus.COMPLETED.value
         contract.updatedAt = datetime.now()
+
+        # Update in DynamoDB
+        db_client.put_item(db_client.contracts_table_name, contract.to_dict())
 
         return (
             jsonify(
@@ -302,10 +248,12 @@ def complete_contract(contract_id: str):
 def delete_contract(contract_id: str):
     """Delete a contract (admin only)"""
     try:
-        if contract_id not in contracts_db:
+        contract_data = db_client.get_contract_by_id(contract_id)
+        
+        if not contract_data:
             return jsonify({"error": "Contract not found"}), 404
 
-        del contracts_db[contract_id]
+        db_client.delete_item(db_client.contracts_table_name, {"id": contract_id})
 
         return jsonify({"message": "Contract deleted successfully"}), 200
 

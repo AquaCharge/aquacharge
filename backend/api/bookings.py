@@ -1,121 +1,27 @@
 from flask import Blueprint, jsonify, request
 from models.booking import Booking, BookingStatus
-from datetime import datetime, timedelta
-from typing import Dict
+from datetime import datetime, timezone
+from db.dynamoClient import DynamoClient
 
 bookings_bp = Blueprint("bookings", __name__)
 
-# In-memory storage (replace with actual database)
-bookings_db: Dict[str, Booking] = {}
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-bookings-dev", region_name="us-east-1"
+)
 
 
-# Initialize with sample data
-def init_sample_bookings():
-    if not bookings_db:  # Only initialize if empty
-        base_time = datetime(2024, 10, 18, 8, 0, 0)  # Starting from today
-
-        sample_bookings = [
-            # Completed bookings
-            Booking(
-                id="booking-001",
-                userId="user-003",
-                vesselId="vessel-001",
-                stationId="station-001",
-                startTime=base_time - timedelta(days=5, hours=2),
-                endTime=base_time - timedelta(days=5),
-                status=BookingStatus.COMPLETED,
-                chargerType="Type 2 AC",
-                createdAt=base_time - timedelta(days=7),
-            ),
-            Booking(
-                id="booking-002",
-                userId="user-004",
-                vesselId="vessel-003",
-                stationId="station-002",
-                startTime=base_time - timedelta(days=3, hours=3),
-                endTime=base_time - timedelta(days=3, hours=1),
-                status=BookingStatus.COMPLETED,
-                chargerType="Type 2 AC",
-                createdAt=base_time - timedelta(days=5),
-            ),
-            # Confirmed upcoming bookings
-            Booking(
-                id="booking-003",
-                userId="user-003",
-                vesselId="vessel-002",
-                stationId="station-001",
-                startTime=base_time + timedelta(hours=4),
-                endTime=base_time + timedelta(hours=6),
-                status=BookingStatus.CONFIRMED,
-                chargerType="CCS DC",
-                createdAt=base_time - timedelta(days=2),
-            ),
-            Booking(
-                id="booking-004",
-                userId="user-005",
-                vesselId="vessel-005",
-                stationId="station-004",
-                startTime=base_time + timedelta(days=1, hours=6),
-                endTime=base_time + timedelta(days=1, hours=8),
-                status=BookingStatus.CONFIRMED,
-                chargerType="CHAdeMO",
-                createdAt=base_time - timedelta(days=1),
-            ),
-            # Pending bookings
-            Booking(
-                id="booking-005",
-                userId="user-002",
-                vesselId="vessel-006",
-                stationId="station-001",
-                startTime=base_time + timedelta(days=2, hours=10),
-                endTime=base_time + timedelta(days=2, hours=12),
-                status=BookingStatus.PENDING,
-                chargerType="Type 2 AC",
-                createdAt=base_time - timedelta(hours=6),
-            ),
-            Booking(
-                id="booking-006",
-                userId="user-004",
-                vesselId="vessel-003",
-                stationId="station-006",
-                startTime=base_time + timedelta(days=3, hours=14),
-                endTime=base_time + timedelta(days=3, hours=16),
-                status=BookingStatus.PENDING,
-                chargerType="Type 2 AC",
-                createdAt=base_time - timedelta(hours=2),
-            ),
-            # Cancelled booking
-            Booking(
-                id="booking-007",
-                userId="user-005",
-                vesselId="vessel-004",
-                stationId="station-003",
-                startTime=base_time - timedelta(days=1, hours=10),
-                endTime=base_time - timedelta(days=1, hours=8),
-                status=BookingStatus.CANCELLED,
-                chargerType="CCS DC",
-                createdAt=base_time - timedelta(days=3),
-            ),
-            # More future bookings
-            Booking(
-                id="booking-008",
-                userId="user-003",
-                vesselId="vessel-001",
-                stationId="station-002",
-                startTime=base_time + timedelta(days=7, hours=9),
-                endTime=base_time + timedelta(days=7, hours=11),
-                status=BookingStatus.CONFIRMED,
-                chargerType="Type 2 AC",
-                createdAt=base_time - timedelta(hours=12),
-            ),
-        ]
-
-        for booking in sample_bookings:
-            bookings_db[booking.id] = booking
+def parse_datetime_safe(dt_string):
+    """Parse datetime string and ensure it's timezone-aware (UTC)"""
+    dt = datetime.fromisoformat(dt_string)
+    # If naive, assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
-# Initialize sample data when module is imported
-init_sample_bookings()
+def now_utc():
+    """Get current datetime in UTC"""
+    return datetime.now(timezone.utc)
 
 
 @bookings_bp.route("", methods=["GET"])
@@ -124,28 +30,30 @@ def get_bookings():
     user_id = request.args.get("userId")
     status = request.args.get("status")
 
-    bookings = list(bookings_db.values())
+    bookings = dynamoDB_client.scan_items()
 
     if user_id:
-        bookings = [b for b in bookings if b.userId == user_id]
+        bookings = [b for b in bookings if b.get("userId") == user_id]
 
     if status:
         try:
             status_enum = BookingStatus[status.upper()]
-            bookings = [b for b in bookings if b.status == status_enum]
+            bookings = [b for b in bookings if b.get("status") == status_enum.value]
         except KeyError:
             return jsonify({"error": "Invalid status"}), 400
 
-    return jsonify([b.to_dict() for b in bookings]), 200
+    return jsonify(bookings), 200
 
 
 @bookings_bp.route("/<booking_id>", methods=["GET"])
 def get_booking(booking_id: str):
     """Get a specific booking by ID"""
-    if booking_id not in bookings_db:
+    booking = dynamoDB_client.get_item(key={"id": booking_id})
+
+    if not booking:
         return jsonify({"error": "Booking not found"}), 404
 
-    return jsonify(bookings_db[booking_id].to_dict()), 200
+    return jsonify(booking), 200
 
 
 @bookings_bp.route("", methods=["POST"])
@@ -168,8 +76,8 @@ def create_booking():
 
     # Parse datetime strings
     try:
-        start_time = datetime.fromisoformat(data["startTime"])
-        end_time = datetime.fromisoformat(data["endTime"])
+        start_time = parse_datetime_safe(data["startTime"])
+        end_time = parse_datetime_safe(data["endTime"])
     except ValueError:
         return jsonify({"error": "Invalid datetime format. Use ISO format."}), 400
 
@@ -178,13 +86,18 @@ def create_booking():
         return jsonify({"error": "End time must be after start time"}), 400
 
     # Check for conflicts (simplified - would need proper DB queries)
-    for booking in bookings_db.values():
-        if booking.stationId == data["stationId"] and booking.status in [
-            BookingStatus.PENDING,
-            BookingStatus.CONFIRMED,
+    bookings = dynamoDB_client.scan_items()
+    for booking_dict in bookings:
+        if booking_dict.get("stationId") == data["stationId"] and booking_dict.get(
+            "status"
+        ) in [
+            BookingStatus.PENDING.value,
+            BookingStatus.CONFIRMED.value,
         ]:
             # Check for time overlap
-            if not (end_time <= booking.startTime or start_time >= booking.endTime):
+            booking_start = parse_datetime_safe(booking_dict["startTime"])
+            booking_end = parse_datetime_safe(booking_dict["endTime"])
+            if not (end_time <= booking_start or start_time >= booking_end):
                 return (
                     jsonify({"error": "Time slot conflicts with existing booking"}),
                     409,
@@ -206,7 +119,7 @@ def create_booking():
     )
 
     # Store booking
-    bookings_db[booking.id] = booking
+    dynamoDB_client.put_item(booking.to_dict())
 
     return jsonify(booking.to_dict()), 201
 
@@ -214,55 +127,68 @@ def create_booking():
 @bookings_bp.route("/<booking_id>", methods=["PUT"])
 def update_booking(booking_id: str):
     """Update an existing booking"""
-    if booking_id not in bookings_db:
+    booking_dict = dynamoDB_client.get_item(key={"id": booking_id})
+    if not booking_dict:
         return jsonify({"error": "Booking not found"}), 404
 
     data = request.get_json()
-    booking = bookings_db[booking_id]
+    update_data = {}
 
     # Update status
     if "status" in data:
         try:
-            booking.status = BookingStatus[data["status"].upper()]
+            status_enum = BookingStatus[data["status"].upper()]
+            update_data["status"] = status_enum.value
         except KeyError:
             return jsonify({"error": "Invalid status"}), 400
 
     # Update times if provided
+    start_time = parse_datetime_safe(booking_dict["startTime"])
+    end_time = parse_datetime_safe(booking_dict["endTime"])
+
     if "startTime" in data:
-        booking.startTime = datetime.fromisoformat(data["startTime"])
+        start_time = parse_datetime_safe(data["startTime"])
+        update_data["startTime"] = start_time.isoformat()
     if "endTime" in data:
-        booking.endTime = datetime.fromisoformat(data["endTime"])
+        end_time = parse_datetime_safe(data["endTime"])
+        update_data["endTime"] = end_time.isoformat()
 
     # Validate time range
-    if booking.endTime <= booking.startTime:
+    if end_time <= start_time:
         return jsonify({"error": "End time must be after start time"}), 400
 
-    return jsonify(booking.to_dict()), 200
+    updated_booking = dynamoDB_client.update_item(
+        key={"id": booking_id}, update_data=update_data
+    )
+
+    return jsonify(updated_booking), 200
 
 
 @bookings_bp.route("/<booking_id>/cancel", methods=["POST"])
 def cancel_booking(booking_id: str):
     """Cancel a booking"""
-    if booking_id not in bookings_db:
+    booking_dict = dynamoDB_client.get_item(key={"id": booking_id})
+    if not booking_dict:
         return jsonify({"error": "Booking not found"}), 404
 
-    booking = bookings_db[booking_id]
-
-    if booking.status == BookingStatus.COMPLETED:
+    if booking_dict.get("status") == BookingStatus.COMPLETED.value:
         return jsonify({"error": "Cannot cancel completed booking"}), 400
 
-    booking.status = BookingStatus.CANCELLED
+    updated_booking = dynamoDB_client.update_item(
+        key={"id": booking_id}, update_data={"status": BookingStatus.CANCELLED.value}
+    )
 
-    return jsonify(booking.to_dict()), 200
+    return jsonify(updated_booking), 200
 
 
 @bookings_bp.route("/<booking_id>", methods=["DELETE"])
 def delete_booking(booking_id: str):
     """Delete a booking"""
-    if booking_id not in bookings_db:
+    booking = dynamoDB_client.get_item(key={"id": booking_id})
+    if not booking:
         return jsonify({"error": "Booking not found"}), 404
 
-    del bookings_db[booking_id]
+    dynamoDB_client.delete_item(key={"id": booking_id})
     return jsonify({"message": "Booking deleted successfully"}), 200
 
 
@@ -274,14 +200,19 @@ def get_upcoming_bookings():
     if not user_id:
         return jsonify({"error": "userId parameter is required"}), 400
 
-    current_time = datetime.now()
-    upcoming = [
-        b.to_dict()
-        for b in bookings_db.values()
-        if b.userId == user_id
-        and b.startTime > current_time
-        and b.status in [BookingStatus.PENDING, BookingStatus.CONFIRMED]
-    ]
+    bookings = dynamoDB_client.scan_items()
+    current_time = now_utc()
+
+    upcoming = []
+    for booking_dict in bookings:
+        booking_start = parse_datetime_safe(booking_dict["startTime"])
+        if (
+            booking_dict.get("userId") == user_id
+            and booking_start > current_time
+            and booking_dict.get("status")
+            in [BookingStatus.PENDING.value, BookingStatus.CONFIRMED.value]
+        ):
+            upcoming.append(booking_dict)
 
     # Sort by start time
     upcoming.sort(key=lambda x: x["startTime"])

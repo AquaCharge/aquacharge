@@ -2,83 +2,26 @@ from flask import Blueprint, jsonify, request
 from models.contract import Contract, ContractStatus
 from middleware.auth import require_auth, require_role
 from datetime import datetime
-from typing import Dict
+from db.dynamoClient import DynamoClient
+from decimal import Decimal
 
 contracts_bp = Blueprint("contracts", __name__)
 
 # In-memory storage (replace with actual database)
-contracts_db: Dict[str, Contract] = {}
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-contracts-dev", region_name="us-east-1"
+)
 
 
-# Initialize with sample contracts
-def init_sample_contracts():
-    if not contracts_db:  # Only initialize if empty
-
-        sample_contracts = [
-            Contract(
-                id="contract-001",
-                vesselId="vessel-001",
-                vesselName="Sea Breeze",
-                energyAmount=150.0,
-                pricePerKwh=0.15,
-                totalValue=22.50,
-                startTime=datetime(2025, 10, 27, 9, 0, 0),
-                endTime=datetime(2025, 10, 27, 17, 0, 0),
-                status=ContractStatus.ACTIVE.value,
-                terms="Standard vessel-to-grid energy transaction terms",
-                createdAt=datetime(2025, 10, 26, 10, 0, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-002",
-                vesselId="vessel-002",
-                vesselName="Ocean Explorer",
-                energyAmount=200.0,
-                pricePerKwh=0.18,
-                totalValue=36.00,
-                startTime=datetime(2025, 10, 28, 8, 0, 0),
-                endTime=datetime(2025, 10, 28, 18, 0, 0),
-                status=ContractStatus.PENDING.value,
-                terms="Peak hour energy transaction with premium rates",
-                createdAt=datetime(2025, 10, 26, 14, 30, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-003",
-                vesselId="vessel-003",
-                vesselName="Wave Runner",
-                energyAmount=75.0,
-                pricePerKwh=0.12,
-                totalValue=9.00,
-                startTime=datetime(2025, 10, 25, 14, 0, 0),
-                endTime=datetime(2025, 10, 25, 20, 0, 0),
-                status=ContractStatus.COMPLETED.value,
-                terms="Off-peak energy transaction",
-                createdAt=datetime(2025, 10, 25, 8, 0, 0),
-                createdBy="user-001",
-            ),
-            Contract(
-                id="contract-004",
-                vesselId="vessel-004",
-                vesselName="Harbor Master",
-                energyAmount=300.0,
-                pricePerKwh=0.20,
-                totalValue=60.00,
-                startTime=datetime(2025, 10, 26, 6, 0, 0),
-                endTime=datetime(2025, 10, 26, 12, 0, 0),
-                status=ContractStatus.FAILED.value,
-                terms="High-capacity energy transfer agreement",
-                createdAt=datetime(2025, 10, 25, 18, 0, 0),
-                createdBy="user-001",
-            ),
-        ]
-
-        for contract in sample_contracts:
-            contracts_db[contract.id] = contract
-
-
-# Initialize sample data when module is imported
-init_sample_contracts()
+def convert_decimals(obj):
+    """Convert Decimal objects to float for JSON serialization"""
+    if isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: convert_decimals(value) for key, value in obj.items()}
+    elif isinstance(obj, Decimal):
+        return float(obj)
+    return obj
 
 
 @contracts_bp.route("", methods=["GET"])
@@ -90,22 +33,24 @@ def get_contracts():
         # Get query parameters
         status_filter = request.args.get("status")
         vessel_id = request.args.get("vesselId")
+        contracts = dynamoDB_client.scan_items()
 
         # Filter contracts
         filtered_contracts = []
-        for contract in contracts_db.values():
+        for contract in contracts:
             # Apply status filter
-            if status_filter and contract.status != status_filter:
+            if status_filter and contract["status"] != status_filter:
                 continue
             # Apply vessel filter
             if vessel_id and contract.vesselId != vessel_id:
                 continue
+            contract = Contract.from_dict(contract)
             filtered_contracts.append(contract.to_public_dict())
 
         # Sort by creation date (newest first)
         filtered_contracts.sort(key=lambda x: x["createdAt"], reverse=True)
 
-        return jsonify(filtered_contracts), 200
+        return jsonify(convert_decimals(filtered_contracts)), 200
 
     except Exception as e:
         return (
@@ -119,12 +64,13 @@ def get_contracts():
 @require_role("ADMIN")
 def get_contract(contract_id: str):
     """Get a specific contract by ID"""
+    contract = dynamoDB_client.get_item(key={"id": contract_id})
     try:
-        if contract_id not in contracts_db:
+        if not contract:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
-        return jsonify(contract.to_public_dict()), 200
+        contract = Contract.from_dict(contract)
+        return jsonify(convert_decimals(contract.to_public_dict())), 200
 
     except Exception as e:
         return jsonify({"error": "Failed to retrieve contract", "details": str(e)}), 500
@@ -165,8 +111,8 @@ def create_contract():
         contract = Contract(
             vesselId=data["vesselId"],
             vesselName=data["vesselName"],
-            energyAmount=float(data["energyAmount"]),
-            pricePerKwh=float(data["pricePerKwh"]),
+            energyAmount=Decimal(str(data["energyAmount"])),
+            pricePerKwh=Decimal(str(data["pricePerKwh"])),
             startTime=start_time,
             endTime=end_time,
             terms=data["terms"],
@@ -180,14 +126,16 @@ def create_contract():
         contract.validate()
 
         # Store contract
-        contracts_db[contract.id] = contract
+        dynamoDB_client.put_item(item=contract.to_dict())
 
         return (
             jsonify(
-                {
-                    "message": "Contract created successfully",
-                    "contract": contract.to_public_dict(),
-                }
+                convert_decimals(
+                    {
+                        "message": "Contract created successfully",
+                        "contract": contract.to_public_dict(),
+                    }
+                )
             ),
             201,
         )
@@ -201,13 +149,13 @@ def create_contract():
 @contracts_bp.route("/<contract_id>", methods=["PUT"])
 def update_contract(contract_id: str):
     """Update a contract"""
+    contract = dynamoDB_client.get_item(key={"id": contract_id})
     try:
-        if contract_id not in contracts_db:
+        if not contract:
             return jsonify({"error": "Contract not found"}), 404
 
         data = request.get_json()
-        contract = contracts_db[contract_id]
-
+        contract = Contract.from_dict(contract)
         # Update fields if provided
         if "status" in data:
             if data["status"] not in [status.value for status in ContractStatus]:
@@ -220,12 +168,22 @@ def update_contract(contract_id: str):
         # Update timestamp
         contract.updatedAt = datetime.now()
 
+        dynamoDB_client.update_item(
+            key={"id": contract_id},
+            update_data={
+                "status": contract.status,
+                "terms": contract.terms,
+                "updatedAt": contract.updatedAt.isoformat(),
+            },
+        )
         return (
             jsonify(
-                {
-                    "message": "Contract updated successfully",
-                    "contract": contract.to_public_dict(),
-                }
+                convert_decimals(
+                    {
+                        "message": "Contract updated successfully",
+                        "contract": contract.to_public_dict(),
+                    }
+                )
             ),
             200,
         )
@@ -237,11 +195,12 @@ def update_contract(contract_id: str):
 @contracts_bp.route("/<contract_id>/cancel", methods=["POST"])
 def cancel_contract(contract_id: str):
     """Cancel a pending contract"""
+    contract = dynamoDB_client.get_item(key={"id": contract_id})
     try:
-        if contract_id not in contracts_db:
+        if not contract:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract)
 
         if contract.status != ContractStatus.PENDING.value:
             return jsonify({"error": "Only pending contracts can be cancelled"}), 400
@@ -249,12 +208,22 @@ def cancel_contract(contract_id: str):
         contract.status = ContractStatus.CANCELLED.value
         contract.updatedAt = datetime.now()
 
+        dynamoDB_client.update_item(
+            key={"id": contract_id},
+            update_data={
+                "status": contract.status,
+                "updatedAt": contract.updatedAt.isoformat(),
+            },
+        )
+
         return (
             jsonify(
-                {
-                    "message": "Contract cancelled successfully",
-                    "contract": contract.to_public_dict(),
-                }
+                convert_decimals(
+                    {
+                        "message": "Contract cancelled successfully",
+                        "contract": contract.to_public_dict(),
+                    }
+                )
             ),
             200,
         )
@@ -266,11 +235,12 @@ def cancel_contract(contract_id: str):
 @contracts_bp.route("/<contract_id>/complete", methods=["POST"])
 def complete_contract(contract_id: str):
     """Mark a contract as completed"""
+    contract = dynamoDB_client.get_item(key={"id": contract_id})
     try:
-        if contract_id not in contracts_db:
+        if not contract:
             return jsonify({"error": "Contract not found"}), 404
 
-        contract = contracts_db[contract_id]
+        contract = Contract.from_dict(contract)
 
         if contract.status not in [
             ContractStatus.PENDING.value,
@@ -283,13 +253,22 @@ def complete_contract(contract_id: str):
 
         contract.status = ContractStatus.COMPLETED.value
         contract.updatedAt = datetime.now()
+        dynamoDB_client.update_item(
+            key={"id": contract_id},
+            update_data={
+                "status": contract.status,
+                "updatedAt": contract.updatedAt.isoformat(),
+            },
+        )
 
         return (
             jsonify(
-                {
-                    "message": "Contract completed successfully",
-                    "contract": contract.to_public_dict(),
-                }
+                convert_decimals(
+                    {
+                        "message": "Contract completed successfully",
+                        "contract": contract.to_public_dict(),
+                    }
+                )
             ),
             200,
         )
@@ -301,11 +280,12 @@ def complete_contract(contract_id: str):
 @contracts_bp.route("/<contract_id>", methods=["DELETE"])
 def delete_contract(contract_id: str):
     """Delete a contract (admin only)"""
+    contract = dynamoDB_client.get_item(key={"id": contract_id})
     try:
-        if contract_id not in contracts_db:
+        if not contract:
             return jsonify({"error": "Contract not found"}), 404
 
-        del contracts_db[contract_id]
+        dynamoDB_client.delete_item(key={"id": contract_id})
 
         return jsonify({"message": "Contract deleted successfully"}), 200
 

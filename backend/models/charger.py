@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any
 from enum import Enum
+import decimal
 import uuid
 
 from .baseModel import BaseModel
@@ -17,7 +18,7 @@ class Charger(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     chargingStationId: str = ""
     chargerType: str = ""
-    maxRate: float = 0.0
+    maxRate: decimal.Decimal = decimal.Decimal(0.0)
     active: bool = True
 
     @classmethod

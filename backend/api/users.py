@@ -1,115 +1,32 @@
 from flask import Blueprint, jsonify, request
 from models.user import User, UserRole, UserType
-from datetime import datetime
-from typing import Dict
 import hashlib
+from db.dynamoClient import DynamoClient
+
+
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-users-dev", region_name="us-east-1"
+)
 
 users_bp = Blueprint("users", __name__)
-
-# In-memory storage (replace with actual database)
-users_db: Dict[str, User] = {}
-
-
-# Initialize with sample data
-def init_sample_users():
-    if not users_db:  # Only initialize if empty
-        sample_users = [
-            User(
-                id="user-001",
-                displayName="Stacy Admin",
-                email="admin@aquacharge.com",
-                passwordHash=hashlib.sha256("admin123".encode()).hexdigest(),
-                role=UserRole.ADMIN.value,
-                type=UserType.POWER_OPERATOR.value,
-                active=True,
-                orgId="org-001",
-                createdAt=datetime(2024, 1, 15, 10, 30, 0),
-                updatedAt=datetime(2024, 2, 1, 14, 20, 0),
-            ),
-            User(
-                id="user-002",
-                displayName="Joe Vessel-Operator",
-                email="operator@blueharbor.com",
-                passwordHash=hashlib.sha256("operator456".encode()).hexdigest(),
-                role=UserRole.ADMIN.value,
-                type=UserType.POWER_OPERATOR.value,
-                active=True,
-                orgId="org-002",
-                createdAt=datetime(2024, 2, 10, 9, 15, 0),
-                updatedAt=None,
-            ),
-            User(
-                id="user-003",
-                displayName="John Vessel-Captain",
-                email="captain@oceanbreezes.com",
-                passwordHash=hashlib.sha256("user789".encode()).hexdigest(),
-                role=UserRole.USER.value,
-                type=UserType.VESSEL_OPERATOR.value,
-                active=True,
-                orgId=None,
-                createdAt=datetime(2024, 3, 5, 16, 45, 0),
-                updatedAt=datetime(2024, 3, 20, 11, 30, 0),
-            ),
-            User(
-                id="user-004",
-                displayName="yacht_club",
-                email="management@royalyacht.com",
-                passwordHash=hashlib.sha256("yacht2024".encode()).hexdigest(),
-                role=UserRole.USER.value,
-                type=UserType.VESSEL_OPERATOR.value,
-                active=True,
-                orgId="org-003",
-                createdAt=datetime(2024, 1, 20, 13, 10, 0),
-                updatedAt=None,
-            ),
-            User(
-                id="user-005",
-                displayName="fleet_manager",
-                email="fleet@commercialmarine.com",
-                passwordHash=hashlib.sha256("fleet555".encode()).hexdigest(),
-                role=UserRole.USER.value,
-                type=UserType.VESSEL_OPERATOR.value,
-                active=False,
-                orgId="org-004",
-                createdAt=datetime(2024, 4, 1, 8, 0, 0),
-                updatedAt=datetime(2024, 4, 15, 17, 25, 0),
-            ),
-            User(
-                id="user-006",
-                displayName="power_operator",
-                email="power@aquacharge.com",
-                passwordHash=hashlib.sha256("power123".encode()).hexdigest(),
-                role=UserRole.USER.value,
-                type=UserType.POWER_OPERATOR.value,
-                active=True,
-                orgId="org-001",
-                createdAt=datetime(2024, 10, 1, 9, 0, 0),
-                updatedAt=None,
-            ),
-        ]
-
-        for user in sample_users:
-            users_db[user.id] = user
-
-
-# Initialize sample data when module is imported
-init_sample_users()
 
 
 @users_bp.route("", methods=["GET"])
 def get_users():
     """Get all users"""
-    users_list = [user.to_public_dict() for user in users_db.values()]
-    return jsonify(users_list), 200
+    users = dynamoDB_client.scan_items()
+    return jsonify(users), 200
 
 
 @users_bp.route("/<user_id>", methods=["GET"])
 def get_user(user_id: str):
     """Get a specific user by ID"""
-    if user_id not in users_db:
+
+    user = dynamoDB_client.get_item({"id": user_id})
+    if not user:
         return jsonify({"error": "User not found"}), 404
 
-    return jsonify(users_db[user_id].to_public_dict()), 200
+    return jsonify(user), 200
 
 
 @users_bp.route("", methods=["POST"])
@@ -147,8 +64,11 @@ def create_user():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    # Store user
-    users_db[user.id] = user
+    # Store user - remove None values for GSI compatibility
+    user_dict = user.to_dict()
+    user_dict = {k: v for k, v in user_dict.items() if v is not None}
+
+    dynamoDB_client.put_item(user_dict)
 
     return jsonify(user.to_public_dict()), 201
 
@@ -156,40 +76,55 @@ def create_user():
 @users_bp.route("/<user_id>", methods=["PUT"])
 def update_user(user_id: str):
     """Update an existing user"""
-    if user_id not in users_db:
+    # Get user from database
+    user_data = dynamoDB_client.get_item(key={"id": user_id})
+    if not user_data:
         return jsonify({"error": "User not found"}), 404
 
     data = request.get_json()
-    user = users_db[user_id]
 
-    # Update allowed fields
+    # Create current user object
+    current_user = User(**user_data)
+
+    # Build update dictionary with only provided fields
+    update_data = {}
     if "displayName" in data:
-        user.displayName = data["displayName"]
+        update_data["displayName"] = data["displayName"]
+        current_user.displayName = data["displayName"]
     if "email" in data:
-        user.email = data["email"]
+        update_data["email"] = data["email"]
+        current_user.email = data["email"]
     if "role" in data:
-        user.role = UserRole[data["role"]].value
+        update_data["role"] = UserRole[data["role"]].value
+        current_user.role = UserRole[data["role"]].value
     if "active" in data:
-        user.active = data["active"]
+        update_data["active"] = data["active"]
+        current_user.active = data["active"]
     if "orgId" in data:
-        user.orgId = data["orgId"]
+        update_data["orgId"] = data["orgId"]
+        current_user.orgId = data["orgId"]
 
-    user.updatedAt = datetime.now()
-
-    # Validate updated user
+    # Validate the updated user before saving
     try:
-        user.validate()
+        current_user.validate()
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    return jsonify(user.to_public_dict()), 200
+    # Update the item in DynamoDB
+    updated_user_dict = dynamoDB_client.update_item(
+        key={"id": user_id}, update_data=update_data
+    )
+
+    updated_user = User(**updated_user_dict)
+    return jsonify(updated_user.to_public_dict()), 200
 
 
 @users_bp.route("/<user_id>", methods=["DELETE"])
 def delete_user(user_id: str):
     """Delete a user"""
-    if user_id not in users_db:
+    user = dynamoDB_client.get_item(key={"id": user_id})
+    if not user:
         return jsonify({"error": "User not found"}), 404
 
-    del users_db[user_id]
+    dynamoDB_client.delete_item(key={"id": user_id})
     return jsonify({"message": "User deleted successfully"}), 200

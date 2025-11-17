@@ -126,7 +126,7 @@ def test_register_success(client):
     rv = client.post(
         "/api/auth/register",
         json={
-            "displayName": test_display_name,  # Use the variable, not the hardcoded string!
+            "displayName": test_display_name,
             "email": test_email,
             "password": "password123",
         },

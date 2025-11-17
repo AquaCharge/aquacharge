@@ -7,7 +7,6 @@ from decimal import Decimal
 
 contracts_bp = Blueprint("contracts", __name__)
 
-# In-memory storage (replace with actual database)
 dynamoDB_client = DynamoClient(
     table_name="aquacharge-contracts-dev", region_name="us-east-1"
 )
@@ -42,7 +41,7 @@ def get_contracts():
             if status_filter and contract["status"] != status_filter:
                 continue
             # Apply vessel filter
-            if vessel_id and contract.vesselId != vessel_id:
+            if vessel_id and contract.get("vesselId") != vessel_id:
                 continue
             contract = Contract.from_dict(contract)
             filtered_contracts.append(contract.to_public_dict())

@@ -151,8 +151,6 @@ def login():
             return jsonify({"error": "Account is deactivated"}), 401
 
         # Verify password
-        print(hash_password(password))
-        print(verify_password(password, user.passwordHash))
         if not verify_password(password, user.passwordHash):
             return jsonify({"error": "Invalid credentials"}), 401
 

@@ -5,7 +5,6 @@ from db.dynamoClient import DynamoClient
 
 chargers_bp = Blueprint("chargers", __name__)
 
-# In-memory storage (replace with actual database)
 dynamoDB_client = DynamoClient(
     table_name="aquacharge-chargers-dev", region_name="us-east-1"
 )

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from models.vessel import Vessel
 from datetime import datetime
 from db.dynamoClient import DynamoClient
+from boto3.dynamodb.conditions import Key
 import decimal
 
 dynamoDB_client = DynamoClient(
@@ -19,7 +20,7 @@ def get_vessels():
     if user_id:
         vessels = dynamoDB_client.query_gsi(
             index_name="userId-index",
-            key_condition_expression="userId = :userId",
+            key_condition_expression=Key("userId").eq(user_id),
             expression_attribute_values={":userId": user_id},
         )
     else:
@@ -55,7 +56,7 @@ def create_vessel():
         displayName=data["displayName"],
         vesselType=data["vesselType"],
         chargerType=data["chargerType"],
-        capacity=float(data["capacity"]),
+        capacity=decimal.Decimal(data["capacity"]),
         maxChargeRate=decimal.Decimal(data.get("maxChargeRate", 0)),
         minChargeRate=decimal.Decimal(data.get("minChargeRate", 0)),
         rangeMeters=decimal.Decimal(data.get("rangeMeters", 0)),
@@ -85,7 +86,7 @@ def update_vessel(vessel_id: str):
         "displayName": str,
         "vesselType": str,
         "chargerType": str,
-        "capacity": float,
+        "capacity": decimal.Decimal,
         "maxChargeRate": decimal.Decimal,
         "minChargeRate": decimal.Decimal,
         "rangeMeters": decimal.Decimal,
@@ -96,9 +97,12 @@ def update_vessel(vessel_id: str):
     update_data = {}
     for field, field_type in allowed_fields.items():
         if field in data:
-            value = (
-                field_type(data[field]) if field_type in [float, int] else data[field]
-            )
+            if field_type == decimal.Decimal:
+                value = decimal.Decimal(str(data[field]))
+            elif field_type in [float, int]:
+                value = field_type(data[field])
+            else:
+                value = data[field]
             update_data[field] = value
             setattr(current_vessel, field, value)
 

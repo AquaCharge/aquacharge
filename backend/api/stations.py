@@ -5,8 +5,6 @@ import decimal
 
 stations_bp = Blueprint("stations", __name__)
 
-# In-memory storage (replace with actual database)
-
 dynamoDB_client = DynamoClient(
     table_name="aquacharge-stations-dev", region_name="us-east-1"
 )

@@ -122,7 +122,106 @@ class DynamoClient:
             print(f"Error querying GSI: {e}")
             raise
 
+    def batch_write_items(self, items: list) -> dict:
+        """
+        Write multiple items in batches (up to 25 items per batch).
+        DynamoDB limits batch_write to 25 items per request.
 
-# Example usage:
-# dynamo_client = DynamoClient(table_name="your-table-name", region_name="us-east-1")
-# dynamo_client.put_item({"id": "123", "name": "Sample Item"})
+        Args:
+            items: List of dictionaries representing items to write
+
+        Returns:
+            Dictionary with success count and any unprocessed items
+        """
+        try:
+            if not items:
+                return {"success_count": 0, "unprocessed_items": []}
+
+            success_count = 0
+            unprocessed_items = []
+
+            # Process in batches of 25 (DynamoDB limit)
+            batch_size = 25
+            for i in range(0, len(items), batch_size):
+                batch = items[i : i + batch_size]
+
+                # Build the batch write request
+                request_items = {
+                    self.table.table_name: [
+                        {"PutRequest": {"Item": item}} for item in batch
+                    ]
+                }
+
+                response = self.dynamodb.batch_write_item(RequestItems=request_items)
+
+                # Count successful writes
+                success_count += len(batch)
+
+                # Handle unprocessed items (due to throttling or other issues)
+                unprocessed = response.get("UnprocessedItems", {})
+                if unprocessed and self.table.table_name in unprocessed:
+                    unprocessed_batch = unprocessed[self.table.table_name]
+                    for req in unprocessed_batch:
+                        if "PutRequest" in req:
+                            unprocessed_items.append(req["PutRequest"]["Item"])
+                            success_count -= 1
+
+            return {
+                "success_count": success_count,
+                "unprocessed_items": unprocessed_items,
+            }
+        except Exception as e:
+            print(f"Error in batch write: {e}")
+            raise
+
+    def batch_delete_items(self, keys: list) -> dict:
+        """
+        Delete multiple items in batches (up to 25 items per batch).
+        DynamoDB limits batch_write to 25 items per request.
+
+        Args:
+            keys: List of key dictionaries (e.g., [{"id": "123"}, {"id": "456"}])
+
+        Returns:
+            Dictionary with success count and any unprocessed keys
+        """
+        try:
+            if not keys:
+                return {"success_count": 0, "unprocessed_keys": []}
+
+            success_count = 0
+            unprocessed_keys = []
+
+            # Process in batches of 25 (DynamoDB limit)
+            batch_size = 25
+            for i in range(0, len(keys), batch_size):
+                batch = keys[i : i + batch_size]
+
+                # Build the batch write request
+                request_items = {
+                    self.table.table_name: [
+                        {"DeleteRequest": {"Key": key}} for key in batch
+                    ]
+                }
+
+                response = self.dynamodb.batch_write_item(RequestItems=request_items)
+
+                # Count successful deletes
+                success_count += len(batch)
+
+                # Handle unprocessed items (due to throttling or other issues)
+                unprocessed = response.get("UnprocessedItems", {})
+                if unprocessed and self.table.table_name in unprocessed:
+                    unprocessed_batch = unprocessed[self.table.table_name]
+                    for req in unprocessed_batch:
+                        if "DeleteRequest" in req:
+                            unprocessed_keys.append(req["DeleteRequest"]["Key"])
+                            success_count -= 1
+
+            return {
+                "success_count": success_count,
+                "unprocessed_keys": unprocessed_keys,
+            }
+        except Exception as e:
+            print(f"Error in batch delete: {e}")
+            raise

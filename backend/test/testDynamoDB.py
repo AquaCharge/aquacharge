@@ -12,10 +12,7 @@ test_item_ids = []
 @pytest.fixture
 def dynamo_client():
     """Fixture to provide DynamoDB client for testing"""
-    client = DynamoClient(
-        table_name="aquacharge-users-dev",
-        region_name="us-east-1"
-    )
+    client = DynamoClient(table_name="aquacharge-users-dev", region_name="us-east-1")
     yield client
 
 
@@ -23,7 +20,7 @@ def dynamo_client():
 def cleanup_test_items(dynamo_client):
     """Automatically clean up test items after each test"""
     yield  # Run the test first
-    
+
     # Cleanup: Delete all test items created during the test
     if test_item_ids:
         for item_id in test_item_ids:
@@ -62,7 +59,7 @@ def test_put_and_get_item(dynamo_client):
     """Test putting and getting an item"""
     test_id = f"test-{uuid.uuid4()}"
     test_item_ids.append(test_id)
-    
+
     test_item = {
         "id": test_id,
         "displayName": "Test User",
@@ -73,11 +70,11 @@ def test_put_and_get_item(dynamo_client):
         "active": True,
         "createdAt": datetime.now().isoformat(),
     }
-    
+
     # Put item
     response = dynamo_client.put_item(test_item)
     assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
-    
+
     # Get item
     retrieved_item = dynamo_client.get_item(key={"id": test_id})
     assert retrieved_item["id"] == test_id
@@ -89,7 +86,7 @@ def test_update_item(dynamo_client):
     """Test updating an item"""
     test_id = f"test-{uuid.uuid4()}"
     test_item_ids.append(test_id)
-    
+
     # Create initial item
     test_item = {
         "id": test_id,
@@ -102,18 +99,17 @@ def test_update_item(dynamo_client):
         "createdAt": datetime.now().isoformat(),
     }
     dynamo_client.put_item(test_item)
-    
+
     # Update item
     update_data = {
         "displayName": "Updated Name",
         "active": False,
-        "updatedAt": datetime.now().isoformat()
+        "updatedAt": datetime.now().isoformat(),
     }
     updated_item = dynamo_client.update_item(
-        key={"id": test_id},
-        update_data=update_data
+        key={"id": test_id}, update_data=update_data
     )
-    
+
     assert updated_item["displayName"] == "Updated Name"
     assert updated_item["active"] == False
     assert "updatedAt" in updated_item
@@ -122,7 +118,7 @@ def test_update_item(dynamo_client):
 def test_delete_item(dynamo_client):
     """Test deleting an item"""
     test_id = f"test-{uuid.uuid4()}"
-    
+
     # Create item
     test_item = {
         "id": test_id,
@@ -135,15 +131,15 @@ def test_delete_item(dynamo_client):
         "createdAt": datetime.now().isoformat(),
     }
     dynamo_client.put_item(test_item)
-    
+
     # Verify it exists
     retrieved = dynamo_client.get_item(key={"id": test_id})
     assert retrieved["id"] == test_id
-    
+
     # Delete item
     response = dynamo_client.delete_item(key={"id": test_id})
     assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
-    
+
     # Verify it's deleted
     deleted_item = dynamo_client.get_item(key={"id": test_id})
     assert deleted_item == {}  # Should return empty dict
@@ -155,7 +151,7 @@ def test_query_gsi_email_index(dynamo_client):
     test_id = f"test-{uuid.uuid4()}"
     test_item_ids.append(test_id)
     test_email = f"test_{test_id}@example.com"
-    
+
     # Create item
     test_item = {
         "id": test_id,
@@ -168,13 +164,12 @@ def test_query_gsi_email_index(dynamo_client):
         "createdAt": datetime.now().isoformat(),
     }
     dynamo_client.put_item(test_item)
-    
+
     # Query by email using GSI
     results = dynamo_client.query_gsi(
-        index_name="email-index",
-        key_condition_expression=Key("email").eq(test_email)
+        index_name="email-index", key_condition_expression=Key("email").eq(test_email)
     )
-    
+
     assert len(results) == 1
     assert results[0]["email"] == test_email
     assert results[0]["id"] == test_id
@@ -184,7 +179,7 @@ def test_scan_with_filter(dynamo_client):
     """Test scanning with a filter expression"""
     test_id = f"test-{uuid.uuid4()}"
     test_item_ids.append(test_id)
-    
+
     # Create item with specific attribute
     test_item = {
         "id": test_id,
@@ -197,12 +192,10 @@ def test_scan_with_filter(dynamo_client):
         "createdAt": datetime.now().isoformat(),
     }
     dynamo_client.put_item(test_item)
-    
+
     # Scan with filter
-    results = dynamo_client.scan_items(
-        filter_expression=Attr("id").eq(test_id)
-    )
-    
+    results = dynamo_client.scan_items(filter_expression=Attr("id").eq(test_id))
+
     assert len(results) >= 1
     found = any(item["id"] == test_id for item in results)
     assert found, f"Test item {test_id} not found in scan results"
@@ -216,23 +209,25 @@ def test_batch_write_items(dynamo_client):
     for i in range(5):
         test_id = f"test-batch-{uuid.uuid4()}"
         test_item_ids.append(test_id)
-        test_items.append({
-            "id": test_id,
-            "displayName": f"Batch User {i}",
-            "email": f"batch_{test_id}@example.com",
-            "passwordHash": "hashed_password",
-            "role": 2,
-            "type": 1,
-            "active": True,
-            "createdAt": datetime.now().isoformat(),
-        })
-    
+        test_items.append(
+            {
+                "id": test_id,
+                "displayName": f"Batch User {i}",
+                "email": f"batch_{test_id}@example.com",
+                "passwordHash": "hashed_password",
+                "role": 2,
+                "type": 1,
+                "active": True,
+                "createdAt": datetime.now().isoformat(),
+            }
+        )
+
     # Batch write
     result = dynamo_client.batch_write_items(test_items)
-    
+
     assert result["success_count"] == 5
     assert len(result["unprocessed_items"]) == 0
-    
+
     # Verify all items were written
     for item in test_items:
         retrieved = dynamo_client.get_item(key={"id": item["id"]})
@@ -247,26 +242,28 @@ def test_batch_delete_items(dynamo_client):
     for i in range(3):
         test_id = f"test-batch-delete-{uuid.uuid4()}"
         keys.append({"id": test_id})
-        test_items.append({
-            "id": test_id,
-            "displayName": f"Delete User {i}",
-            "email": f"delete_{test_id}@example.com",
-            "passwordHash": "hashed_password",
-            "role": 2,
-            "type": 1,
-            "active": True,
-            "createdAt": datetime.now().isoformat(),
-        })
-    
+        test_items.append(
+            {
+                "id": test_id,
+                "displayName": f"Delete User {i}",
+                "email": f"delete_{test_id}@example.com",
+                "passwordHash": "hashed_password",
+                "role": 2,
+                "type": 1,
+                "active": True,
+                "createdAt": datetime.now().isoformat(),
+            }
+        )
+
     # Write items first
     dynamo_client.batch_write_items(test_items)
-    
+
     # Batch delete
     result = dynamo_client.batch_delete_items(keys)
-    
+
     assert result["success_count"] == 3
     assert len(result["unprocessed_keys"]) == 0
-    
+
     # Verify all items were deleted
     for key in keys:
         retrieved = dynamo_client.get_item(key=key)
@@ -280,22 +277,26 @@ def test_batch_write_large_batch(dynamo_client):
     for i in range(30):
         test_id = f"test-large-batch-{uuid.uuid4()}"
         test_item_ids.append(test_id)
-        test_items.append({
-            "id": test_id,
-            "displayName": f"Large Batch User {i}",
-            "email": f"large_{test_id}@example.com",
-            "passwordHash": "hashed_password",
-            "role": 2,
-            "type": 1,
-            "active": True,
-            "createdAt": datetime.now().isoformat(),
-        })
-    
+        test_items.append(
+            {
+                "id": test_id,
+                "displayName": f"Large Batch User {i}",
+                "email": f"large_{test_id}@example.com",
+                "passwordHash": "hashed_password",
+                "role": 2,
+                "type": 1,
+                "active": True,
+                "createdAt": datetime.now().isoformat(),
+            }
+        )
+
     # Batch write (should automatically handle multiple batches)
     result = dynamo_client.batch_write_items(test_items)
-    
+
     assert result["success_count"] == 30
-    print(f"✓ Successfully wrote {result['success_count']} items across multiple batches")
+    print(
+        f"✓ Successfully wrote {result['success_count']} items across multiple batches"
+    )
 
 
 # --- Error Handling Tests --- #
@@ -309,7 +310,7 @@ def test_query_gsi_no_results(dynamo_client):
     """Test querying GSI with no matching results"""
     results = dynamo_client.query_gsi(
         index_name="email-index",
-        key_condition_expression=Key("email").eq("nonexistent@example.com")
+        key_condition_expression=Key("email").eq("nonexistent@example.com"),
     )
     assert results == []
 

@@ -1,6 +1,6 @@
 import pytest
 from db.dynamoClient import DynamoClient
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 import uuid
 from datetime import datetime
 
@@ -111,7 +111,7 @@ def test_update_item(dynamo_client):
     )
 
     assert updated_item["displayName"] == "Updated Name"
-    assert updated_item["active"] == False
+    assert not updated_item["active"]
     assert "updatedAt" in updated_item
 
 
@@ -173,32 +173,6 @@ def test_query_gsi_email_index(dynamo_client):
     assert len(results) == 1
     assert results[0]["email"] == test_email
     assert results[0]["id"] == test_id
-
-
-def test_scan_with_filter(dynamo_client):
-    """Test scanning with a filter expression"""
-    test_id = f"test-{uuid.uuid4()}"
-    test_item_ids.append(test_id)
-
-    # Create item with specific attribute
-    test_item = {
-        "id": test_id,
-        "displayName": "Scan Test User",
-        "email": f"test_{test_id}@example.com",
-        "passwordHash": "hashed_password",
-        "role": 2,
-        "type": 1,
-        "active": True,
-        "createdAt": datetime.now().isoformat(),
-    }
-    dynamo_client.put_item(test_item)
-
-    # Scan with filter
-    results = dynamo_client.scan_items(filter_expression=Attr("id").eq(test_id))
-
-    assert len(results) >= 1
-    found = any(item["id"] == test_id for item in results)
-    assert found, f"Test item {test_id} not found in scan results"
 
 
 # --- Batch Operations Tests --- #

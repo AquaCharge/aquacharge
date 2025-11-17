@@ -13,9 +13,7 @@ import re
 auth_bp = Blueprint("auth", __name__)
 
 # Initialize DynamoDB client
-dynamoDB_client = DynamoClient(
-    table_name="aquacharge-users-dev", region_name="us-east-1"
-)
+dynamoDB_client = DynamoClient(table_name="aquacharge-users-dev", region_name="us-east-1")
 
 # In-memory storage for password reset tokens (replace with database in production)
 password_reset_tokens: Dict[str, Dict[str, Any]] = {}
@@ -37,13 +35,13 @@ def prepare_user_data_from_dynamo(data: dict) -> dict:
     """Prepare user data from DynamoDB for User model"""
     # Convert Decimals
     data = convert_decimals(data)
-
+    
     # Convert ISO datetime strings to datetime objects
-    if "createdAt" in data and isinstance(data["createdAt"], str):
-        data["createdAt"] = datetime.fromisoformat(data["createdAt"])
-    if "updatedAt" in data and isinstance(data["updatedAt"], str):
-        data["updatedAt"] = datetime.fromisoformat(data["updatedAt"])
-
+    if 'createdAt' in data and isinstance(data['createdAt'], str):
+        data['createdAt'] = datetime.fromisoformat(data['createdAt'])
+    if 'updatedAt' in data and isinstance(data['updatedAt'], str):
+        data['updatedAt'] = datetime.fromisoformat(data['updatedAt'])
+    
     return data
 
 
@@ -136,9 +134,10 @@ def login():
 
         # Find user by email using GSI
         users = dynamoDB_client.query_gsi(
-            index_name="email-index", key_condition_expression=Key("email").eq(email)
+            index_name="email-index",
+            key_condition_expression=Key('email').eq(email)
         )
-
+        
         if not users:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -160,17 +159,17 @@ def login():
         token = generate_jwt_token(user)
 
         # Update last login time
-        update_data = {"updatedAt": datetime.now().isoformat()}
-        dynamoDB_client.update_item(key={"id": user.id}, update_data=update_data)
+        update_data = {'updatedAt': datetime.now().isoformat()}
+        dynamoDB_client.update_item(key={'id': user.id}, update_data=update_data)
 
         # Return user data (without password) and token
         user_data = user.to_public_dict()
-
+        
         # Add human-readable role and type names
         # user.role and user.type are integers, so we get the enum by value
         user_data["role_name"] = UserRole(user.role).name
         user_data["type_name"] = UserType(user.type).name
-
+        
         # Convert any Decimal objects to float for JSON serialization
         user_data = convert_decimals(user_data)
 
@@ -220,19 +219,15 @@ def register():
                 400,
             )
 
-        # Check if email already exists
-        existing_users = dynamoDB_client.scan_items(
-            filter_expression=Attr("email").eq(email)
+        # Check if email already exists using GSI for consistency
+        existing_users = dynamoDB_client.query_gsi(
+            index_name="email-index",
+            key_condition_expression=Key('email').eq(email)
         )
         if existing_users:
             return jsonify({"error": "Email already registered"}), 409
 
-        # Check if display name already taken
-        existing_display_name = dynamoDB_client.scan_items(
-            filter_expression=Attr("displayName").eq(displayName)
-        )
-        if existing_display_name:
-            return jsonify({"error": "Display name already taken"}), 409
+        # Display names can be duplicated - no uniqueness check needed
 
         # Create new user
         user = User(
@@ -298,11 +293,13 @@ def verify_token():
 
         # Get user from database
         user_id = payload.get("user_id")
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
+        user_data = dynamoDB_client.get_item(key={'id': user_id})
+        
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
+        # Convert Decimals before creating User object
+        user_data = prepare_user_data_from_dynamo(user_data)
         user = User(**user_data)
 
         # Check if user is still active
@@ -311,16 +308,11 @@ def verify_token():
 
         # Return user data
         user_data = user.to_public_dict()
-        user_data["role_name"] = (
-            UserRole(user.role).name
-            if isinstance(user.role, UserRole)
-            else UserRole[user.role].name
-        )
-        user_data["type_name"] = (
-            UserType(user.type).name
-            if isinstance(user.type, UserType)
-            else UserType[user.type].name
-        )
+        user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
+        
+        # Ensure all Decimals are converted
+        user_data = convert_decimals(user_data)
 
         return jsonify({"user": user_data, "valid": True}), 200
 
@@ -359,11 +351,13 @@ def refresh_token():
 
         # Get user from database
         user_id = payload.get("user_id")
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
+        user_data = dynamoDB_client.get_item(key={'id': user_id})
+        
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
+        # Convert Decimals before creating User object
+        user_data = prepare_user_data_from_dynamo(user_data)
         user = User(**user_data)
 
         # Check if user is still active
@@ -400,14 +394,16 @@ def forgot_password():
             return jsonify({"error": "Invalid email format"}), 400
 
         # Find user by email
-        users = dynamoDB_client.scan_items(filter_expression=Attr("email").eq(email))
+        users = dynamoDB_client.scan_items(
+            filter_expression=Attr('email').eq(email)
+        )
 
         # Always return success to prevent email enumeration
         # But only actually process if user exists
         if users and len(users) > 0:
             user_data = users[0]
             user = User(**user_data)
-
+            
             if user.active:
                 # Generate reset token
                 reset_token = secrets.token_urlsafe(32)
@@ -421,9 +417,7 @@ def forgot_password():
                 }
 
                 # TODO: Send email with reset link
-                reset_link = (
-                    f"https://aquacharge.com/reset-password?token={reset_token}"
-                )
+                reset_link = f"https://aquacharge.com/reset-password?token={reset_token}"
                 print(f"Password reset link for {email}: {reset_link}")
 
         return (
@@ -484,17 +478,17 @@ def reset_password():
 
         # Get user
         user_id = token_data["user_id"]
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
+        user_data = dynamoDB_client.get_item(key={'id': user_id})
+        
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
         # Update password
         update_data = {
-            "passwordHash": hash_password(new_password),
-            "updatedAt": datetime.now().isoformat(),
+            'passwordHash': hash_password(new_password),
+            'updatedAt': datetime.now().isoformat()
         }
-        dynamoDB_client.update_item(key={"id": user_id}, update_data=update_data)
+        dynamoDB_client.update_item(key={'id': user_id}, update_data=update_data)
 
         # Mark token as used
         token_data["used"] = True
@@ -545,8 +539,8 @@ def change_password():
 
         # Get user
         user_id = payload.get("user_id")
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
+        user_data = dynamoDB_client.get_item(key={'id': user_id})
+        
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
@@ -567,10 +561,10 @@ def change_password():
 
         # Update password
         update_data = {
-            "passwordHash": hash_password(new_password),
-            "updatedAt": datetime.now().isoformat(),
+            'passwordHash': hash_password(new_password),
+            'updatedAt': datetime.now().isoformat()
         }
-        dynamoDB_client.update_item(key={"id": user_id}, update_data=update_data)
+        dynamoDB_client.update_item(key={'id': user_id}, update_data=update_data)
 
         return jsonify({"message": "Password has been changed successfully"}), 200
 
@@ -605,11 +599,13 @@ def get_current_user():
 
         # Get user
         user_id = payload.get("user_id")
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
+        user_data = dynamoDB_client.get_item(key={'id': user_id})
+        
         if not user_data:
             return jsonify({"error": "User not found"}), 404
 
+        # Convert Decimals before creating User object
+        user_data = prepare_user_data_from_dynamo(user_data)
         user = User(**user_data)
 
         # Check if user is still active
@@ -618,16 +614,11 @@ def get_current_user():
 
         # Return user data
         user_data = user.to_public_dict()
-        user_data["role_name"] = (
-            UserRole(user.role).name
-            if isinstance(user.role, UserRole)
-            else UserRole[user.role].name
-        )
-        user_data["type_name"] = (
-            UserType(user.type).name
-            if isinstance(user.type, UserType)
-            else UserType[user.type].name
-        )
+        user_data["role_name"] = UserRole(user.role).name
+        user_data["type_name"] = UserType(user.type).name
+        
+        # Ensure all Decimals are converted
+        user_data = convert_decimals(user_data)
 
         return jsonify(user_data), 200
 

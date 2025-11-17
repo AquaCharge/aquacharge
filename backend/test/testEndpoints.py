@@ -78,7 +78,13 @@ def client():
     with app.test_client() as client:
         yield client
 
-    # Cleanup: Delete all test items created during tests
+
+@pytest.fixture(autouse=True)
+def cleanup_test_items():
+    """Automatically clean up all test items after each test"""
+    yield  # Run the test first
+    
+    # Cleanup: Delete all test items created during the test
     cleanup_test_data()
 
 

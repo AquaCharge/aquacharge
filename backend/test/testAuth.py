@@ -23,7 +23,7 @@ def client():
 def cleanup_users():
     """Automatically clean up test users after each test"""
     yield  # Run the test first
-    
+
     # Cleanup: Delete all test users created during the test
     # BUT never delete the admin user or other pre-existing users
     if created_test_emails:
@@ -34,7 +34,7 @@ def cleanup_users():
             # Skip admin and any other system users
             if email in ["admin@aquacharge.com"]:
                 continue
-                
+
             try:
                 users = dynamo_client.query_gsi(
                     index_name="email-index",
@@ -95,12 +95,12 @@ def test_login_missing_fields(client):
 def test_register_success(client):
     """Test successful user registration"""
     import time
-    
+
     # Use timestamp to ensure uniqueness and make cleanup easier
     timestamp = str(int(time.time() * 1000))  # milliseconds for uniqueness
     test_email = f"test_{timestamp}@example.com"
     test_display_name = f"test_{timestamp}"
-    
+
     # Clean up any existing test user first (from failed previous runs)
     dynamo_client = DynamoClient(
         table_name="aquacharge-users-dev", region_name="us-east-1"
@@ -114,10 +114,12 @@ def test_register_success(client):
         if existing:
             for user in existing:
                 dynamo_client.delete_item(key={"id": user["id"]})
-                print(f"Pre-test cleanup: removed existing user with email {test_email}")
+                print(
+                    f"Pre-test cleanup: removed existing user with email {test_email}"
+                )
     except Exception as e:
         print(f"Pre-test cleanup failed: {e}")
-    
+
     # Track this email for post-test cleanup
     created_test_emails.append(test_email)
 
@@ -305,7 +307,7 @@ def test_change_password(client):
         headers={"Authorization": f"Bearer {token}"},
         json={"current_password": "admin123", "new_password": "newpassword123"},
     )
-    
+
     # Store the result but don't assert yet - we need to restore password first
     change_success = rv.status_code == 200
     change_data = rv.get_json()
@@ -329,7 +331,7 @@ def test_change_password(client):
             print("Successfully restored admin password to original")
     except Exception as e:
         print(f"WARNING: Failed to restore admin password: {e}")
-    
+
     # Now assert the results
     assert change_success, f"Password change failed: {change_data}"
     assert "message" in change_data

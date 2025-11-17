@@ -83,7 +83,7 @@ def client():
 def cleanup_test_items():
     """Automatically clean up all test items after each test"""
     yield  # Run the test first
-    
+
     # Cleanup: Delete all test items created during the test
     cleanup_test_data()
 

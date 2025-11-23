@@ -197,8 +197,24 @@ def test_get_stations(client):
 
 
 def test_get_station(client):
-    rv = client.get("/api/stations/cffee0c4-73c9-47f4-8619-ec5297dc8716")
+    # Create a test station first
+    station = {
+        "displayName": "Test Get Station",
+        "longitude": decimal.Decimal("1.23"),
+        "latitude": decimal.Decimal("4.56"),
+        "city": "Testville",
+        "provinceOrState": "TestState",
+        "country": "Testland",
+    }
+    create_rv = client.post("/api/stations", json=station)
+    station_id = create_rv.get_json()["id"]
+    
+    # Now test getting that station
+    rv = client.get(f"/api/stations/{station_id}")
     assert rv.status_code == 200
+    
+    # Cleanup
+    created_test_items["stations"].append(station_id)
 
 
 def test_get_station_not_found(client):
@@ -220,11 +236,27 @@ def test_create_station_and_delete(client):
 
 
 def test_update_station(client):
+    # Create a test station first
+    station = {
+        "displayName": "Test Update Station",
+        "longitude": decimal.Decimal("1.23"),
+        "latitude": decimal.Decimal("4.56"),
+        "city": "OriginalCity",
+        "provinceOrState": "TestState",
+        "country": "Testland",
+    }
+    create_rv = client.post("/api/stations", json=station)
+    station_id = create_rv.get_json()["id"]
+    
+    # Now test updating that station
     rv = client.put(
-        "/api/stations/cffee0c4-73c9-47f4-8619-ec5297dc8716",
+        f"/api/stations/{station_id}",
         json={"city": "San Jose", "status": "MAINTENANCE"},
     )
     assert rv.status_code == 200
+    
+    # Cleanup
+    created_test_items["stations"].append(station_id)
 
 
 def test_get_nearby_stations(client):

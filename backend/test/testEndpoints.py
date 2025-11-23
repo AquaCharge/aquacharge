@@ -208,11 +208,11 @@ def test_get_station(client):
     }
     create_rv = client.post("/api/stations", json=station)
     station_id = create_rv.get_json()["id"]
-    
+
     # Now test getting that station
     rv = client.get(f"/api/stations/{station_id}")
     assert rv.status_code == 200
-    
+
     # Cleanup
     created_test_items["stations"].append(station_id)
 
@@ -247,14 +247,14 @@ def test_update_station(client):
     }
     create_rv = client.post("/api/stations", json=station)
     station_id = create_rv.get_json()["id"]
-    
+
     # Now test updating that station
     rv = client.put(
         f"/api/stations/{station_id}",
         json={"city": "San Jose", "status": "MAINTENANCE"},
     )
     assert rv.status_code == 200
-    
+
     # Cleanup
     created_test_items["stations"].append(station_id)
 

@@ -1,85 +1,13 @@
 from flask import Blueprint, jsonify, request
 from models.station import Station, StationStatus
-from typing import Dict
+from db.dynamoClient import DynamoClient
+import decimal
 
 stations_bp = Blueprint("stations", __name__)
 
-# In-memory storage (replace with actual database)
-stations_db: Dict[str, Station] = {}
-
-
-# Initialize with sample data
-def init_sample_stations():
-    if not stations_db:  # Only initialize if empty
-        sample_stations = [
-            Station(
-                id="station-001",
-                displayName="Marina Bay Charging Hub",
-                longitude=-123.1207,
-                latitude=49.2827,
-                city="Vancouver",
-                provinceOrState="British Columbia",
-                country="Canada",
-                status=StationStatus.ACTIVE,
-            ),
-            Station(
-                id="station-002",
-                displayName="Harbour View Electric Dock",
-                longitude=-122.4194,
-                latitude=37.7749,
-                city="San Francisco",
-                provinceOrState="California",
-                country="USA",
-                status=StationStatus.ACTIVE,
-            ),
-            Station(
-                id="station-003",
-                displayName="Blue Water Marina Station",
-                longitude=-80.1918,
-                latitude=25.7617,
-                city="Miami",
-                provinceOrState="Florida",
-                country="USA",
-                status=StationStatus.MAINTENANCE,
-            ),
-            Station(
-                id="station-004",
-                displayName="Nordic Fjord Charging Point",
-                longitude=10.7522,
-                latitude=59.9139,
-                city="Oslo",
-                provinceOrState="Oslo",
-                country="Norway",
-                status=StationStatus.ACTIVE,
-            ),
-            Station(
-                id="station-005",
-                displayName="Sydney Harbour Electric",
-                longitude=151.2093,
-                latitude=-33.8688,
-                city="Sydney",
-                provinceOrState="New South Wales",
-                country="Australia",
-                status=StationStatus.INACTIVE,
-            ),
-            Station(
-                id="station-006",
-                displayName="Mediterranean Charging Hub",
-                longitude=2.1734,
-                latitude=41.3851,
-                city="Barcelona",
-                provinceOrState="Catalonia",
-                country="Spain",
-                status=StationStatus.ACTIVE,
-            ),
-        ]
-
-        for station in sample_stations:
-            stations_db[station.id] = station
-
-
-# Initialize sample data when module is imported
-init_sample_stations()
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-stations-dev", region_name="us-east-1"
+)
 
 
 @stations_bp.route("", methods=["GET"])
@@ -88,7 +16,7 @@ def get_stations():
     city = request.args.get("city")
     status = request.args.get("status")
 
-    stations = list(stations_db.values())
+    stations = list(dynamoDB_client.scan_items())
 
     if city:
         stations = [s for s in stations if s.city.lower() == city.lower()]
@@ -100,16 +28,19 @@ def get_stations():
         except KeyError:
             return jsonify({"error": "Invalid status"}), 400
 
-    return jsonify([s.to_dict() for s in stations]), 200
+    return jsonify(stations), 200
 
 
 @stations_bp.route("/<station_id>", methods=["GET"])
 def get_station(station_id: str):
     """Get a specific station by ID"""
-    if station_id not in stations_db:
+
+    station = dynamoDB_client.get_item(key={"id": station_id})
+
+    if not station:
         return jsonify({"error": "Station not found"}), 404
 
-    return jsonify(stations_db[station_id].to_dict()), 200
+    return jsonify(station), 200
 
 
 @stations_bp.route("", methods=["POST"])
@@ -133,8 +64,8 @@ def create_station():
     # Create station instance
     station = Station(
         displayName=data["displayName"],
-        longitude=float(data["longitude"]),
-        latitude=float(data["latitude"]),
+        longitude=decimal.Decimal(str(data["longitude"])),
+        latitude=decimal.Decimal(str(data["latitude"])),
         city=data["city"],
         provinceOrState=data["provinceOrState"],
         country=data["country"],
@@ -146,7 +77,7 @@ def create_station():
     )
 
     # Store station
-    stations_db[station.id] = station
+    dynamoDB_client.put_item(item=station.to_dict())
 
     return jsonify(station.to_dict()), 201
 
@@ -154,64 +85,83 @@ def create_station():
 @stations_bp.route("/<station_id>", methods=["PUT"])
 def update_station(station_id: str):
     """Update an existing station"""
-    if station_id not in stations_db:
+    station = dynamoDB_client.get_item(key={"id": station_id})
+
+    if not station:
         return jsonify({"error": "Station not found"}), 404
 
     data = request.get_json()
-    station = stations_db[station_id]
+    current_station = Station.from_dict(station)
 
-    # Update allowed fields
-    update_fields = [
-        "displayName",
-        "longitude",
-        "latitude",
-        "city",
-        "provinceOrState",
-        "country",
-        "status",
-    ]
+    # Build update dictionary with only provided fields
+    update_data = {}
 
-    for field in update_fields:
-        if field in data:
-            if field in ["longitude", "latitude"]:
-                setattr(station, field, float(data[field]))
-            elif field == "status":
-                setattr(station, field, StationStatus[data[field].upper()])
-            else:
-                setattr(station, field, data[field])
+    if "displayName" in data:
+        update_data["displayName"] = data["displayName"]
+        current_station.displayName = data["displayName"]
+    if "longitude" in data:
+        update_data["longitude"] = decimal.Decimal(str(data["longitude"]))
+        current_station.longitude = decimal.Decimal(str(data["longitude"]))
+    if "latitude" in data:
+        update_data["latitude"] = decimal.Decimal(str(data["latitude"]))
+        current_station.latitude = decimal.Decimal(str(data["latitude"]))
+    if "city" in data:
+        update_data["city"] = data["city"]
+        current_station.city = data["city"]
+    if "provinceOrState" in data:
+        update_data["provinceOrState"] = data["provinceOrState"]
+        current_station.provinceOrState = data["provinceOrState"]
+    if "country" in data:
+        update_data["country"] = data["country"]
+        current_station.country = data["country"]
+    if "status" in data:
+        status_value = StationStatus[data["status"].upper()].value
+        update_data["status"] = status_value
+        current_station.status = StationStatus[data["status"].upper()]
 
-    return jsonify(station.to_dict()), 200
+    # Update the item in DynamoDB
+    updated_station_dict = dynamoDB_client.update_item(
+        key={"id": station_id}, update_data=update_data
+    )
+
+    return jsonify(updated_station_dict), 200
 
 
 @stations_bp.route("/<station_id>", methods=["DELETE"])
 def delete_station(station_id: str):
     """Delete a station"""
-    if station_id not in stations_db:
+    station = dynamoDB_client.get_item(key={"id": station_id})
+
+    if not station:
         return jsonify({"error": "Station not found"}), 404
 
-    del stations_db[station_id]
+    dynamoDB_client.delete_item(key={"id": station_id})
     return jsonify({"message": "Station deleted successfully"}), 200
 
 
 @stations_bp.route("/nearby", methods=["GET"])
 def get_nearby_stations():
     """Get stations near a specific location"""
-    lat = request.args.get("lat", type=float)
-    lng = request.args.get("lng", type=float)
-    radius = request.args.get("radius", default=10, type=float)  # km
+    lat = request.args.get("lat", type=decimal.Decimal)
+    lng = request.args.get("lng", type=decimal.Decimal)
+    radius = request.args.get("radius", default=10, type=decimal.Decimal)  # km
 
     if lat is None or lng is None:
         return jsonify({"error": "lat and lng parameters are required"}), 400
 
     # Simple distance calculation (you'd want to use proper geospatial queries in production)
     nearby = []
-    for station in stations_db.values():
+    stations = dynamoDB_client.scan_items()
+    for station in stations:
         # Simplified distance calculation
+        print(station)
         distance = (
-            (station.latitude - lat) ** 2 + (station.longitude - lng) ** 2
+            float((station["latitude"] - lat)) ** 2
+            + float((station["longitude"] - lng)) ** 2
         ) ** 0.5
+        distance = decimal.Decimal(distance)
         if distance <= radius:
-            station_dict = station.to_dict()
+            station_dict = station
             station_dict["distance"] = distance
             nearby.append(station_dict)
 

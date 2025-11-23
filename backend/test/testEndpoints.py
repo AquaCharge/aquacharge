@@ -10,6 +10,46 @@ from api.vessels import vessels_bp
 from api.contracts import contracts_bp
 from api.auth import auth_bp
 from config import JWT_SECRET, JWT_ALGORITHM
+from db.dynamoClient import DynamoClient
+import decimal
+
+# Track created test items for cleanup
+created_test_items = {
+    "bookings": [],
+    "chargers": [],
+    "stations": [],
+    "users": [],
+    "vessels": [],
+    "contracts": [],
+}
+
+
+def cleanup_test_data():
+    """Clean up all test items created during tests"""
+    table_mappings = {
+        "bookings": "aquacharge-bookings-dev",
+        "chargers": "aquacharge-chargers-dev",
+        "stations": "aquacharge-stations-dev",
+        "users": "aquacharge-users-dev",
+        "vessels": "aquacharge-vessels-dev",
+        "contracts": "aquacharge-contracts-dev",
+    }
+
+    for resource_type, item_ids in created_test_items.items():
+        if item_ids and resource_type in table_mappings:
+            try:
+                dynamo_client = DynamoClient(
+                    table_name=table_mappings[resource_type], region_name="us-east-1"
+                )
+                for item_id in item_ids:
+                    try:
+                        dynamo_client.delete_item(key={"id": item_id})
+                        print(f"Cleaned up {resource_type}: {item_id}")
+                    except Exception as e:
+                        print(f"Failed to cleanup {resource_type} {item_id}: {e}")
+            except Exception as e:
+                print(f"Failed to initialize cleanup for {resource_type}: {e}")
+        item_ids.clear()
 
 
 def create_jwt_token(user_id, role=2, user_type=1, email="test@example.com"):
@@ -37,6 +77,15 @@ def client():
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def cleanup_test_items():
+    """Automatically clean up all test items after each test"""
+    yield  # Run the test first
+
+    # Cleanup: Delete all test items created during the test
+    cleanup_test_data()
 
 
 @pytest.fixture
@@ -90,8 +139,11 @@ def test_delete_booking(client):
         },
     )
     booking_id = rv.get_json()["id"]
+    created_test_items["bookings"].append(booking_id)
     rv = client.delete(f"/api/bookings/{booking_id}")
     assert rv.status_code == 200
+    # Remove from cleanup list since we already deleted it
+    created_test_items["bookings"].remove(booking_id)
 
 
 def test_get_upcoming_bookings(client):
@@ -145,7 +197,7 @@ def test_get_stations(client):
 
 
 def test_get_station(client):
-    rv = client.get("/api/stations/station-001")
+    rv = client.get("/api/stations/cffee0c4-73c9-47f4-8619-ec5297dc8716")
     assert rv.status_code == 200
 
 
@@ -157,8 +209,8 @@ def test_get_station_not_found(client):
 def test_create_station_and_delete(client):
     station = {
         "displayName": "Test Dock",
-        "longitude": 1.23,
-        "latitude": 4.56,
+        "longitude": decimal.Decimal("1.23"),
+        "latitude": decimal.Decimal("4.56"),
         "city": "Testville",
         "provinceOrState": "TestState",
         "country": "Testland",
@@ -169,7 +221,8 @@ def test_create_station_and_delete(client):
 
 def test_update_station(client):
     rv = client.put(
-        "/api/stations/station-002", json={"city": "San Jose", "status": "MAINTENANCE"}
+        "/api/stations/cffee0c4-73c9-47f4-8619-ec5297dc8716",
+        json={"city": "San Jose", "status": "MAINTENANCE"},
     )
     assert rv.status_code == 200
 
@@ -196,13 +249,18 @@ def test_get_user_not_found(client):
 
 
 def test_create_user_and_delete(client):
-    user = {
-        "displayName": "testuser",
-        "email": "test@example.com",
-        "password": "password123",
-    }
-    rv = client.post("/api/users", json=user)
-    assert rv.status_code == 201
+    response = client.post(
+        "/api/users",
+        json={
+            "displayName": "Test User",
+            "email": "test@example.com",
+            "password": "testpassword123",
+            "orgId": "test-org-001",
+        },
+    )
+    assert response.status_code == 201
+    user_id = response.get_json()["id"]
+    created_test_items["users"].append(user_id)
 
 
 def test_update_user(client):

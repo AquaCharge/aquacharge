@@ -4,7 +4,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import BotoCoreError, ClientError
 
-from aws_client import get_ports_table
+from db.dynamoClient import DynamoClient
 
 PORT_FIELD_VARIANTS = {
     "port_id": ("portId", "port_id", "PORT_ID", "id", "ID"),
@@ -86,8 +86,12 @@ def _build_cross_dateline_expression(
 
 
 class PortsRepository:
-    def __init__(self, table=None):
-        self.table = table or get_ports_table()
+    def __init__(self, dynamo_client: Optional[DynamoClient] = None):
+        if dynamo_client is None:
+            # Default to ports table - adjust table_name and region as needed
+            dynamo_client = DynamoClient(table_name="Ports", region_name="us-east-1")
+        self.client = dynamo_client
+        self.table = dynamo_client.table
 
     def _scan(self, limit: int, **scan_kwargs) -> List[Dict]:
         limit = min(max(limit, 0), MAX_LIMIT)

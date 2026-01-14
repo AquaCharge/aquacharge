@@ -21,11 +21,18 @@ def load_env_vars(env_path: Path) -> Dict[str, str]:
 
     load_dotenv(dotenv_path=env_path)
 
-    access_key = os.getenv("AWS_ACCESS_KEY")
+    access_key = os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     region = os.getenv("AWS_REGION", DEFAULT_REGION)
 
-    missing = [name for name, value in [("AWS_ACCESS_KEY", access_key), ("AWS_SECRET_ACCESS_KEY", secret_key)] if not value]
+    missing = [
+        name
+        for name, value in [
+            ("AWS_ACCESS_KEY_ID", access_key),
+            ("AWS_SECRET_ACCESS_KEY", secret_key),
+        ]
+        if not value
+    ]
     if missing:
         raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 

@@ -20,13 +20,13 @@ class MissingAWSCredentials(RuntimeError):
 
 
 def _get_aws_settings() -> Dict[str, str]:
-    access_key = os.getenv("AWS_ACCESS_KEY")
+    access_key = os.getenv("AWS_ACCESS_KEY_ID")
     secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
     region = os.getenv("AWS_REGION", "us-east-1")
 
     if not access_key or not secret_key:
         raise MissingAWSCredentials(
-            "AWS_ACCESS_KEY and AWS_SECRET_ACCESS_KEY must be set in backend/.env"
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set in backend/.env"
         )
 
     return {

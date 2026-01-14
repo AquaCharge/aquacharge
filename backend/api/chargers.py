@@ -1,114 +1,13 @@
 from flask import Blueprint, jsonify, request
 from models.charger import Charger
-from typing import Dict
+import decimal
+from db.dynamoClient import DynamoClient
 
 chargers_bp = Blueprint("chargers", __name__)
 
-# In-memory storage (replace with actual database)
-chargers_db: Dict[str, Charger] = {}
-
-
-# Initialize with sample data
-def init_sample_chargers():
-    if not chargers_db:  # Only initialize if empty
-        sample_chargers = [
-            # Marina Bay Charging Hub chargers
-            Charger(
-                id="charger-001",
-                chargingStationId="station-001",
-                chargerType="Type 2 AC",
-                maxRate=22.0,
-                active=True,
-            ),
-            Charger(
-                id="charger-002",
-                chargingStationId="station-001",
-                chargerType="CCS DC",
-                maxRate=50.0,
-                active=True,
-            ),
-            Charger(
-                id="charger-003",
-                chargingStationId="station-001",
-                chargerType="CHAdeMO",
-                maxRate=50.0,
-                active=True,
-            ),
-            # Harbour View Electric Dock chargers
-            Charger(
-                id="charger-004",
-                chargingStationId="station-002",
-                chargerType="Type 2 AC",
-                maxRate=11.0,
-                active=True,
-            ),
-            Charger(
-                id="charger-005",
-                chargingStationId="station-002",
-                chargerType="CCS DC",
-                maxRate=75.0,
-                active=True,
-            ),
-            # Blue Water Marina Station chargers
-            Charger(
-                id="charger-006",
-                chargingStationId="station-003",
-                chargerType="Type 2 AC",
-                maxRate=22.0,
-                active=False,
-            ),
-            Charger(
-                id="charger-007",
-                chargingStationId="station-003",
-                chargerType="Tesla Supercharger",
-                maxRate=120.0,
-                active=False,
-            ),
-            # Nordic Fjord Charging Point chargers
-            Charger(
-                id="charger-008",
-                chargingStationId="station-004",
-                chargerType="Type 2 AC",
-                maxRate=22.0,
-                active=True,
-            ),
-            Charger(
-                id="charger-009",
-                chargingStationId="station-004",
-                chargerType="CCS DC",
-                maxRate=100.0,
-                active=True,
-            ),
-            # Mediterranean Charging Hub chargers
-            Charger(
-                id="charger-010",
-                chargingStationId="station-006",
-                chargerType="Type 2 AC",
-                maxRate=7.4,
-                active=True,
-            ),
-            Charger(
-                id="charger-011",
-                chargingStationId="station-006",
-                chargerType="CCS DC",
-                maxRate=50.0,
-                active=True,
-            ),
-            Charger(
-                id="charger-012",
-                chargingStationId="station-006",
-                chargerType="CHAdeMO",
-                maxRate=50.0,
-                active=True,
-            ),
-        ]
-
-        for charger in sample_chargers:
-            chargers_db[charger.id] = charger
-
-
-# Initialize sample data when module is imported
-init_sample_chargers()
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-chargers-dev", region_name="us-east-1"
+)
 
 
 @chargers_bp.route("", methods=["GET"])
@@ -116,14 +15,10 @@ def get_chargers():
     """Get all chargers, optionally filtered by station"""
     station_id = request.args.get("stationId")
 
+    chargers = dynamoDB_client.scan_items()
+
     if station_id:
-        chargers = [
-            c.to_dict()
-            for c in chargers_db.values()
-            if c.chargingStationId == station_id
-        ]
-    else:
-        chargers = [c.to_dict() for c in chargers_db.values()]
+        chargers = [c.to_dict() for c in chargers if c.chargingStationId == station_id]
 
     return jsonify(chargers), 200
 
@@ -131,10 +26,11 @@ def get_chargers():
 @chargers_bp.route("/<charger_id>", methods=["GET"])
 def get_charger(charger_id: str):
     """Get a specific charger by ID"""
-    if charger_id not in chargers_db:
+    charger = dynamoDB_client.get_item(key={"id": charger_id})
+    if not charger:
         return jsonify({"error": "Charger not found"}), 404
 
-    return jsonify(chargers_db[charger_id].to_dict()), 200
+    return jsonify(charger), 200
 
 
 @chargers_bp.route("", methods=["POST"])
@@ -152,12 +48,12 @@ def create_charger():
     charger = Charger(
         chargingStationId=data["chargingStationId"],
         chargerType=data["chargerType"],
-        maxRate=float(data["maxRate"]),
+        maxRate=decimal.Decimal(data["maxRate"]),
         active=data.get("active", True),
     )
 
     # Store charger
-    chargers_db[charger.id] = charger
+    dynamoDB_client.put_item(item=charger.to_dict())
 
     return jsonify(charger.to_dict()), 201
 
@@ -165,30 +61,33 @@ def create_charger():
 @chargers_bp.route("/<charger_id>", methods=["PUT"])
 def update_charger(charger_id: str):
     """Update an existing charger"""
-    if charger_id not in chargers_db:
+    charger_dict = dynamoDB_client.get_item(key={"id": charger_id})
+    if not charger_dict:
         return jsonify({"error": "Charger not found"}), 404
 
     data = request.get_json()
-    charger = chargers_db[charger_id]
 
+    charger = Charger(**charger_dict)
     # Update allowed fields
     if "chargerType" in data:
         charger.chargerType = data["chargerType"]
     if "maxRate" in data:
-        charger.maxRate = float(data["maxRate"])
+        charger.maxRate = decimal.Decimal(data["maxRate"])
     if "active" in data:
         charger.active = data["active"]
 
+    dynamoDB_client.put_item(item=charger.to_dict())
     return jsonify(charger.to_dict()), 200
 
 
 @chargers_bp.route("/<charger_id>", methods=["DELETE"])
 def delete_charger(charger_id: str):
     """Delete a charger"""
-    if charger_id not in chargers_db:
+    charger = dynamoDB_client.get_item(key={"id": charger_id})
+    if not charger:
         return jsonify({"error": "Charger not found"}), 404
 
-    del chargers_db[charger_id]
+    dynamoDB_client.delete_item(key={"id": charger_id})
     return jsonify({"message": "Charger deleted successfully"}), 200
 
 
@@ -198,12 +97,13 @@ def get_available_chargers():
     station_id = request.args.get("stationId")
     charger_type = request.args.get("chargerType")
 
-    chargers = [c for c in chargers_db.values() if c.active]
+    chargers = dynamoDB_client.scan_items()
+    chargers = [c for c in chargers if c["active"]]
 
     if station_id:
-        chargers = [c for c in chargers if c.chargingStationId == station_id]
+        chargers = [c for c in chargers if c["chargingStationId"] == station_id]
 
     if charger_type:
-        chargers = [c for c in chargers if c.chargerType == charger_type]
+        chargers = [c for c in chargers if c["chargerType"] == charger_type]
 
-    return jsonify([c.to_dict() for c in chargers]), 200
+    return jsonify(chargers), 200

@@ -318,6 +318,31 @@ export class InfraStack extends cdk.Stack {
     this.chargersTable.grantReadWriteData(ec2Role);
     this.vesselsTable.grantReadWriteData(ec2Role);
     this.bookingsTable.grantReadWriteData(ec2Role);
+    this.contractsTable.grantReadWriteData(ec2Role);
+
+    // Grant additional permissions for GSI queries (indexes)
+    // grantReadWriteData only covers the table, not the indexes
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:Query',
+        'dynamodb:Scan',
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:BatchGetItem',
+        'dynamodb:BatchWriteItem',
+      ],
+      resources: [
+        this.usersTable.tableArn + '/index/*',
+        this.stationsTable.tableArn + '/index/*',
+        this.chargersTable.tableArn + '/index/*',
+        this.vesselsTable.tableArn + '/index/*',
+        this.bookingsTable.tableArn + '/index/*',
+        this.contractsTable.tableArn + '/index/*',
+      ],
+    }));
 
     // ===== EC2 Instance =====
     // User data script to install Docker and Docker Compose

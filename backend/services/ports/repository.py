@@ -89,7 +89,7 @@ class PortsRepository:
     def __init__(self, dynamo_client: Optional[DynamoClient] = None):
         if dynamo_client is None:
             # Default to ports table - adjust table_name and region as needed
-            dynamo_client = DynamoClient(table_name="Ports", region_name="us-east-1")
+            dynamo_client = DynamoClient(table_name="aquacharge-ports-dev", region_name="us-east-1")
         self.client = dynamo_client
         self.table = dynamo_client.table
 

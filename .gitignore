@@ -31,3 +31,5 @@ Thumbs.db
 node_modules/
 dist/
 .vite/
+CODEBASE_AUDIT_REPORT.md
+.claude/

@@ -2,6 +2,9 @@
 
 Applies to any coding agent (Codex, Claude Code, Cursor agents, etc.).
 
+## Current ticket sequencing
+See `docs/implementation_plan.md` for the unblock-first per-person ticket order.
+
 ## Prime directive
 Minimize git conflicts. Prefer small, isolated changes per ticket.
 

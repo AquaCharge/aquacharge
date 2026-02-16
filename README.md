@@ -10,6 +10,7 @@ A minimal React + Flask starter for **AquaCharge** — an application exploring 
 - Alex Groom
 - Lucas Savoie
 - Gabe Vadureanu
+- Mackenzie Cooper
 
 ---
 

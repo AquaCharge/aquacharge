@@ -110,7 +110,15 @@ class AuthService:
             # Fall through to scan fallback below.
             pass
 
-        return self.dynamo_client.scan_items(filter_expression=Attr("email").eq(email))
+        scanned_users = self.dynamo_client.scan_items(
+            filter_expression=Attr("email").eq(email)
+        )
+        # Some environments may return unfiltered scan results; enforce exact match here.
+        return [
+            user
+            for user in scanned_users
+            if str(user.get("email", "")).lower().strip() == email
+        ]
 
     def login(self, data: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], int]:
         try:

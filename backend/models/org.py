@@ -1,25 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any
-from enum import Enum
-import decimal
 import uuid
 
 from .baseModel import BaseModel
 
 
-class ChargerStatus(Enum):
-    ACTIVE = 1
-    MAINTENANCE = 2
-    INACTIVE = 3
-
-
 @dataclass
-class Charger(BaseModel):
+class Org(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    chargingStationId: str = ""
-    chargerType: str = ""
-    maxRate: decimal.Decimal = decimal.Decimal(0.0)
-    status: str = ""
+    displayName: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):

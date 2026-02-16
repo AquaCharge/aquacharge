@@ -19,6 +19,7 @@ class ContractStatus(Enum):
 @dataclass
 class Contract(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    bookingId: str = ""
     vesselId: str = ""
     drEventId: str = ""
     vesselName: str = ""
@@ -82,6 +83,7 @@ class Contract(BaseModel):
         """Convert to dictionary for API responses"""
         return {
             "id": self.id,
+            "bookingId": self.bookingId,
             "vesselId": self.vesselId,
             "drEventId": self.drEventId,
             "vesselName": self.vesselName,

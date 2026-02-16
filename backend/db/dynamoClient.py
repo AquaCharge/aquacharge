@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 
 
 class DynamoClient:
@@ -12,6 +13,46 @@ class DynamoClient:
             return response
         except Exception as e:
             print(f"Error putting item: {e}")
+            raise
+
+    def put_item_conditional(
+        self,
+        item: dict,
+        condition_expression,
+        expression_attribute_names=None,
+        expression_attribute_values=None,
+    ) -> dict:
+        """
+        Put an item only if a condition is met.
+
+        Args:
+            item: The item to write.
+            condition_expression: A ConditionExpression (string or boto3 Attr/Key condition).
+            expression_attribute_names: Optional name placeholders.
+            expression_attribute_values: Optional value placeholders.
+
+        Returns:
+            The DynamoDB response on success, or None if the condition failed.
+        """
+        try:
+            params = {
+                "Item": item,
+                "ConditionExpression": condition_expression,
+            }
+            if expression_attribute_names is not None:
+                params["ExpressionAttributeNames"] = expression_attribute_names
+            if expression_attribute_values is not None:
+                params["ExpressionAttributeValues"] = expression_attribute_values
+
+            response = self.table.put_item(**params)
+            return response
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                return None
+            print(f"Error in conditional put: {e}")
+            raise
+        except Exception as e:
+            print(f"Error in conditional put: {e}")
             raise
 
     def get_item(self, key: dict) -> dict:

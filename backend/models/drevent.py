@@ -6,6 +6,7 @@ import uuid
 
 from .baseModel import BaseModel
 
+
 # Enum for event types
 class EventStatus(Enum):
     CREATED = "Created"
@@ -16,6 +17,7 @@ class EventStatus(Enum):
     COMPLETED = "Completed"
     SETTLED = "Settled"
     ARCHIVED = "Archived"
+
 
 @dataclass
 class DREvent(BaseModel):

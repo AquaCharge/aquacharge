@@ -16,6 +16,9 @@ class Vessel(BaseModel):
     capacity: float = 0.0
     maxChargeRate: float = 0.0
     minChargeRate: float = 0.0
+    maxDischargeRate: float = 0.0
+    longitude: float = 0.0
+    latitude: float = 0.0
     rangeMeters: float = 0.0
     active: bool = True
     createdAt: datetime = field(default_factory=datetime.now)

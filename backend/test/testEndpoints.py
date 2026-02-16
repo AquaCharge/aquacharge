@@ -159,7 +159,10 @@ def test_get_chargers(client):
 
 
 def test_get_charger(client):
-    rv = client.get("/api/chargers/charger-001")
+    # Get a real charger ID from the database
+    all_chargers = client.get("/api/chargers")
+    charger_id = all_chargers.get_json()[0]["id"]
+    rv = client.get(f"/api/chargers/{charger_id}")
     assert rv.status_code == 200
 
 
@@ -179,8 +182,11 @@ def test_create_charger_and_delete(client):
 
 
 def test_update_charger(client):
+    # Get a real charger ID from the database
+    all_chargers = client.get("/api/chargers")
+    charger_id = all_chargers.get_json()[0]["id"]
     rv = client.put(
-        "/api/chargers/charger-002", json={"active": False, "maxRate": 60.0}
+        f"/api/chargers/{charger_id}", json={"status": "inactive", "maxRate": 60.0}
     )
     assert rv.status_code == 200
 
@@ -271,7 +277,10 @@ def test_get_users(client):
 
 
 def test_get_user(client):
-    rv = client.get("/api/users/user-001")
+    # Get a real user ID from the database
+    all_users = client.get("/api/users")
+    user_id = all_users.get_json()[0]["id"]
+    rv = client.get(f"/api/users/{user_id}")
     assert rv.status_code == 200
 
 
@@ -296,8 +305,11 @@ def test_create_user_and_delete(client):
 
 
 def test_update_user(client):
+    # Get a real user ID from the database
+    all_users = client.get("/api/users")
+    user_id = all_users.get_json()[0]["id"]
     rv = client.put(
-        "/api/users/user-003", json={"email": "newmail@example.com", "active": False}
+        f"/api/users/{user_id}", json={"email": "newmail@example.com", "active": False}
     )
     assert rv.status_code == 200
 

@@ -22,6 +22,7 @@ export class InfraStack extends cdk.Stack {
   public readonly vesselsTable: dynamodb.ITable;
   public readonly bookingsTable: dynamodb.ITable;
   public readonly contractsTable: dynamodb.ITable;
+  public readonly drEventsTable: dynamodb.ITable;
   public readonly portsTable: dynamodb.ITable;
 
   constructor(scope: Construct, id: string, props?: InfraStackProps) {
@@ -43,6 +44,7 @@ export class InfraStack extends cdk.Stack {
     this.vesselsTable = tables.vesselsTable;
     this.bookingsTable = tables.bookingsTable;
     this.contractsTable = tables.contractsTable;
+    this.drEventsTable = tables.drEventsTable;
     this.portsTable = tables.portsTable;
 
     // ===== VPC (Simplified - only public subnets, no NAT Gateway) =====
@@ -132,6 +134,7 @@ export class InfraStack extends cdk.Stack {
     this.vesselsTable.grantReadWriteData(ec2Role);
     this.bookingsTable.grantReadWriteData(ec2Role);
     this.contractsTable.grantReadWriteData(ec2Role);
+    this.drEventsTable.grantReadWriteData(ec2Role);
     this.portsTable.grantReadWriteData(ec2Role);
 
     // Grant additional permissions for GSI queries (indexes)
@@ -155,6 +158,7 @@ export class InfraStack extends cdk.Stack {
         this.vesselsTable.tableArn + '/index/*',
         this.bookingsTable.tableArn + '/index/*',
         this.contractsTable.tableArn + '/index/*',
+        this.drEventsTable.tableArn + '/index/*',
         this.portsTable.tableArn + '/index/*',
       ],
     }));

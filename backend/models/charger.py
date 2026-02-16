@@ -23,4 +23,9 @@ class Charger(BaseModel):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
+        # Migrate legacy 'active' field to 'status'
+        if "active" in data:
+            active = data.pop("active")
+            if "status" not in data or not data["status"]:
+                data["status"] = "active" if active else "inactive"
         return cls(**data)

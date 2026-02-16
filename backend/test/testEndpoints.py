@@ -180,7 +180,7 @@ def test_create_charger_and_delete(client):
 
 def test_update_charger(client):
     rv = client.put(
-        "/api/chargers/charger-002", json={"active": False, "maxRate": 60.0}
+        "/api/chargers/charger-002", json={"status": "inactive", "maxRate": 60.0}
     )
     assert rv.status_code == 200
 

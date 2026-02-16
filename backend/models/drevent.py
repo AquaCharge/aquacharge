@@ -23,7 +23,6 @@ class EventStatus(Enum):
 class DREvent(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     stationId: str = ""
-    contractId: str = ""
     pricePerKwh: float = 0.0
     targetEnergyKwh: float = 0.0
     maxParticipants: int = 0

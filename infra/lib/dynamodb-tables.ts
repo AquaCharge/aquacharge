@@ -20,8 +20,9 @@ export class DynamoDbTables {
   public readonly vesselsTable: dynamodb.ITable;
   public readonly bookingsTable: dynamodb.ITable;
   public readonly contractsTable: dynamodb.ITable;
-  public readonly drEventsTable: dynamodb.ITable;
   public readonly portsTable: dynamodb.ITable;
+  public readonly drEventsTable: dynamodb.ITable;
+  public readonly orgsTable: dynamodb.ITable;
 
   constructor(tableScope: Construct, props: DynamoDbTablesProps) {
     const { environmentName, useExistingTables } = props;
@@ -45,11 +46,14 @@ export class DynamoDbTables {
       this.contractsTable = dynamodb.Table.fromTableName(
         tableScope, 'ContractsTable', `aquacharge-contracts-${environmentName}`
       );
+      this.portsTable = dynamodb.Table.fromTableName(
+        tableScope, 'PortsTable', `aquacharge-ports-${environmentName}`
+      );
       this.drEventsTable = dynamodb.Table.fromTableName(
         tableScope, 'DREventsTable', `aquacharge-drevents-${environmentName}`
       );
-      this.portsTable = dynamodb.Table.fromTableName(
-        tableScope, 'PortsTable', `aquacharge-ports-${environmentName}`
+      this.orgsTable = dynamodb.Table.fromTableName(
+        tableScope, 'OrgsTable', `aquacharge-orgs-${environmentName}`
       );
     } else {
       // Users Table
@@ -184,28 +188,33 @@ export class DynamoDbTables {
         pointInTimeRecovery: true,
       });
       contractsTable.addGlobalSecondaryIndex({
-        indexName: 'userId-index',
-        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+        indexName: 'bookingId-index',
+        partitionKey: { name: 'bookingId', type: dynamodb.AttributeType.STRING },
         projectionType: dynamodb.ProjectionType.ALL,
       });
-      this.contractsTable = contractsTable;
-
-      // DR Events Table
-      const drEventsTable = new dynamodb.Table(tableScope, 'DREventsTable', {
-        tableName: `aquacharge-drevents-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
+      contractsTable.addGlobalSecondaryIndex({
+        indexName: 'vesselId-index',
+        partitionKey: { name: 'vesselId', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
       });
-      drEventsTable.addGlobalSecondaryIndex({
-        indexName: 'stationId-index',
-        partitionKey: { name: 'stationId', type: dynamodb.AttributeType.STRING },
+      contractsTable.addGlobalSecondaryIndex({
+        indexName: 'drEventId-index',
+        partitionKey: { name: 'drEventId', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      contractsTable.addGlobalSecondaryIndex({
+        indexName: 'status-index',
+        partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
         sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
         projectionType: dynamodb.ProjectionType.ALL,
       });
-      this.drEventsTable = drEventsTable;
+      contractsTable.addGlobalSecondaryIndex({
+        indexName: 'createdBy-index',
+        partitionKey: { name: 'createdBy', type: dynamodb.AttributeType.STRING },
+        sortKey: { name: 'createdAt', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      this.contractsTable = contractsTable;
 
       // Ports Table
       const portsTable = new dynamodb.Table(tableScope, 'PortsTable', {
@@ -216,6 +225,51 @@ export class DynamoDbTables {
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
       });
       this.portsTable = portsTable;
+
+      // DREvents Table
+      const drEventsTable = new dynamodb.Table(tableScope, 'DREventsTable', {
+        tableName: `aquacharge-drevents-${environmentName}`,
+        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        pointInTimeRecovery: true,
+      });
+      drEventsTable.addGlobalSecondaryIndex({
+        indexName: 'stationId-index',
+        partitionKey: { name: 'stationId', type: dynamodb.AttributeType.STRING },
+        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      drEventsTable.addGlobalSecondaryIndex({
+        indexName: 'status-index',
+        partitionKey: { name: 'status', type: dynamodb.AttributeType.STRING },
+        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      drEventsTable.addGlobalSecondaryIndex({
+        indexName: 'startTime-index',
+        partitionKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      this.drEventsTable = drEventsTable;
+
+      // Orgs Table
+      const orgsTable = new dynamodb.Table(tableScope, 'OrgsTable', {
+        tableName: `aquacharge-orgs-${environmentName}`,
+        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        pointInTimeRecovery: true,
+      });
+      orgsTable.addGlobalSecondaryIndex({
+        indexName: 'displayName-index',
+        partitionKey: { name: 'displayName', type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      this.orgsTable = orgsTable;
     }
   }
 }

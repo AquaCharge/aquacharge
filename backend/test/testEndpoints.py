@@ -325,6 +325,7 @@ def test_contracts_require_admin_role(
     # Test POST /api/contracts - should fail for non-admin users
     contract_data = {
         "vesselId": "vessel-001",
+        "drEventId": "dr-event-001",
         "vesselName": "Test Vessel",
         "energyAmount": 100.0,
         "pricePerKwh": 0.15,

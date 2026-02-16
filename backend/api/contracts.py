@@ -86,6 +86,7 @@ def create_contract():
         # Validate required fields
         required_fields = [
             "vesselId",
+            "drEventId",
             "vesselName",
             "energyAmount",
             "pricePerKwh",
@@ -109,6 +110,7 @@ def create_contract():
         # Create contract instance
         contract = Contract(
             vesselId=data["vesselId"],
+            drEventId=data["drEventId"],
             vesselName=data["vesselName"],
             energyAmount=Decimal(str(data["energyAmount"])),
             pricePerKwh=Decimal(str(data["pricePerKwh"])),

@@ -19,7 +19,7 @@ class Charger(BaseModel):
     chargingStationId: str = ""
     chargerType: str = ""
     maxRate: decimal.Decimal = decimal.Decimal(0.0)
-    status: str = ""
+    status: ChargerStatus = ChargerStatus.ACTIVE
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):

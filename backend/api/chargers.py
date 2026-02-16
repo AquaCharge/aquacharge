@@ -49,7 +49,7 @@ def create_charger():
         chargingStationId=data["chargingStationId"],
         chargerType=data["chargerType"],
         maxRate=decimal.Decimal(data["maxRate"]),
-        active=data.get("active", True),
+        status=data.get("status", "active"),
     )
 
     # Store charger
@@ -67,14 +67,14 @@ def update_charger(charger_id: str):
 
     data = request.get_json()
 
-    charger = Charger(**charger_dict)
+    charger = Charger.from_dict(charger_dict)
     # Update allowed fields
     if "chargerType" in data:
         charger.chargerType = data["chargerType"]
     if "maxRate" in data:
         charger.maxRate = decimal.Decimal(data["maxRate"])
-    if "active" in data:
-        charger.active = data["active"]
+    if "status" in data:
+        charger.status = data["status"]
 
     dynamoDB_client.put_item(item=charger.to_dict())
     return jsonify(charger.to_dict()), 200
@@ -98,7 +98,7 @@ def get_available_chargers():
     charger_type = request.args.get("chargerType")
 
     chargers = dynamoDB_client.scan_items()
-    chargers = [c for c in chargers if c["active"]]
+    chargers = [c for c in chargers if c.get("status") == "active"]
 
     if station_id:
         chargers = [c for c in chargers if c["chargingStationId"] == station_id]

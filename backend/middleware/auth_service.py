@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 import hashlib
 import jwt
 import re
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from flask import current_app
 
 from db.dynamoClient import DynamoClient
@@ -98,6 +98,20 @@ class AuthService:
         except jwt.InvalidTokenError as exc:
             raise ValueError("Invalid token") from exc
 
+    def _find_users_by_email(self, email: str) -> list:
+        """Lookup by GSI first, with scan fallback for environments without index consistency."""
+        try:
+            users = self.dynamo_client.query_gsi(
+                index_name="email-index", key_condition_expression=Key("email").eq(email)
+            )
+            if users:
+                return users
+        except Exception:
+            # Fall through to scan fallback below.
+            pass
+
+        return self.dynamo_client.scan_items(filter_expression=Attr("email").eq(email))
+
     def login(self, data: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], int]:
         try:
             if not data or "email" not in data or "password" not in data:
@@ -106,9 +120,7 @@ class AuthService:
             email = data["email"].lower().strip()
             password = data["password"]
 
-            users = self.dynamo_client.query_gsi(
-                index_name="email-index", key_condition_expression=Key("email").eq(email)
-            )
+            users = self._find_users_by_email(email)
             if not users:
                 return {"error": "Invalid credentials"}, 401
 
@@ -158,9 +170,7 @@ class AuthService:
                     "error": "Password must be at least 8 characters and contain letters and numbers"
                 }, 400
 
-            existing_users = self.dynamo_client.query_gsi(
-                index_name="email-index", key_condition_expression=Key("email").eq(email)
-            )
+            existing_users = self._find_users_by_email(email)
             if existing_users:
                 return {"error": "Email already registered"}, 409
 

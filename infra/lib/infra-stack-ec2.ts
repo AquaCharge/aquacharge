@@ -22,8 +22,9 @@ export class InfraStack extends cdk.Stack {
   public readonly vesselsTable: dynamodb.ITable;
   public readonly bookingsTable: dynamodb.ITable;
   public readonly contractsTable: dynamodb.ITable;
-  public readonly drEventsTable: dynamodb.ITable;
   public readonly portsTable: dynamodb.ITable;
+  public readonly drEventsTable: dynamodb.ITable;
+  public readonly orgsTable: dynamodb.ITable;
 
   constructor(scope: Construct, id: string, props?: InfraStackProps) {
     super(scope, id, props);
@@ -44,8 +45,9 @@ export class InfraStack extends cdk.Stack {
     this.vesselsTable = tables.vesselsTable;
     this.bookingsTable = tables.bookingsTable;
     this.contractsTable = tables.contractsTable;
-    this.drEventsTable = tables.drEventsTable;
     this.portsTable = tables.portsTable;
+    this.drEventsTable = tables.drEventsTable;
+    this.orgsTable = tables.orgsTable;
 
     // ===== VPC (Simplified - only public subnets, no NAT Gateway) =====
     const vpc = new ec2.Vpc(this, 'AquaChargeVpc', {
@@ -134,8 +136,9 @@ export class InfraStack extends cdk.Stack {
     this.vesselsTable.grantReadWriteData(ec2Role);
     this.bookingsTable.grantReadWriteData(ec2Role);
     this.contractsTable.grantReadWriteData(ec2Role);
-    this.drEventsTable.grantReadWriteData(ec2Role);
     this.portsTable.grantReadWriteData(ec2Role);
+    this.drEventsTable.grantReadWriteData(ec2Role);
+    this.orgsTable.grantReadWriteData(ec2Role);
 
     // Grant additional permissions for GSI queries (indexes)
     // grantReadWriteData only covers the table, not the indexes
@@ -158,8 +161,9 @@ export class InfraStack extends cdk.Stack {
         this.vesselsTable.tableArn + '/index/*',
         this.bookingsTable.tableArn + '/index/*',
         this.contractsTable.tableArn + '/index/*',
-        this.drEventsTable.tableArn + '/index/*',
         this.portsTable.tableArn + '/index/*',
+        this.drEventsTable.tableArn + '/index/*',
+        this.orgsTable.tableArn + '/index/*',
       ],
     }));
 
@@ -199,7 +203,10 @@ export class InfraStack extends cdk.Stack {
       `DYNAMODB_CHARGERS_TABLE=${this.chargersTable.tableName}`,
       `DYNAMODB_VESSELS_TABLE=${this.vesselsTable.tableName}`,
       `DYNAMODB_BOOKINGS_TABLE=${this.bookingsTable.tableName}`,
+      `DYNAMODB_CONTRACTS_TABLE=${this.contractsTable.tableName}`,
       `DYNAMODB_PORTS_TABLE=${this.portsTable.tableName}`,
+      `DYNAMODB_DREVENTS_TABLE=${this.drEventsTable.tableName}`,
+      `DYNAMODB_ORGS_TABLE=${this.orgsTable.tableName}`,
       `FLASK_ENV=${environmentName === 'prod' ? 'production' : 'development'}`,
       'EOF',
       'chown ec2-user:ec2-user /home/ec2-user/aquacharge/.env',
@@ -315,6 +322,24 @@ export class InfraStack extends cdk.Stack {
       value: this.portsTable.tableName,
       description: 'Ports DynamoDB table name',
       exportName: `aquacharge-ports-table-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'ContractsTableName', {
+      value: this.contractsTable.tableName,
+      description: 'Contracts DynamoDB table name',
+      exportName: `aquacharge-contracts-table-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'DREventsTableName', {
+      value: this.drEventsTable.tableName,
+      description: 'DR Events DynamoDB table name',
+      exportName: `aquacharge-drevents-table-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'OrgsTableName', {
+      value: this.orgsTable.tableName,
+      description: 'Organizations DynamoDB table name',
+      exportName: `aquacharge-orgs-table-${environmentName}`,
     });
 
     // Security Information

@@ -1,0 +1,138 @@
+========== AquaCharge Database Seeding ==========
+
+[1/7] Generating Users...
+  ✓ 14 users created
+[2/7] Generating Stations...
+  ✓ 4 stations created
+[3/7] Generating Chargers...
+  ✓ 35 chargers created
+[4/7] Generating Vessels...
+  ✓ 15 vessels created
+[5/7] Generating Bookings...
+  ✓ 30 bookings created
+  ✓ No double-booking conflicts
+[6/7] Generating DR Events...
+  ✓ 9 DR events created
+[7/7] Generating Contracts...
+========== AquaCharge Database Seeding ==========
+
+[1/7] Generating Users...
+  OK 14 users created
+[2/7] Generating Stations...
+  OK 4 stations created
+[3/7] Generating Chargers...
+  OK 34 chargers created
+[4/7] Generating Vessels...
+  OK 14 vessels created
+[5/7] Generating Bookings...
+  OK 49 bookings created
+  OK No double-booking conflicts
+[6/7] Generating DR Events...
+  OK 11 DR events created
+[7/7] Generating Contracts...
+========== AquaCharge Database Seeding ==========
+
+[1/7] Generating Users...
+  OK 14 users created
+[2/7] Generating Stations...
+  OK 4 stations created
+[3/7] Generating Chargers...
+  OK 26 chargers created
+[4/7] Generating Vessels...
+  OK 14 vessels created
+[5/7] Generating Bookings...
+  OK 38 bookings created
+  OK No double-booking conflicts
+[6/7] Generating DR Events...
+  OK 11 DR events created
+[7/7] Generating Contracts...
+  OK 40 contracts created
+
+Validation Results:
+  OK No double-booking conflicts
+  OK All foreign keys valid
+
+Writing to DynamoDB...
+[dry-run] aquacharge-users-dev: would write 14 records
+[dry-run] aquacharge-stations-dev: would write 4 records
+[dry-run] aquacharge-chargers-dev: would write 26 records
+[dry-run] aquacharge-vessels-dev: would write 14 records
+[dry-run] aquacharge-bookings-dev: would write 38 records
+[dry-run] aquacharge-drevents-dev: would write 11 records
+[dry-run] aquacharge-contracts-dev: would write 40 records
+========== USER CREDENTIALS ==========
+VESSEL OPERATORS (VO):
+  Email: james.morrison@atlanticmarine.com | Password: Maritime@2024
+  Email: sarah.chen@bayshipping.com | Password: ShipMgr#2024
+  Email: michael.obrien@nbferries.com | Password: VesselOp@2024
+  Email: emma.lévesque@atlanticmarine.com | Password: Crew2024!
+  Email: david.macdonald@bayshipping.com | Password: Maritime@2024
+  Email: olivia.kim@nbferries.com | Password: ShipMgr#2024
+  Email: robert.wilson@atlanticmarine.com | Password: Maritime@2024
+  Email: sophie.taylor@bayshipping.com | Password: HarborOp#2024
+  Email: william.brown@nbferries.com | Password: Crew2024!
+  Email: anna.davis@atlanticmarine.com | Password: HarborOp#2024
+  Email: admin@bayshipping.com | Password: AdminPass@2024
+POWER SYSTEM OPERATORS (PSO):
+  Email: robert.wilson@gridoperator.com | Password: GridOp@2024
+  Email: jennifer.martinez@gridoperator.com | Password: GridMgr#2024
+  Email: daniel.thompson@gridoperator.com | Password: PSO@2024
+Credentials saved to: generated_user_credentials.csv
+
+========== COMPLETION ==========
+OK Database seeding completed successfully
+OK Credentials saved to: ./generated_user_credentials.csv
+WARNING: IMPORTANT: Secure credentials file before deployment
+========== AquaCharge Database Seeding ==========
+
+[1/7] Generating Users...
+  OK 14 users created
+[2/7] Generating Stations...
+  OK 4 stations created
+[3/7] Generating Chargers...
+  OK 28 chargers created
+[4/7] Generating Vessels...
+  OK 20 vessels created
+[5/7] Generating Bookings...
+  OK 36 bookings created
+  OK No double-booking conflicts
+[6/7] Generating DR Events...
+  OK 11 DR events created
+[7/7] Generating Contracts...
+  OK 40 contracts created
+
+Validation Results:
+  OK No double-booking conflicts
+  OK All foreign keys valid
+
+Writing to DynamoDB...
+[dry-run] aquacharge-users-dev: would write 14 records
+[dry-run] aquacharge-stations-dev: would write 4 records
+[dry-run] aquacharge-chargers-dev: would write 28 records
+[dry-run] aquacharge-vessels-dev: would write 20 records
+[dry-run] aquacharge-bookings-dev: would write 36 records
+[dry-run] aquacharge-drevents-dev: would write 11 records
+[dry-run] aquacharge-contracts-dev: would write 40 records
+========== USER CREDENTIALS ==========
+VESSEL OPERATORS (VO):
+  Email: james.morrison@atlanticmarine.com | Password: Maritime@2024
+  Email: sarah.chen@bayshipping.com | Password: HarborOp#2024
+  Email: michael.obrien@nbferries.com | Password: Maritime@2024
+  Email: emma.lévesque@atlanticmarine.com | Password: ShipMgr#2024
+  Email: david.macdonald@bayshipping.com | Password: VesselOp@2024
+  Email: olivia.kim@nbferries.com | Password: VesselOp@2024
+  Email: robert.wilson@atlanticmarine.com | Password: HarborOp#2024
+  Email: sophie.taylor@bayshipping.com | Password: ShipMgr#2024
+  Email: william.brown@nbferries.com | Password: Crew2024!
+  Email: anna.davis@atlanticmarine.com | Password: ShipMgr#2024
+  Email: admin@bayshipping.com | Password: AdminPass@2024
+POWER SYSTEM OPERATORS (PSO):
+  Email: robert.wilson@gridoperator.com | Password: GridOp@2024
+  Email: jennifer.martinez@gridoperator.com | Password: GridMgr#2024
+  Email: daniel.thompson@gridoperator.com | Password: PSO@2024
+Credentials saved to: generated_user_credentials.csv
+
+========== COMPLETION ==========
+OK Database seeding completed successfully
+OK Credentials saved to: ./generated_user_credentials.csv
+WARNING: IMPORTANT: Secure credentials file before deployment

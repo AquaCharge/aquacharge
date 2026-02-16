@@ -14,6 +14,7 @@ class EventStatus(Enum):
     ACCEPTED = "Accepted"
     COMMITTED = "Committed"
     ACTIVE = "Active"
+    CANCELLED = "Cancelled"
     COMPLETED = "Completed"
     SETTLED = "Settled"
     ARCHIVED = "Archived"

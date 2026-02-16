@@ -3,12 +3,13 @@ from models.user import User, UserRole, UserType
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from db.dynamoClient import DynamoClient
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr
 from decimal import Decimal
 import hashlib
 import jwt
 import secrets
 import re
+from middleware.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -19,6 +20,7 @@ dynamoDB_client = DynamoClient(
 
 # In-memory storage for password reset tokens (replace with database in production)
 password_reset_tokens: Dict[str, Dict[str, Any]] = {}
+auth_service = AuthService(dynamo_client=dynamoDB_client)
 
 
 # Helper functions
@@ -124,198 +126,22 @@ def validate_password(password: str) -> bool:
 @auth_bp.route("/login", methods=["POST"])
 def login():
     """Authenticate user and return JWT token"""
-    try:
-        data = request.get_json()
-
-        # Validate required fields
-        if not data or "email" not in data or "password" not in data:
-            return jsonify({"error": "Email and password are required"}), 400
-
-        email = data["email"].lower().strip()
-        password = data["password"]
-
-        # Find user by email using GSI
-        users = dynamoDB_client.query_gsi(
-            index_name="email-index", key_condition_expression=Key("email").eq(email)
-        )
-
-        if not users:
-            return jsonify({"error": "Invalid credentials"}), 401
-
-        # Prepare user data from DynamoDB
-        user_data = prepare_user_data_from_dynamo(users[0])
-        user = User(**user_data)
-
-        # Check if user is active
-        if not user.active:
-            return jsonify({"error": "Account is deactivated"}), 401
-
-        # Verify password
-        if not verify_password(password, user.passwordHash):
-            return jsonify({"error": "Invalid credentials"}), 401
-
-        # Generate JWT token
-        token = generate_jwt_token(user)
-
-        # Update last login time
-        update_data = {"updatedAt": datetime.now().isoformat()}
-        dynamoDB_client.update_item(key={"id": user.id}, update_data=update_data)
-
-        # Return user data (without password) and token
-        user_data = user.to_public_dict()
-
-        # Add human-readable role and type names
-        # user.role and user.type are integers, so we get the enum by value
-        user_data["role_name"] = UserRole(user.role).name
-        user_data["type_name"] = UserType(user.type).name
-
-        # Convert any Decimal objects to float for JSON serialization
-        user_data = convert_decimals(user_data)
-
-        return (
-            jsonify(
-                {
-                    "token": token,
-                    "user": user_data,
-                    "expires_in": 24 * 3600,  # 24 hours in seconds
-                }
-            ),
-            200,
-        )
-
-    except Exception as e:
-        return jsonify({"error": "Login failed", "details": str(e)}), 500
+    response_body, status = auth_service.login(request.get_json())
+    return jsonify(response_body), status
 
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
     """Register a new user"""
-    try:
-        data = request.get_json()
-
-        # Validate required fields
-        required_fields = ["displayName", "email", "password"]
-        for field in required_fields:
-            if field not in data or not data[field]:
-                return jsonify({"error": f"{field} is required"}), 400
-
-        displayName = data["displayName"].strip()
-        email = data["email"].lower().strip()
-        password = data["password"]
-
-        # Validate email format
-        if not validate_email(email):
-            return jsonify({"error": "Invalid email format"}), 400
-
-        # Validate password strength
-        if not validate_password(password):
-            return (
-                jsonify(
-                    {
-                        "error": "Password must be at least 8 characters and contain letters and numbers"
-                    }
-                ),
-                400,
-            )
-
-        # Check if email already exists using GSI for consistency
-        existing_users = dynamoDB_client.query_gsi(
-            index_name="email-index", key_condition_expression=Key("email").eq(email)
-        )
-        if existing_users:
-            return jsonify({"error": "Email already registered"}), 409
-
-        # Display names can be duplicated - no uniqueness check needed
-
-        # Create new user
-        user = User(
-            displayName=displayName,
-            email=email,
-            passwordHash=hash_password(password),
-            role=UserRole.USER.value,
-            type=UserType.VESSEL_OPERATOR.value,
-            active=True,
-            orgId=data.get("orgId"),
-        )
-
-        # Validate user data
-        try:
-            user.validate()
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-
-        # Store user - remove None values for GSI compatibility
-        user_dict = user.to_dict()
-        user_dict = {k: v for k, v in user_dict.items() if v is not None}
-        dynamoDB_client.put_item(user_dict)
-
-        # Generate JWT token for auto-login
-        token = generate_jwt_token(user)
-
-        # Return user data (without password) and token
-        user_data = user.to_public_dict()
-        user_data["role_name"] = UserRole(user.role).name
-        user_data["type_name"] = UserType(user.type).name
-
-        return (
-            jsonify(
-                {
-                    "token": token,
-                    "user": user_data,
-                    "message": "Registration successful",
-                }
-            ),
-            201,
-        )
-
-    except Exception as e:
-        return jsonify({"error": "Registration failed", "details": str(e)}), 500
+    response_body, status = auth_service.register(request.get_json())
+    return jsonify(response_body), status
 
 
 @auth_bp.route("/verify-token", methods=["POST"])
 def verify_token():
     """Verify JWT token and return user data"""
-    try:
-        # Get token from Authorization header
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"error": "No valid token provided"}), 401
-
-        token = auth_header.split(" ")[1]
-
-        # Decode token
-        try:
-            payload = decode_jwt_token(token)
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 401
-
-        # Get user from database
-        user_id = payload.get("user_id")
-        user_data = dynamoDB_client.get_item(key={"id": user_id})
-
-        if not user_data:
-            return jsonify({"error": "User not found"}), 404
-
-        # Convert Decimals before creating User object
-        user_data = prepare_user_data_from_dynamo(user_data)
-        user = User(**user_data)
-
-        # Check if user is still active
-        if not user.active:
-            return jsonify({"error": "Account is deactivated"}), 401
-
-        # Return user data
-        user_data = user.to_public_dict()
-        user_data["role_name"] = UserRole(user.role).name
-        user_data["type_name"] = UserType(user.type).name
-
-        # Ensure all Decimals are converted
-        user_data = convert_decimals(user_data)
-
-        return jsonify({"user": user_data, "valid": True}), 200
-
-    except Exception as e:
-        return jsonify({"error": "Token verification failed", "details": str(e)}), 500
+    response_body, status = auth_service.verifyJWT(request.headers.get("Authorization"))
+    return jsonify(response_body), status
 
 
 @auth_bp.route("/refresh", methods=["POST"])
@@ -573,9 +399,8 @@ def change_password():
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     """Logout user (client-side token removal)"""
-    # Since we're using stateless JWTs, logout is handled client-side
-    # In a more complex system, you might maintain a blacklist of tokens
-    return jsonify({"message": "Logged out successfully"}), 200
+    response_body, status = auth_service.logout()
+    return jsonify(response_body), status
 
 
 @auth_bp.route("/me", methods=["GET"])

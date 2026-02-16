@@ -108,7 +108,12 @@ def create_contract():
             return jsonify({"error": "Invalid date format. Use ISO format."}), 400
 
         # Create contract instance
+        booking_id = data.get("bookingId")
+        if isinstance(booking_id, str):
+            booking_id = booking_id.strip() or None
+
         contract = Contract(
+            bookingId=booking_id,
             vesselId=data["vesselId"],
             drEventId=data["drEventId"],
             vesselName=data["vesselName"],
@@ -127,7 +132,9 @@ def create_contract():
         contract.validate()
 
         # Store contract
-        dynamoDB_client.put_item(item=contract.to_dict())
+        contract_item = contract.to_dict()
+        contract_item = {k: v for k, v in contract_item.items() if v is not None}
+        dynamoDB_client.put_item(item=contract_item)
 
         return (
             jsonify(

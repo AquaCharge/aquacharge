@@ -19,7 +19,7 @@ class ContractStatus(Enum):
 @dataclass
 class Contract(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    bookingId: str = ""
+    bookingId: Optional[str] = None
     vesselId: str = ""
     drEventId: str = ""
     vesselName: str = ""

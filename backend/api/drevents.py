@@ -40,7 +40,7 @@ def get_drevents():
             jsonify({"error": "Failed to retrieve DR events", "details": str(e)}),
             500,
         )
-    
+
 
 @drevents_bp.route("/<event_id>", methods=["GET"])
 @require_auth
@@ -57,7 +57,7 @@ def get_drevent_by_id(event_id):
             jsonify({"error": "Failed to retrieve DR event", "details": str(e)}),
             500,
         )
-    
+
 
 @drevents_bp.route("", methods=["POST"])
 @require_auth
@@ -135,7 +135,7 @@ def update_drevent(event_id):
             jsonify({"error": "Failed to update DR event", "details": str(e)}),
             500,
         )
-    
+
 
 @drevents_bp.route("/<event_id>", methods=["PUT"])
 @require_auth

@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { DynamoDbTables } from './dynamodb-tables';
 
 export interface InfraStackProps extends cdk.StackProps {
   environmentName?: string;
@@ -21,6 +22,7 @@ export class InfraStack extends cdk.Stack {
   public readonly vesselsTable: dynamodb.ITable;
   public readonly bookingsTable: dynamodb.ITable;
   public readonly contractsTable: dynamodb.ITable;
+  public readonly portsTable: dynamodb.ITable;
 
   constructor(scope: Construct, id: string, props?: InfraStackProps) {
     super(scope, id, props);
@@ -29,208 +31,19 @@ export class InfraStack extends cdk.Stack {
     // Always include the hardcoded IP, and add any additional IPs from props
     const allowedIps = ['131.202.255.236/32', ...(props?.allowedIpAddresses || [])];
     const instanceTypeString = props?.instanceType || 't3.micro';
-    const useExistingTables = props?.useExistingTables ?? true; // Default to true to use existing tables
+    const useExistingTables = props?.useExistingTables ?? false; // Default to false to allow CDK to manage tables
     const keyPairName = props?.keyPairName || 'aquacharge-key';
 
     // ===== DynamoDB Tables =====
-    
-    if (useExistingTables) {
-      // Reference existing tables instead of creating new ones
-      this.usersTable = dynamodb.Table.fromTableName(
-        this,
-        'UsersTable',
-        `aquacharge-users-${environmentName}`
-      );
-      
-      this.stationsTable = dynamodb.Table.fromTableName(
-        this,
-        'StationsTable',
-        `aquacharge-stations-${environmentName}`
-      );
-      
-      this.chargersTable = dynamodb.Table.fromTableName(
-        this,
-        'ChargersTable',
-        `aquacharge-chargers-${environmentName}`
-      );
-      
-      this.vesselsTable = dynamodb.Table.fromTableName(
-        this,
-        'VesselsTable',
-        `aquacharge-vessels-${environmentName}`
-      );
-      
-      this.bookingsTable = dynamodb.Table.fromTableName(
-        this,
-        'BookingsTable',
-        `aquacharge-bookings-${environmentName}`
-      );
-    
-      this.contractsTable = dynamodb.Table.fromTableName(
-        this,
-        'ContractsTable',
-        `aquacharge-contracts-${environmentName}`
-      );
-    } else {
+    const tables = new DynamoDbTables(this, { environmentName, useExistingTables });
 
-      // Create new tables
-      // Users Table
-      const usersTable = new dynamodb.Table(this, 'UsersTable', {
-        tableName: `aquacharge-users-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-        pointInTimeRecovery: true,
-      });
-
-      usersTable.addGlobalSecondaryIndex({
-        indexName: 'email-index',
-        partitionKey: { name: 'email', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      usersTable.addGlobalSecondaryIndex({
-        indexName: 'orgId-index',
-        partitionKey: { name: 'orgId', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.usersTable = usersTable;
-
-      // Stations Table
-      const stationsTable = new dynamodb.Table(this, 'StationsTable', {
-        tableName: `aquacharge-stations-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
-      });
-
-      stationsTable.addGlobalSecondaryIndex({
-        indexName: 'city-index',
-        partitionKey: { name: 'city', type: dynamodb.AttributeType.STRING },
-        sortKey: { name: 'provinceOrState', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      stationsTable.addGlobalSecondaryIndex({
-        indexName: 'status-index',
-        partitionKey: { name: 'status', type: dynamodb.AttributeType.NUMBER },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.stationsTable = stationsTable;
-
-      // Chargers Table
-      const chargersTable = new dynamodb.Table(this, 'ChargersTable', {
-        tableName: `aquacharge-chargers-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
-      });
-
-      chargersTable.addGlobalSecondaryIndex({
-        indexName: 'chargingStationId-index',
-        partitionKey: { name: 'chargingStationId', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      chargersTable.addGlobalSecondaryIndex({
-        indexName: 'chargerType-index',
-        partitionKey: { name: 'chargerType', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.chargersTable = chargersTable;
-
-      // Vessels Table
-      const vesselsTable = new dynamodb.Table(this, 'VesselsTable', {
-        tableName: `aquacharge-vessels-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
-      });
-
-      vesselsTable.addGlobalSecondaryIndex({
-        indexName: 'userId-index',
-        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      vesselsTable.addGlobalSecondaryIndex({
-        indexName: 'vesselType-index',
-        partitionKey: { name: 'vesselType', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.vesselsTable = vesselsTable;
-
-      // Bookings Table
-      const bookingsTable = new dynamodb.Table(this, 'BookingsTable', {
-        tableName: `aquacharge-bookings-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-        pointInTimeRecovery: true,
-      });
-
-      bookingsTable.addGlobalSecondaryIndex({
-        indexName: 'userId-index',
-        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      bookingsTable.addGlobalSecondaryIndex({
-        indexName: 'stationId-index',
-        partitionKey: { name: 'stationId', type: dynamodb.AttributeType.STRING },
-        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      bookingsTable.addGlobalSecondaryIndex({
-        indexName: 'vesselId-index',
-        partitionKey: { name: 'vesselId', type: dynamodb.AttributeType.STRING },
-        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      bookingsTable.addGlobalSecondaryIndex({
-        indexName: 'status-index',
-        partitionKey: { name: 'status', type: dynamodb.AttributeType.NUMBER },
-        sortKey: { name: 'startTime', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.bookingsTable = bookingsTable;
-
-      // Contracts Table
-      const contractsTable = new dynamodb.Table(this, 'ContractsTable', {
-        tableName: `aquacharge-contracts-${environmentName}`,
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
-      });
-      
-      contractsTable.addGlobalSecondaryIndex({
-        indexName: 'userId-index',
-        partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
-        projectionType: dynamodb.ProjectionType.ALL,
-      });
-
-      this.contractsTable = contractsTable;
-    }
+    this.usersTable = tables.usersTable;
+    this.stationsTable = tables.stationsTable;
+    this.chargersTable = tables.chargersTable;
+    this.vesselsTable = tables.vesselsTable;
+    this.bookingsTable = tables.bookingsTable;
+    this.contractsTable = tables.contractsTable;
+    this.portsTable = tables.portsTable;
 
     // ===== VPC (Simplified - only public subnets, no NAT Gateway) =====
     const vpc = new ec2.Vpc(this, 'AquaChargeVpc', {
@@ -319,6 +132,7 @@ export class InfraStack extends cdk.Stack {
     this.vesselsTable.grantReadWriteData(ec2Role);
     this.bookingsTable.grantReadWriteData(ec2Role);
     this.contractsTable.grantReadWriteData(ec2Role);
+    this.portsTable.grantReadWriteData(ec2Role);
 
     // Grant additional permissions for GSI queries (indexes)
     // grantReadWriteData only covers the table, not the indexes
@@ -341,6 +155,7 @@ export class InfraStack extends cdk.Stack {
         this.vesselsTable.tableArn + '/index/*',
         this.bookingsTable.tableArn + '/index/*',
         this.contractsTable.tableArn + '/index/*',
+        this.portsTable.tableArn + '/index/*',
       ],
     }));
 
@@ -380,6 +195,7 @@ export class InfraStack extends cdk.Stack {
       `DYNAMODB_CHARGERS_TABLE=${this.chargersTable.tableName}`,
       `DYNAMODB_VESSELS_TABLE=${this.vesselsTable.tableName}`,
       `DYNAMODB_BOOKINGS_TABLE=${this.bookingsTable.tableName}`,
+      `DYNAMODB_PORTS_TABLE=${this.portsTable.tableName}`,
       `FLASK_ENV=${environmentName === 'prod' ? 'production' : 'development'}`,
       'EOF',
       'chown ec2-user:ec2-user /home/ec2-user/aquacharge/.env',
@@ -489,6 +305,12 @@ export class InfraStack extends cdk.Stack {
       value: this.bookingsTable.tableName,
       description: 'Bookings DynamoDB table name',
       exportName: `aquacharge-bookings-table-${environmentName}`,
+    });
+
+    new cdk.CfnOutput(this, 'PortsTableName', {
+      value: this.portsTable.tableName,
+      description: 'Ports DynamoDB table name',
+      exportName: `aquacharge-ports-table-${environmentName}`,
     });
 
     // Security Information

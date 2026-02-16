@@ -61,7 +61,7 @@ fi
 npx cdk deploy \
   -c environment=$ENVIRONMENT \
   -c allowedIps="$ALLOWED_IPS" \
-  -c useExistingTables=true \
+  -c useExistingTables=false \
   --require-approval never
 
 echo "✅ Infrastructure deployed"

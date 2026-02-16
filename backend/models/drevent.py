@@ -27,8 +27,12 @@ class DREvent(BaseModel):
     pricePerKwh: float = 0.0
     targetEnergyKwh: float = 0.0
     maxParticipants: int = 0
-    startTime: datetime = field(default_factory=lambda: datetime.now() + timedelta(hours=2))
-    endTime: datetime = field(default_factory=lambda: datetime.now() + timedelta(hours=5))
+    startTime: datetime = field(
+        default_factory=lambda: datetime.now() + timedelta(hours=2)
+    )
+    endTime: datetime = field(
+        default_factory=lambda: datetime.now() + timedelta(hours=5)
+    )
     status: EventStatus = EventStatus.CREATED
     details: Optional[Dict[str, Any]] = None
 

@@ -89,7 +89,9 @@ class PortsRepository:
     def __init__(self, dynamo_client: Optional[DynamoClient] = None):
         if dynamo_client is None:
             # Default to ports table - adjust table_name and region as needed
-            dynamo_client = DynamoClient(table_name="aquacharge-ports-dev", region_name="us-east-1")
+            dynamo_client = DynamoClient(
+                table_name="aquacharge-ports-dev", region_name="us-east-1"
+            )
         self.client = dynamo_client
         self.table = dynamo_client.table
 
@@ -134,9 +136,7 @@ class PortsRepository:
         lon_expression = (
             _build_between_expression(LONGITUDE_FIELDS, min_lon, max_lon)
             if not crosses_dateline
-            else _build_cross_dateline_expression(
-                LONGITUDE_FIELDS, min_lon, max_lon
-            )
+            else _build_cross_dateline_expression(LONGITUDE_FIELDS, min_lon, max_lon)
         )
         filter_expression = lat_expression & lon_expression
         scan_kwargs = {
@@ -168,7 +168,9 @@ class PortsRepository:
             for item in response.get("Items", []):
                 raw_name = _get_first_value(item, PORT_FIELD_VARIANTS["city"]) or ""
                 name = str(raw_name).strip()
-                raw_country = _get_first_value(item, PORT_FIELD_VARIANTS["country"]) or ""
+                raw_country = (
+                    _get_first_value(item, PORT_FIELD_VARIANTS["country"]) or ""
+                )
                 country = str(raw_country).strip()
                 if normalized_query in name.lower() or (
                     include_country and normalized_query in country.lower()

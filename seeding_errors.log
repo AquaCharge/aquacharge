@@ -136,3 +136,26 @@ Credentials saved to: generated_user_credentials.csv
 OK Database seeding completed successfully
 OK Credentials saved to: ./generated_user_credentials.csv
 WARNING: IMPORTANT: Secure credentials file before deployment
+========== AquaCharge Database Seeding ==========
+
+[1/7] Generating Users...
+  OK 14 users created
+[2/7] Generating Stations...
+  OK 4 stations created
+[3/7] Generating Chargers...
+  OK 31 chargers created
+[4/7] Generating Vessels...
+  OK 16 vessels created
+[5/7] Generating Bookings...
+  OK 38 bookings created
+  OK No double-booking conflicts
+[6/7] Generating DR Events...
+  OK 11 DR events created
+[7/7] Generating Contracts...
+  OK 40 contracts created
+
+Validation Results:
+  OK No double-booking conflicts
+  OK All foreign keys valid
+AWS credentials not configured. Configure ~/.aws/credentials or env vars.
+Database verification failed. Aborting.

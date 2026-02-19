@@ -1,19 +1,18 @@
 """
-Class representing a Battery Energy Storage System (BESS) for a vessel, 
-with methods to determine energy transfer based on charging/discharging decisions 
+Class representing a Battery Energy Storage System (BESS) for a vessel,
+with methods to determine energy transfer based on charging/discharging decisions
 and to apply those transfers to the state of charge (SOC).
 """
+
+
 class BESS:
-
-    
     def __init__(self, vessel: dict):
-        self.vessel_id       = vessel["id"]
-        self.max             = float(vessel["capacity"])          # kWh (full capacity)
-        self.min             = self.max * 0.20                    # kWh (20% SOC floor — safety threshold)
-        self.soc             = float(vessel["currentSoc"])        # kWh (current stored energy)
-        self.maxChargeRate   = float(vessel["maxChargeRate"])     # kW
-        self.maxDischargeRate= float(vessel["maxDischargeRate"])  # kW
-
+        self.vessel_id = vessel["id"]
+        self.max = float(vessel["capacity"])          # kWh (full capacity)
+        self.min = self.max * 0.20                    # kWh (20% SOC floor - safety threshold)
+        self.soc = float(vessel["currentSoc"])        # kWh (current stored energy)
+        self.maxChargeRate = float(vessel["maxChargeRate"])     # kW
+        self.maxDischargeRate = float(vessel["maxDischargeRate"])  # kW
 
     def determine_energy_transfer(self, delta_t: float, decision: str) -> float:
         """
@@ -24,7 +23,7 @@ class BESS:
             decision: "charge" | "discharge" | "idle"
 
         Returns:
-            powerTransfer (kWh) — negative means energy left the battery
+            powerTransfer (kWh) - negative means energy left the battery
         """
         if decision == "charge":
             proposed = self.soc + (self.maxChargeRate * delta_t)
@@ -32,7 +31,7 @@ class BESS:
 
         elif decision == "discharge":
             proposed = self.soc - (self.maxDischargeRate * delta_t)
-            # Respect the SOC floor — never discharge below self.min
+            # Respect the SOC floor - never discharge below self.min
             if proposed < self.min:
                 transfer = self.min - self.soc   # negative: drains only down to floor
             else:
@@ -42,11 +41,9 @@ class BESS:
             transfer = 0.0
 
         return transfer
-    
 
     def apply_transfer(self, transfer: float):
         self.soc += transfer
-
 
     @property
     def at_floor(self) -> bool:

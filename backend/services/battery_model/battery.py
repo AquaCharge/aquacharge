@@ -1,5 +1,11 @@
-
+"""
+Class representing a Battery Energy Storage System (BESS) for a vessel, 
+with methods to determine energy transfer based on charging/discharging decisions 
+and to apply those transfers to the state of charge (SOC).
+"""
 class BESS:
+
+    
     def __init__(self, vessel: dict):
         self.vessel_id       = vessel["id"]
         self.max             = float(vessel["capacity"])          # kWh (full capacity)
@@ -7,6 +13,7 @@ class BESS:
         self.soc             = float(vessel["currentSoc"])        # kWh (current stored energy)
         self.maxChargeRate   = float(vessel["maxChargeRate"])     # kW
         self.maxDischargeRate= float(vessel["maxDischargeRate"])  # kW
+
 
     def determine_energy_transfer(self, delta_t: float, decision: str) -> float:
         """
@@ -36,8 +43,10 @@ class BESS:
 
         return transfer
     
+
     def apply_transfer(self, transfer: float):
         self.soc += transfer
+
 
     @property
     def at_floor(self) -> bool:

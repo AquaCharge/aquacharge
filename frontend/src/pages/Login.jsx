@@ -58,9 +58,26 @@ export default function Login() {
     
     setIsLoading(false)
   }
-
+  {/* Helper component for cleaner code */}
+  function DemoButton({ email, pass, label }) {
+    return (
+      <button
+        type="button"
+        onClick={() => handleDemoLogin(email, pass)}
+        className="w-full min-w-0 text-left p-3 rounded-lg border border-gray-200 hover:bg-white hover:shadow-sm transition-all group overflow-hidden"
+        disabled={isLoading}
+        title={`${email} / ${pass}`}
+      >
+        <div className="text-xs min-w-0 overflow-hidden space-y-1">
+          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate">{label}</p>
+          <p className="text-gray-500 font-mono truncate" title={email}>{email}</p>
+          <p className="text-gray-500 font-mono truncate" title={pass}>{pass}</p>
+        </div>
+      </button>
+    );
+  }
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50 px-4 py-8">
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
         <div className="text-center mb-8">
@@ -236,46 +253,29 @@ export default function Login() {
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-white/60 backdrop-blur rounded-lg border border-gray-200">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Demo Credentials</h3>
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('admin@aquacharge.com', 'admin123')}
-              className="w-full text-left p-2 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
-              disabled={isLoading}
-            >
-              <div className="text-sm">
-                <p className="font-medium text-gray-900">Admin Account</p>
-                <p className="text-gray-600">admin@aquacharge.com / admin123</p>
-              </div>
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('operator@blueharbor.com', 'operator456')}
-              className="w-full text-left p-2 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
-              disabled={isLoading}
-            >
-              <div className="text-sm">
-                <p className="font-medium text-gray-900">Operator Account</p>
-                <p className="text-gray-600">operator@blueharbor.com / operator456</p>
-              </div>
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('captain@oceanbreezes.com', 'user789')}
-              className="w-full text-left p-2 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
-              disabled={isLoading}
-            >
-              <div className="text-sm">
-                <p className="font-medium text-gray-900">User Account</p>
-                <p className="text-gray-600">captain@oceanbreezes.com / user789</p>
-              </div>
-            </button>
+      {/* Demo Credentials - wider width */}
+      <div className="w-full max-w-3xl mt-6 p-6 bg-white/60 backdrop-blur rounded-xl border border-gray-200 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Demo Credentials</h3>
+
+        <div className="space-y-6">
+          {/* Bay Shipping Co (Includes Admin) */}
+          <div>
+            <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-2">Bay Shipping Co (VO)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <DemoButton email="sarah.chen@bayshipping.com" pass="HarborOp#2024" label="User" />
+            </div>
+          </div>
+
+          {/* Maritime Grid Operator */}
+          <div>
+            <h4 className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Maritime Grid Operator (PSO)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <DemoButton email="robert.wilson@gridoperator.com" pass="GridOp@2024" label="User" />
+              <DemoButton email="jennifer.martinez@gridoperator.com" pass="GridMgr#2024" label="User" />
+              <DemoButton email="daniel.thompson@gridoperator.com" pass="PSO@2024" label="User" />
+            </div>
           </div>
         </div>
       </div>

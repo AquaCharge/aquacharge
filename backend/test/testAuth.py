@@ -32,7 +32,7 @@ def cleanup_users():
         )
         for email in created_test_emails:
             # Skip admin and any other system users
-            if email in ["admin@aquacharge.com"]:
+            if email in ["admin.jason@boats.com"]:
                 continue
 
             try:
@@ -53,20 +53,20 @@ def test_login_success(client):
     """Test successful login with valid credentials"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "admin123"},
     )
     assert rv.status_code == 200
     data = rv.get_json()
     assert "token" in data
     assert "user" in data
-    assert data["user"]["email"] == "admin@aquacharge.com"
+    assert data["user"]["email"] == "admin.jason@boats.com"
 
 
 def test_login_invalid_email(client):
     """Test login with invalid email"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "nonexistent@example.com", "password": "password123"},
+        json={"email": "nonexistent@example.com", "password": "BoatAdmin#3232"},
     )
     assert rv.status_code == 401
     data = rv.get_json()
@@ -77,7 +77,7 @@ def test_login_invalid_password(client):
     """Test login with invalid password"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "wrongpassword"},
+        json={"email": "admin.jason@boats.com", "password": "wrongpassword"},
     )
     assert rv.status_code == 401
     data = rv.get_json()
@@ -86,7 +86,7 @@ def test_login_invalid_password(client):
 
 def test_login_missing_fields(client):
     """Test login with missing fields"""
-    rv = client.post("/api/auth/login", json={"email": "admin@aquacharge.com"})
+    rv = client.post("/api/auth/login", json={"email": "admin.jason@boats.com"})
     assert rv.status_code == 400
     data = rv.get_json()
     assert "error" in data
@@ -128,7 +128,7 @@ def test_register_success(client):
         json={
             "displayName": test_display_name,
             "email": test_email,
-            "password": "password123",
+            "password": "BoatAdmin#3232",
         },
     )
     assert rv.status_code == 201, f"Registration failed: {rv.get_json()}"
@@ -144,8 +144,8 @@ def test_register_duplicate_email(client):
         "/api/auth/register",
         json={
             "displayName": "testuser456",
-            "email": "admin@aquacharge.com",  # Already exists
-            "password": "password123",
+            "email": "admin.jason@boats.com",  # Already exists
+            "password": "BoatAdmin#3232",
         },
     )
     assert rv.status_code == 409
@@ -175,7 +175,7 @@ def test_register_invalid_email(client):
         json={
             "displayName": "testuser101",
             "email": "invalid-email",
-            "password": "password123",
+            "password": "BoatAdmin#3232",
         },
     )
     assert rv.status_code == 400
@@ -188,7 +188,7 @@ def test_verify_token_valid(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "admin123"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -224,7 +224,7 @@ def test_verify_token_missing(client):
 def test_forgot_password(client):
     """Test forgot password request"""
     rv = client.post(
-        "/api/auth/forgot-password", json={"email": "admin@aquacharge.com"}
+        "/api/auth/forgot-password", json={"email": "admin.jason@boats.com"}
     )
     assert rv.status_code == 200
     data = rv.get_json()
@@ -244,7 +244,7 @@ def test_get_current_user(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "admin123"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -253,7 +253,7 @@ def test_get_current_user(client):
     rv = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert rv.status_code == 200, f"Get current user failed: {rv.get_json()}"
     data = rv.get_json()
-    assert data["email"] == "admin@aquacharge.com"
+    assert data["email"] == "admin.jason@boats.com"
 
 
 def test_get_current_user_unauthorized(client):
@@ -269,7 +269,7 @@ def test_refresh_token(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "admin123"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -296,7 +296,7 @@ def test_change_password(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin@aquacharge.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "admin123"},
     )
     assert login_rv.status_code == 200, f"Initial login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -317,7 +317,7 @@ def test_change_password(client):
         # Login with new password
         login_rv2 = client.post(
             "/api/auth/login",
-            json={"email": "admin@aquacharge.com", "password": "newpassword123"},
+            json={"email": "admin.jason@boats.com", "password": "newpassword123"},
         )
         if login_rv2.status_code == 200:
             token2 = login_rv2.get_json()["token"]

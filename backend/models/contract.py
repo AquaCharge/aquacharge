@@ -19,7 +19,9 @@ class ContractStatus(Enum):
 @dataclass
 class Contract(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    bookingId: Optional[str] = None
     vesselId: str = ""
+    drEventId: str = ""
     vesselName: str = ""
     energyAmount: float = 0.0  # kWh
     pricePerKwh: float = 0.0  # USD per kWh
@@ -41,6 +43,8 @@ class Contract(BaseModel):
         """Validate contract data"""
         if not self.vesselId:
             raise ValueError("Vessel ID is required")
+        if not self.drEventId:
+            raise ValueError("DR event ID is required")
         if not self.vesselName:
             raise ValueError("Vessel name is required")
         if self.energyAmount <= 0:
@@ -79,7 +83,9 @@ class Contract(BaseModel):
         """Convert to dictionary for API responses"""
         return {
             "id": self.id,
+            "bookingId": self.bookingId,
             "vesselId": self.vesselId,
+            "drEventId": self.drEventId,
             "vesselName": self.vesselName,
             "energyAmount": self.energyAmount,
             "pricePerKwh": self.pricePerKwh,

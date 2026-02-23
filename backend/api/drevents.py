@@ -81,7 +81,7 @@ def create_drevent():
             maxParticipants=data["maxParticipants"],
             startTime=datetime.fromisoformat(data["startTime"]),
             endTime=datetime.fromisoformat(data["endTime"]),
-            status=EventStatus.SCHEDULED.value,
+            status=EventStatus.CREATED.value,
             details=data.get("details", {}),
         )
 

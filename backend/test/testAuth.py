@@ -53,7 +53,7 @@ def test_login_success(client):
     """Test successful login with valid credentials"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
     )
     assert rv.status_code == 200
     data = rv.get_json()
@@ -188,7 +188,7 @@ def test_verify_token_valid(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -244,7 +244,7 @@ def test_get_current_user(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -269,7 +269,7 @@ def test_refresh_token(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
     )
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -296,7 +296,7 @@ def test_change_password(client):
     # First login to get a token
     login_rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "admin123"},
+        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
     )
     assert login_rv.status_code == 200, f"Initial login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
@@ -305,7 +305,7 @@ def test_change_password(client):
     rv = client.post(
         "/api/auth/change-password",
         headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "admin123", "new_password": "newpassword123"},
+        json={"current_password": "BoatAdmin#3232", "new_password": "newpassword123"},
     )
 
     # Store the result but don't assert yet - we need to restore password first
@@ -326,7 +326,7 @@ def test_change_password(client):
             client.post(
                 "/api/auth/change-password",
                 headers={"Authorization": f"Bearer {token2}"},
-                json={"current_password": "newpassword123", "new_password": "admin123"},
+                json={"current_password": "newpassword123", "new_password": "BoatAdmin#3232"},
             )
             print("Successfully restored admin password to original")
     except Exception as e:

@@ -24,6 +24,7 @@ class Booking(BaseModel):
     startTime: datetime = field(default_factory=datetime.now)
     endTime: datetime = field(default_factory=datetime.now)
     status: BookingStatus = BookingStatus.PENDING
+    chargerId: str = ""
     chargerType: str = ""
     createdAt: datetime = field(default_factory=datetime.now)
 

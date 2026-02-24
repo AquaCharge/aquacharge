@@ -14,23 +14,23 @@ graph TB
         direction TB
         App[App.jsx<br/>Router & Auth Provider]
         AuthContext[AuthContext<br/>Authentication State]
-        
+
         subgraph "Route Handlers"
             VORoutes[VesselOperatorRoutes<br/>VESSEL_OPERATOR views]
             PORoutes[PowerOperatorRoutes<br/>POWER_OPERATOR views]
         end
-        
+
         subgraph "Pages"
             VOPages[Vessel Pages<br/>- Dashboard<br/>- FindChargers<br/>- MyBookings<br/>- FindStations]
             POPages[Power Pages<br/>- Dashboard<br/>- ManageStations<br/>- ManageChargers<br/>- BookingManagement<br/>- Analytics<br/>- UserManagement]
             AuthPages[Auth Pages<br/>- Login<br/>- Register<br/>- ForgotPassword]
         end
-        
+
         subgraph "Components"
             SharedComp[Shared Components<br/>- MapView<br/>- UI Components<br/>- UserTypeIndicator]
             StationComp[Station Components<br/>- StationDetailsCard<br/>- StationSearchFilters]
         end
-        
+
         APIConfig[API Config<br/>api.js]
     end
 
@@ -42,7 +42,7 @@ graph TB
     subgraph "Backend Layer - Flask Application"
         direction TB
         FlaskApp[Flask App<br/>app.py<br/>CORS, Rate Limiting]
-        
+
         subgraph "API Blueprints"
             AuthBP[Auth Blueprint<br/>/api/auth<br/>- login<br/>- register<br/>- verify-token<br/>- refresh<br/>- forgot-password]
             UsersBP[Users Blueprint<br/>/api/users]
@@ -53,11 +53,11 @@ graph TB
             ContractsBP[Contracts Blueprint<br/>/api/contracts]
             PortsBP[Ports Blueprint<br/>/api/ports]
         end
-        
+
         subgraph "Middleware"
             AuthMiddleware[Auth Middleware<br/>- require_auth<br/>- require_role<br/>- JWT validation]
         end
-        
+
         subgraph "Models"
             UserModel[User Model]
             StationModel[Station Model]
@@ -65,8 +65,10 @@ graph TB
             VesselModel[Vessel Model]
             BookingModel[Booking Model]
             ContractModel[Contract Model]
+            DREventModel[DREvent Model]
+            OrgModel[Org Model]
         end
-        
+
         subgraph "Services"
             PortService[Ports Service<br/>Repository Pattern]
         end
@@ -75,47 +77,39 @@ graph TB
     subgraph "Data Layer"
         direction TB
         DynamoClient[DynamoDB Client<br/>dynamoClient.py<br/>CRUD Operations]
-        
+
         subgraph "DynamoDB Tables"
             UsersTable[(Users Table<br/>PK: id<br/>GSI: email-index, orgId-index)]
             StationsTable[(Stations Table<br/>PK: id<br/>GSI: city-index, status-index)]
             ChargersTable[(Chargers Table<br/>PK: id<br/>GSI: chargingStationId-index, chargerType-index)]
             VesselsTable[(Vessels Table<br/>PK: id<br/>GSI: userId-index, vesselType-index)]
             BookingsTable[(Bookings Table<br/>PK: id<br/>GSI: userId-index, stationId-index, vesselId-index, status-index)]
-            ContractsTable[(Contracts Table)]
+            ContractsTable[(Contracts Table<br/>PK: id<br/>GSI: bookingId-index, vesselId-index, drEventId-index, status-index)]
+            DREventsTable[(DREvents Table<br/>PK: id<br/>GSI: stationId-index, status-index, startTime-index)]
+            OrgsTable[(Orgs Table<br/>PK: id<br/>GSI: displayName-index)]
+            PortsTable[(Ports Table<br/>PK: portId)]
         end
     end
 
     subgraph "Infrastructure Layer - AWS"
         direction TB
         CDK[AWS CDK<br/>Infrastructure as Code]
-        
-        subgraph "Compute"
-            EC2[EC2 Instance<br/>Application Host]
-            ECS[ECS Fargate<br/>Containerized Services]
-        end
-        
-        subgraph "Networking"
-            VPC[VPC<br/>Public/Private Subnets]
-            ALB[Application Load Balancer]
-            SecurityGroups[Security Groups]
-        end
-        
-        subgraph "Storage & Services"
-            ECR[ECR<br/>Container Registry]
-            SecretsManager[Secrets Manager<br/>JWT Secrets]
-            CloudWatch[CloudWatch Logs<br/>Monitoring & Logging]
-        end
-    end
 
-    subgraph "External Services"
-        AWSClient[AWS SDK<br/>boto3]
-        EmailService[Email Service<br/>Password Reset]
+        subgraph "Compute"
+            EC2[EC2 Instance<br/>Docker Compose Host]
+        end
+
+        subgraph "Networking"
+            VPC[VPC<br/>Single Public Subnet]
+            SecurityGroups[Security Group<br/>IP Whitelisting]
+        end
+
+        CloudWatch[CloudWatch Agent<br/>Monitoring & Logging]
     end
 
     %% Client to Frontend
     Browser --> App
-    
+
     %% Frontend Internal Flow
     App --> AuthContext
     App --> VORoutes
@@ -130,15 +124,15 @@ graph TB
     AuthContext --> APIConfig
     VOPages --> APIConfig
     POPages --> APIConfig
-    
+
     %% Frontend to API
     APIConfig --> HTTP
     AuthContext --> JWT
-    
+
     %% API to Backend
     HTTP --> FlaskApp
     JWT --> AuthMiddleware
-    
+
     %% Backend Internal Flow
     FlaskApp --> AuthBP
     FlaskApp --> UsersBP
@@ -148,7 +142,7 @@ graph TB
     FlaskApp --> BookingsBP
     FlaskApp --> ContractsBP
     FlaskApp --> PortsBP
-    
+
     AuthBP --> AuthMiddleware
     UsersBP --> AuthMiddleware
     StationsBP --> AuthMiddleware
@@ -157,7 +151,7 @@ graph TB
     BookingsBP --> AuthMiddleware
     ContractsBP --> AuthMiddleware
     PortsBP --> AuthMiddleware
-    
+
     UsersBP --> UserModel
     StationsBP --> StationModel
     ChargersBP --> ChargerModel
@@ -165,7 +159,7 @@ graph TB
     BookingsBP --> BookingModel
     ContractsBP --> ContractModel
     PortsBP --> PortService
-    
+
     %% Backend to Data Layer
     UserModel --> DynamoClient
     StationModel --> DynamoClient
@@ -173,23 +167,24 @@ graph TB
     VesselModel --> DynamoClient
     BookingModel --> DynamoClient
     ContractModel --> DynamoClient
+    DREventModel --> DynamoClient
+    OrgModel --> DynamoClient
     PortService --> DynamoClient
-    
+
     DynamoClient --> UsersTable
     DynamoClient --> StationsTable
     DynamoClient --> ChargersTable
     DynamoClient --> VesselsTable
     DynamoClient --> BookingsTable
     DynamoClient --> ContractsTable
-    
+    DynamoClient --> DREventsTable
+    DynamoClient --> OrgsTable
+    DynamoClient --> PortsTable
+
     %% Infrastructure
     CDK --> VPC
     CDK --> EC2
-    CDK --> ECS
-    CDK --> ALB
     CDK --> SecurityGroups
-    CDK --> ECR
-    CDK --> SecretsManager
     CDK --> CloudWatch
     CDK --> UsersTable
     CDK --> StationsTable
@@ -197,30 +192,22 @@ graph TB
     CDK --> VesselsTable
     CDK --> BookingsTable
     CDK --> ContractsTable
-    
-    ALB --> EC2
-    ALB --> ECS
+    CDK --> DREventsTable
+    CDK --> OrgsTable
+    CDK --> PortsTable
+
     EC2 --> FlaskApp
-    ECS --> FlaskApp
-    
-    %% External Services
-    DynamoClient --> AWSClient
-    AuthBP --> EmailService
-    FlaskApp --> SecretsManager
-    FlaskApp --> CloudWatch
-    
+
     %% Styling
     classDef frontend fill:#e1f5ff,stroke:#01579b,stroke-width:2px
     classDef backend fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef database fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef infrastructure fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-    classDef external fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-    
+
     class App,AuthContext,VORoutes,PORoutes,VOPages,POPages,AuthPages,SharedComp,StationComp,APIConfig frontend
-    class FlaskApp,AuthBP,UsersBP,StationsBP,ChargersBP,VesselsBP,BookingsBP,ContractsBP,PortsBP,AuthMiddleware,UserModel,StationModel,ChargerModel,VesselModel,BookingModel,ContractModel,PortService backend
-    class DynamoClient,UsersTable,StationsTable,ChargersTable,VesselsTable,BookingsTable,ContractsTable database
-    class CDK,EC2,ECS,VPC,ALB,SecurityGroups,ECR,SecretsManager,CloudWatch infrastructure
-    class AWSClient,EmailService external
+    class FlaskApp,AuthBP,UsersBP,StationsBP,ChargersBP,VesselsBP,BookingsBP,ContractsBP,PortsBP,AuthMiddleware,UserModel,StationModel,ChargerModel,VesselModel,BookingModel,ContractModel,DREventModel,OrgModel,PortService backend
+    class DynamoClient,UsersTable,StationsTable,ChargersTable,VesselsTable,BookingsTable,ContractsTable,DREventsTable,OrgsTable,PortsTable database
+    class CDK,EC2,VPC,SecurityGroups,CloudWatch infrastructure
 ```
 
 ## Component Interaction Flows
@@ -293,15 +280,9 @@ graph LR
     Deploy --> VPC[Create VPC]
     Deploy --> Tables[Create DynamoDB Tables]
     Deploy --> EC2[Launch EC2 Instance]
-    Deploy --> ECS[Create ECS Cluster]
-    Deploy --> ALB[Create Load Balancer]
-    Deploy --> Secrets[Create Secrets Manager]
-    
-    DockerBuild[Build Docker Images] --> ECR[Push to ECR]
-    ECR --> ECS
-    EC2 --> FlaskApp[Flask App Running]
-    ECS --> FlaskApp
-    ALB --> FlaskApp
+
+    DockerBuild[Build Docker Images] --> EC2
+    EC2 --> FlaskApp[Flask App Running via Docker Compose]
 ```
 
 ## Key Components Description
@@ -315,21 +296,21 @@ graph LR
 
 ### Backend Components
 - **Flask App**: Main application with CORS, rate limiting, and blueprint registration
-- **API Blueprints**: Modular route handlers for different resources (auth, users, stations, etc.)
+- **API Blueprints**: Modular route handlers for auth, users, stations, chargers, vessels, bookings, contracts, and ports
 - **Middleware**: Authentication and authorization middleware using JWT
-- **Models**: Data models that interact with DynamoDB
+- **Models**: Data models for User, Station, Charger, Vessel, Booking, Contract, DREvent, and Org
 - **Services**: Business logic layer (e.g., Ports service with repository pattern)
 
 ### Data Layer
 - **DynamoDB Client**: Abstraction layer for DynamoDB operations (CRUD, queries, GSI queries)
-- **DynamoDB Tables**: NoSQL tables with partition keys and global secondary indexes for efficient querying
+- **DynamoDB Tables**: 9 NoSQL tables — Users, Stations, Chargers, Vessels, Bookings, Contracts, DREvents, Orgs, Ports
 
 ### Infrastructure
 - **AWS CDK**: Infrastructure as Code for provisioning AWS resources
-- **EC2/ECS**: Compute resources for running the application
-- **VPC & Networking**: Network isolation and load balancing
-- **Secrets Manager**: Secure storage for JWT secrets and credentials
-- **CloudWatch**: Logging and monitoring
+- **EC2**: Single EC2 instance running both frontend and backend via Docker Compose
+- **VPC**: Single public subnet with no NAT gateway (cost-optimized)
+- **Security Group**: IP whitelisting on ports 22, 80, 443, 5050
+- **CloudWatch**: Monitoring and logging via CloudWatch agent on EC2
 
 ## Data Flow Summary
 
@@ -344,6 +325,6 @@ graph LR
 - **Frontend**: React 18, Vite, React Router, Tailwind CSS
 - **Backend**: Python 3.11, Flask 3.0, Flask-CORS, Flask-Limiter
 - **Database**: AWS DynamoDB (NoSQL)
-- **Infrastructure**: AWS CDK (TypeScript), EC2, ECS Fargate, VPC, ALB
+- **Infrastructure**: AWS CDK (TypeScript), EC2, VPC
 - **Authentication**: JWT (HS256)
-- **Deployment**: Docker, ECR, ECS
+- **Deployment**: Docker Compose on EC2

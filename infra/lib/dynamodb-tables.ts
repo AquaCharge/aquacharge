@@ -295,6 +295,12 @@ export class DynamoDbTables {
         partitionKey: {name: 'drEventId', type: dynamodb.AttributeType.STRING},
         projectionType: dynamodb.ProjectionType.ALL
       })
+
+      measurementsTable.addGlobalSecondaryIndex({
+        indexName: 'vesselId-index',
+        partitionKey: { name: 'vesselId', type: dynamodb.AttributeType.STRING},
+        projectionType: dynamodb.ProjectionType.ALL
+      })
     }
   }
 }

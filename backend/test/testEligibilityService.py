@@ -66,6 +66,7 @@ def test_evaluate_vessels_for_event_returns_only_eligible_by_default():
     assert result["eligibleCount"] == 1
     assert len(result["vessels"]) == 1
     assert result["vessels"][0]["vesselId"] == "v-1"
+    assert result["vessels"][0]["forecastedSoc"] is not None
 
 
 def test_evaluate_vessels_for_event_can_include_ineligible_results():
@@ -134,3 +135,108 @@ def test_evaluate_vessels_for_event_requires_station():
         assert False, "Expected LookupError"
     except LookupError as error:
         assert str(error) == "Station not found"
+
+
+def test_forecasted_soc_calculation_uses_distance_and_kwh_per_km():
+    vessels = [
+        {
+            "id": "v-1",
+            "displayName": "Forecast Vessel",
+            "active": True,
+            "latitude": 44.65,
+            "longitude": -63.57,
+            "rangeMeters": 100000,
+            "chargerType": "Type 2 AC",
+            "capacity": 100.0,
+        }
+    ]
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
+    soc_by_vessel_id = {"v-1": 80.0}
+
+    service = _build_service(vessels, stations, soc_by_vessel_id)
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "details": {"minimumSoc": 20, "kwhPerKm": 0.5},
+    }
+
+    result = service.evaluate_vessels_for_event(dr_event)
+    vessel_result = result["vessels"][0]
+
+    expected_forecast = 80.0 - (vessel_result["distanceKm"] * 0.5)
+    assert vessel_result["forecastedSoc"] == expected_forecast
+
+
+def test_schedule_compatibility_marks_vessel_ineligible_when_window_mismatches():
+    vessels = [
+        {
+            "id": "v-1",
+            "displayName": "Schedule Vessel",
+            "active": True,
+            "latitude": 44.65,
+            "longitude": -63.57,
+            "rangeMeters": 100000,
+            "chargerType": "Type 2 AC",
+            "capacity": 150.0,
+            "availableFrom": "2026-03-05T12:00:00",
+            "availableUntil": "2026-03-05T13:00:00",
+        }
+    ]
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
+    soc_by_vessel_id = {"v-1": 75.0}
+
+    service = _build_service(vessels, stations, soc_by_vessel_id)
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "startTime": "2026-03-05T10:00:00",
+        "endTime": "2026-03-05T11:00:00",
+        "details": {"minimumSoc": 20, "requiredEnergyPerVesselKwh": 5},
+    }
+
+    result = service.evaluate_vessels_for_event(dr_event, include_ineligible=True)
+    vessel_result = result["vessels"][0]
+
+    assert vessel_result["scheduleCompatible"] is False
+    assert vessel_result["eligible"] is False
+    assert "Vessel schedule is incompatible" in vessel_result["reasons"]
+
+
+def test_available_battery_capacity_check_blocks_insufficient_vessels():
+    vessels = [
+        {
+            "id": "v-1",
+            "displayName": "Small Battery Vessel",
+            "active": True,
+            "latitude": 44.65,
+            "longitude": -63.57,
+            "rangeMeters": 100000,
+            "chargerType": "Type 2 AC",
+            "capacity": 10.0,
+        }
+    ]
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
+    soc_by_vessel_id = {"v-1": 50.0}
+
+    service = _build_service(vessels, stations, soc_by_vessel_id)
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "details": {
+            "minimumSoc": 20,
+            "kwhPerKm": 0.1,
+            "requiredEnergyPerVesselKwh": 8.0,
+        },
+    }
+
+    result = service.evaluate_vessels_for_event(dr_event, include_ineligible=True)
+    vessel_result = result["vessels"][0]
+
+    assert vessel_result["eligible"] is False
+    assert "Insufficient available battery capacity" in vessel_result["reasons"]

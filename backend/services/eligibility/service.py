@@ -1,9 +1,16 @@
+from datetime import datetime
+from time import perf_counter
 from math import asin, cos, radians, sin, sqrt
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
-from boto3.dynamodb.conditions import Attr
+try:
+    from geopy.distance import geodesic
+except ModuleNotFoundError:
+    geodesic = None
 
 from db.dynamoClient import DynamoClient
+
+DEFAULT_KWH_PER_KM = 0.2
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -36,6 +43,34 @@ def _haversine_distance_meters(
     )
     c_term = 2 * asin(sqrt(a_term))
     return earth_radius_meters * c_term
+
+
+def _distance_meters(
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+) -> float:
+    if geodesic is not None:
+        try:
+            return float(geodesic((start_lat, start_lon), (end_lat, end_lon)).meters)
+        except Exception:
+            pass
+    return _haversine_distance_meters(start_lat, start_lon, end_lat, end_lon)
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 class VesselRepository(Protocol):
@@ -79,23 +114,44 @@ class DynamoMeasurementRepository:
         self.client = client or DynamoClient(
             table_name="aquacharge-measurements-dev", region_name="us-east-1"
         )
+        self._latest_soc_by_vessel_id: Optional[Dict[str, Tuple[str, float]]] = None
+
+    def _build_soc_cache(self) -> None:
+        if self._latest_soc_by_vessel_id is not None:
+            return
+
+        self._latest_soc_by_vessel_id = {}
+        try:
+            measurements = self.client.scan_items()
+        except Exception:
+            measurements = []
+
+        for measurement in measurements:
+            vessel_id = measurement.get("vesselId")
+            if not vessel_id:
+                continue
+
+            soc = _to_float(measurement.get("currentSOC"))
+            if soc is None:
+                continue
+
+            timestamp = str(
+                measurement.get("timestamp")
+                or measurement.get("createdAt")
+                or ""
+            )
+
+            current_best = self._latest_soc_by_vessel_id.get(vessel_id)
+            if current_best is None or timestamp >= current_best[0]:
+                self._latest_soc_by_vessel_id[vessel_id] = (timestamp, soc)
 
     def get_latest_soc(self, vessel_id: str) -> Optional[float]:
-        try:
-            measurements = self.client.scan_items(
-                filter_expression=Attr("vesselId").eq(vessel_id)
-            )
-        except Exception:
+        self._build_soc_cache()
+        if self._latest_soc_by_vessel_id is None:
             return None
 
-        if not measurements:
-            return None
-
-        latest_measurement = max(
-            measurements,
-            key=lambda measurement: measurement.get("timestamp", ""),
-        )
-        return _to_float(latest_measurement.get("currentSOC"))
+        latest = self._latest_soc_by_vessel_id.get(vessel_id)
+        return None if latest is None else latest[1]
 
 
 class EligibilityService:
@@ -114,6 +170,7 @@ class EligibilityService:
         dr_event: Dict[str, Any],
         include_ineligible: bool = False,
     ) -> Dict[str, Any]:
+        started_at = perf_counter()
         station_id = dr_event.get("stationId")
         if not station_id:
             raise ValueError("DR event must include stationId")
@@ -137,11 +194,13 @@ class EligibilityService:
         )
 
         eligible_count = len([result for result in vessel_results if result["eligible"]])
+        duration_ms = round((perf_counter() - started_at) * 1000.0, 2)
         return {
             "eventId": dr_event.get("id"),
             "stationId": station_id,
             "totalVesselsEvaluated": len(vessels),
             "eligibleCount": eligible_count,
+            "evaluationDurationMs": duration_ms,
             "vessels": vessel_results,
         }
 
@@ -160,15 +219,17 @@ class EligibilityService:
         vessel_range_meters = _to_float(vessel.get("rangeMeters")) or 0.0
 
         distance_meters: Optional[float] = None
+        distance_km: Optional[float] = None
         if None in (vessel_latitude, vessel_longitude, station_latitude, station_longitude):
             rejection_reasons.append("Missing vessel or station coordinates")
         else:
-            distance_meters = _haversine_distance_meters(
+            distance_meters = _distance_meters(
                 vessel_latitude,
                 vessel_longitude,
                 station_latitude,
                 station_longitude,
             )
+            distance_km = distance_meters / 1000.0
             if distance_meters > vessel_range_meters:
                 rejection_reasons.append("Vessel is outside operational range")
 
@@ -189,9 +250,44 @@ class EligibilityService:
         if current_soc is None:
             current_soc = _to_float(vessel.get("currentSoc"))
 
+        consumption_kwh_per_km = _to_float(event_details.get("kwhPerKm"))
+        if consumption_kwh_per_km is None:
+            consumption_kwh_per_km = _to_float(vessel.get("kwhPerKm"))
+        if consumption_kwh_per_km is None:
+            consumption_kwh_per_km = DEFAULT_KWH_PER_KM
+
+        forecasted_soc: Optional[float] = None
+        if current_soc is not None and distance_km is not None:
+            forecasted_soc = current_soc - (distance_km * consumption_kwh_per_km)
+            forecasted_soc = max(0.0, min(100.0, forecasted_soc))
+
+        vessel_capacity_kwh = _to_float(vessel.get("capacity")) or 0.0
+        available_battery_kwh: Optional[float] = None
+        if forecasted_soc is not None:
+            available_battery_kwh = vessel_capacity_kwh * (forecasted_soc / 100.0)
+
+        required_energy_per_vessel_kwh: Optional[float] = _to_float(
+            event_details.get("requiredEnergyPerVesselKwh")
+        )
+        if required_energy_per_vessel_kwh is None:
+            target_energy_kwh = _to_float(dr_event.get("targetEnergyKwh"))
+            max_participants = _to_float(dr_event.get("maxParticipants"))
+            if target_energy_kwh is not None and max_participants and max_participants > 0:
+                required_energy_per_vessel_kwh = target_energy_kwh / max_participants
+
+        if required_energy_per_vessel_kwh is not None:
+            if available_battery_kwh is None:
+                rejection_reasons.append("Unable to compute available battery capacity")
+            elif available_battery_kwh < required_energy_per_vessel_kwh:
+                rejection_reasons.append("Insufficient available battery capacity")
+
+        schedule_compatible = self._is_schedule_compatible(vessel, dr_event)
+        if not schedule_compatible:
+            rejection_reasons.append("Vessel schedule is incompatible")
+
         if current_soc is None:
             rejection_reasons.append("Missing SOC telemetry")
-        elif current_soc < minimum_soc:
+        elif forecasted_soc is not None and forecasted_soc < minimum_soc:
             rejection_reasons.append("SOC below event minimum")
 
         return {
@@ -200,8 +296,38 @@ class EligibilityService:
             "eligible": len(rejection_reasons) == 0,
             "reasons": rejection_reasons,
             "distanceMeters": distance_meters,
+            "distanceKm": distance_km,
             "rangeMeters": vessel_range_meters,
             "currentSoc": current_soc,
+            "forecastedSoc": forecasted_soc,
+            "kwhPerKm": consumption_kwh_per_km,
+            "availableBatteryKwh": available_battery_kwh,
+            "requiredEnergyPerVesselKwh": required_energy_per_vessel_kwh,
+            "scheduleCompatible": schedule_compatible,
             "minimumSoc": minimum_soc,
             "chargerType": vessel_charger_type,
         }
+
+    def _is_schedule_compatible(
+        self,
+        vessel: Dict[str, Any],
+        dr_event: Dict[str, Any],
+    ) -> bool:
+        event_start = _parse_datetime(dr_event.get("startTime"))
+        event_end = _parse_datetime(dr_event.get("endTime"))
+
+        if event_start is None or event_end is None:
+            return True
+
+        available_from = _parse_datetime(
+            vessel.get("availableFrom") or vessel.get("availableStart")
+        )
+        available_until = _parse_datetime(
+            vessel.get("availableUntil") or vessel.get("availableEnd")
+        )
+
+        if available_from and event_start < available_from:
+            return False
+        if available_until and event_end > available_until:
+            return False
+        return True

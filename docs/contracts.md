@@ -147,7 +147,7 @@ Error JSON schema (all auth endpoints):
 ### `GET /api/drevents/{eventId}/eligibility`
 
 Evaluate vessel eligibility for a DR event based on vessel status, distance to station,
-charger compatibility, and minimum SOC policy.
+charger compatibility, forecasted SOC, available battery capacity, and schedule compatibility.
 
 Query parameters:
 
@@ -161,6 +161,7 @@ Success response `200`:
   "stationId": "string",
   "totalVesselsEvaluated": 0,
   "eligibleCount": 0,
+  "evaluationDurationMs": 0.0,
   "vessels": [
     {
       "vesselId": "string",
@@ -168,14 +169,34 @@ Success response `200`:
       "eligible": true,
       "reasons": [],
       "distanceMeters": 0.0,
+      "distanceKm": 0.0,
       "rangeMeters": 0.0,
       "currentSoc": 0.0,
+      "forecastedSoc": 0.0,
+      "kwhPerKm": 0.2,
+      "availableBatteryKwh": 0.0,
+      "requiredEnergyPerVesselKwh": 0.0,
+      "scheduleCompatible": true,
       "minimumSoc": 20.0,
       "chargerType": "string"
     }
   ]
 }
 ```
+
+Forecast formula:
+
+- `forecastedSoc = currentSoc - (distanceKm * kwhPerKm)`
+
+Schedule compatibility rules:
+
+- If provided, vessel `availableFrom|availableStart` must be <= event `startTime`.
+- If provided, vessel `availableUntil|availableEnd` must be >= event `endTime`.
+
+Battery capacity rules:
+
+- `availableBatteryKwh = vesselCapacityKwh * (forecastedSoc / 100)`
+- `requiredEnergyPerVesselKwh` uses event `details.requiredEnergyPerVesselKwh`, or falls back to `targetEnergyKwh / maxParticipants`.
 
 Error responses:
 

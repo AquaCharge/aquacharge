@@ -1,4 +1,5 @@
 import pytest
+import time
 from flask import Flask
 from api.auth import auth_bp
 from api.users import users_bp
@@ -48,18 +49,39 @@ def cleanup_users():
         created_test_emails.clear()
 
 
+@pytest.fixture
+def auth_user_credentials(client):
+    """Create an isolated auth user for login/token/password tests."""
+    timestamp = str(int(time.time() * 1000))
+    email = f"auth_test_{timestamp}@example.com"
+    password = "BoatAdmin#3232"
+
+    created_test_emails.append(email)
+    rv = client.post(
+        "/api/auth/register",
+        json={
+            "displayName": f"auth_test_{timestamp}",
+            "email": email,
+            "password": password,
+        },
+    )
+    assert rv.status_code == 201, f"Auth test user setup failed: {rv.get_json()}"
+
+    return {"email": email, "password": password}
+
+
 # --- Authentication Tests --- #
-def test_login_success(client):
+def test_login_success(client, auth_user_credentials):
     """Test successful login with valid credentials"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
+        json=auth_user_credentials,
     )
     assert rv.status_code == 200
     data = rv.get_json()
     assert "token" in data
     assert "user" in data
-    assert data["user"]["email"] == "admin.jason@boats.com"
+    assert data["user"]["email"] == auth_user_credentials["email"]
 
 
 def test_login_invalid_email(client):
@@ -73,11 +95,11 @@ def test_login_invalid_email(client):
     assert "error" in data
 
 
-def test_login_invalid_password(client):
+def test_login_invalid_password(client, auth_user_credentials):
     """Test login with invalid password"""
     rv = client.post(
         "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "wrongpassword"},
+        json={"email": auth_user_credentials["email"], "password": "wrongpassword"},
     )
     assert rv.status_code == 401
     data = rv.get_json()
@@ -183,13 +205,10 @@ def test_register_invalid_email(client):
     assert "error" in data
 
 
-def test_verify_token_valid(client):
+def test_verify_token_valid(client, auth_user_credentials):
     """Test token verification with valid token"""
     # First login to get a token
-    login_rv = client.post(
-        "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
-    )
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
 
@@ -239,13 +258,10 @@ def test_forgot_password_invalid_email(client):
     assert "error" in data
 
 
-def test_get_current_user(client):
+def test_get_current_user(client, auth_user_credentials):
     """Test getting current user data"""
     # First login to get a token
-    login_rv = client.post(
-        "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
-    )
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
 
@@ -253,7 +269,7 @@ def test_get_current_user(client):
     rv = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert rv.status_code == 200, f"Get current user failed: {rv.get_json()}"
     data = rv.get_json()
-    assert data["email"] == "admin.jason@boats.com"
+    assert data["email"] == auth_user_credentials["email"]
 
 
 def test_get_current_user_unauthorized(client):
@@ -264,13 +280,10 @@ def test_get_current_user_unauthorized(client):
     assert "error" in data
 
 
-def test_refresh_token(client):
+def test_refresh_token(client, auth_user_credentials):
     """Test token refresh"""
     # First login to get a token
-    login_rv = client.post(
-        "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
-    )
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
     assert login_rv.status_code == 200, f"Login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
 
@@ -291,13 +304,12 @@ def test_logout(client):
 
 
 @pytest.mark.order_last
-def test_change_password(client):
+def test_change_password(client, auth_user_credentials):
     """Test password change"""
+    new_password = "newpassword123"
+
     # First login to get a token
-    login_rv = client.post(
-        "/api/auth/login",
-        json={"email": "admin.jason@boats.com", "password": "BoatAdmin#3232"},
-    )
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
     assert login_rv.status_code == 200, f"Initial login failed: {login_rv.get_json()}"
     token = login_rv.get_json()["token"]
 
@@ -305,33 +317,18 @@ def test_change_password(client):
     rv = client.post(
         "/api/auth/change-password",
         headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "BoatAdmin#3232", "new_password": "newpassword123"},
+        json={
+            "current_password": auth_user_credentials["password"],
+            "new_password": new_password,
+        },
     )
+    assert rv.status_code == 200, f"Password change failed: {rv.get_json()}"
 
-    # Store the result but don't assert yet - we need to restore password first
-    change_success = rv.status_code == 200
-    change_data = rv.get_json()
+    login_old = client.post("/api/auth/login", json=auth_user_credentials)
+    assert login_old.status_code == 401
 
-    # ALWAYS restore original password, even if the test fails
-    try:
-        # Login with new password
-        login_rv2 = client.post(
-            "/api/auth/login",
-            json={"email": "admin.jason@boats.com", "password": "newpassword123"},
-        )
-        if login_rv2.status_code == 200:
-            token2 = login_rv2.get_json()["token"]
-
-            # Change back to original
-            client.post(
-                "/api/auth/change-password",
-                headers={"Authorization": f"Bearer {token2}"},
-                json={"current_password": "newpassword123", "new_password": "BoatAdmin#3232"},
-            )
-            print("Successfully restored admin password to original")
-    except Exception as e:
-        print(f"WARNING: Failed to restore admin password: {e}")
-
-    # Now assert the results
-    assert change_success, f"Password change failed: {change_data}"
-    assert "message" in change_data
+    login_new = client.post(
+        "/api/auth/login",
+        json={"email": auth_user_credentials["email"], "password": new_password},
+    )
+    assert login_new.status_code == 200, f"Login with new password failed: {login_new.get_json()}"

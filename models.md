@@ -5,7 +5,7 @@
 | Attribute    | Type     | Description                      |
 |-------------|----------|----------------------------------|
 | id          | String   | User ID                          |
-| orgId       | String   | Organization of user             |
+| orgId       | String?  | Organization of user             |
 | displayName | String   | Name displayed for user          |
 | email       | String   | Email                            |
 | passwordHash| String   | Hashed version of password       |
@@ -30,21 +30,23 @@
 
 ## Vessels
 
-| Attribute        | Type     | Description                              |
-|-----------------|----------|------------------------------------------|
-| id              | String   | Vessel ID                                |
-| userId          | String   | User ID associated with vessel           |
-| displayName     | String   | Name displayed for vessel                |
-| vesselType      | String   | Type of Vessel                           |
-| capacity        | float    | Max battery capacity                     |
-| maxChargeRate   | float    | Rate at which the battery can be charged |
-| maxDischargeRate| float    | Rate at which the battery can be discharged |
-| rangeMeters     | float    | Range of vessel if battery is full       |
-| active          | bool     | If vessel is in use or not               |
-| longitude       | float    | Current longitude of vessel              |
-| latitude        | float    | Current latitude of vessel               |
-| createdAt       | datetime | When was the vessel added                |
-| updatedAt       | datetime | When the vessel was last changed         |
+| Attribute        | Type     | Description                                 |
+|-----------------|----------|---------------------------------------------|
+| id              | String   | Vessel ID                                   |
+| userId          | String   | User ID associated with vessel              |
+| displayName     | String   | Name displayed for vessel                   |
+| vesselType      | String   | Type of vessel                              |
+| chargerType     | String   | Charger type the vessel is compatible with  |
+| capacity        | float    | Max battery capacity (kWh)                  |
+| maxChargeRate   | float    | Max rate at which battery can be charged    |
+| minChargeRate   | float    | Min rate at which battery can be charged    |
+| maxDischargeRate| float    | Rate at which battery can be discharged     |
+| rangeMeters     | float    | Range of vessel if battery is full          |
+| active          | bool     | If vessel is in use or not                  |
+| longitude       | float    | Current longitude of vessel                 |
+| latitude        | float    | Current latitude of vessel                  |
+| createdAt       | datetime | When the vessel was added                   |
+| updatedAt       | datetime | When the vessel was last changed            |
 
 ## Chargers
 
@@ -58,46 +60,52 @@
 
 ## Bookings
 
-| Attribute   | Type     | Description                                        |
-|------------|----------|----------------------------------------------------|
-| id         | String   | Booking ID                                         |
-| userId     | String   | User ID for the booking                            |
-| vesselId   | String   | Vessel ID associated with user ID and booking      |
-| stationId  | String   | Station where booking is taking place              |
-| startTime  | datetime | Planned start time                                 |
-| endTime    | datetime | Planned end time                                   |
-| status     | String   | Status of the booking                              |
-| chargerType| String   | Type of charger for compatibility                  |
-| createdAt  | datetime | Booking creation datetime                          |
+| Attribute   | Type     | Description                                   |
+|------------|----------|-----------------------------------------------|
+| id         | String   | Booking ID                                    |
+| userId     | String   | User ID for the booking                       |
+| vesselId   | String   | Vessel associated with the booking            |
+| stationId  | String   | Station where booking is taking place         |
+| startTime  | datetime | Planned start time                            |
+| endTime    | datetime | Planned end time                              |
+| status     | String   | Status of the booking                         |
+| chargerId  | String   | Specific charger assigned to this booking     |
+| chargerType| String   | Type of charger for compatibility             |
+| createdAt  | datetime | Booking creation datetime                     |
 
 ## DREvents
 
-| Attribute       | Type     | Description                              |
-|----------------|----------|------------------------------------------|
-| id             | String   | DR event ID                              |
-| stationId      | String   | Station ID of DR Event                   |
-| targetEnergyKwh| float    | A target value of energy                 |
-| pricePerKwh    | float    | Price of kWh for DR Event                |
-| startTime      | datetime | Datetime of start of DR Event            |
-| endTime        | datetime | Datetime of end of DR Event              |
+| Attribute       | Type     | Description                               |
+|----------------|----------|-------------------------------------------|
+| id             | String   | DR event ID                               |
+| stationId      | String   | Station ID of DR event                    |
+| targetEnergyKwh| float    | Target energy to be delivered (kWh)       |
+| pricePerKwh    | float    | Price per kWh for the DR event            |
+| startTime      | datetime | Datetime of start of DR event             |
+| endTime        | datetime | Datetime of end of DR event               |
 | maxParticipants| int      | Maximum number of participating vessels   |
-| status         | String   | If DR event is active                    |
+| status         | String   | Status of DR event                        |
+| details        | JSON?    | Optional additional event metadata        |
 
 ## Contracts
 
-| Attribute   | Type     | Description                              |
-|------------|----------|------------------------------------------|
-| id         | String   | Contract ID                              |
-| bookingId  | String   | Booking ID associated with contract      |
-| energyAmount| float   | Energy amount promised by vessel or user |
-| pricePerKwh| float    | Value per kWh                            |
-| totalValue | float    | Total monetary value of contract         |
-| startTime  | datetime | Datetime of start of contract            |
-| endTime    | datetime | Datetime of end of contract              |
-| status     | String   | Status of contract                       |
-| createdAt  | datetime | Datetime of creation of contract         |
-| updatedAt  | datetime | Last contract was updated                |
-| createdBy  | String   | User ID of PSO                           |
+| Attribute    | Type     | Description                                    |
+|-------------|----------|------------------------------------------------|
+| id          | String   | Contract ID                                    |
+| bookingId   | String?  | Booking ID associated with contract (optional) |
+| vesselId    | String   | Vessel ID party to the contract                |
+| drEventId   | String   | DR event this contract belongs to              |
+| vesselName  | String   | Display name of the vessel (denormalized)      |
+| energyAmount| float    | Energy amount promised by vessel (kWh)         |
+| pricePerKwh | float    | Value per kWh                                  |
+| totalValue  | float    | Total monetary value of contract               |
+| startTime   | datetime | Datetime of start of contract                  |
+| endTime     | datetime | Datetime of end of contract                    |
+| status      | String   | Status of contract                             |
+| terms       | String   | Contract terms text                            |
+| createdAt   | datetime | Datetime of creation                           |
+| updatedAt   | datetime?| Last time contract was updated                 |
+| createdBy   | String   | User ID of PSO who created the contract        |
 
 ## Org
 

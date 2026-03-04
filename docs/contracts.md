@@ -141,3 +141,55 @@ Error JSON schema (all auth endpoints):
   "details": "string (optional)"
 }
 ```
+
+## DR Event Eligibility Endpoints
+
+### `GET /api/drevents/{eventId}/eligibility`
+
+Evaluate vessel eligibility for a DR event based on vessel status, distance to station,
+charger compatibility, and minimum SOC policy.
+
+Query parameters:
+
+- `includeIneligible` (`true|false`, default `false`): include ineligible vessels with rejection reasons.
+
+Success response `200`:
+
+```json
+{
+  "eventId": "string",
+  "stationId": "string",
+  "totalVesselsEvaluated": 0,
+  "eligibleCount": 0,
+  "vessels": [
+    {
+      "vesselId": "string",
+      "displayName": "string",
+      "eligible": true,
+      "reasons": [],
+      "distanceMeters": 0.0,
+      "rangeMeters": 0.0,
+      "currentSoc": 0.0,
+      "minimumSoc": 20.0,
+      "chargerType": "string"
+    }
+  ]
+}
+```
+
+Error responses:
+
+- `400`: invalid request parameters or event missing `stationId`
+- `404`: DR event or station not found
+- `500`: eligibility evaluation failed
+
+## DR Event Eligibility Error Shape
+
+Error JSON schema:
+
+```json
+{
+  "error": "string",
+  "details": "string (optional)"
+}
+```

@@ -4,6 +4,7 @@ from middleware.auth import require_auth, require_role
 from datetime import datetime
 from db.dynamoClient import DynamoClient
 from decimal import Decimal
+from services.eligibility import EligibilityService
 
 drevents_bp = Blueprint("drevents", __name__)
 
@@ -11,6 +12,7 @@ drevents_bp = Blueprint("drevents", __name__)
 dynamoDB_client = DynamoClient(
     table_name="aquacharge-drevents-dev", region_name="us-east-1"
 )
+eligibility_service = EligibilityService()
 
 
 @drevents_bp.route("", methods=["GET"])
@@ -55,6 +57,34 @@ def get_drevent_by_id(event_id):
     except Exception as e:
         return (
             jsonify({"error": "Failed to retrieve DR event", "details": str(e)}),
+            500,
+        )
+
+
+@drevents_bp.route("/<event_id>/eligibility", methods=["GET"])
+@require_auth
+def get_drevent_eligibility(event_id):
+    """Evaluate vessel eligibility for a specific DR event"""
+    try:
+        event = dynamoDB_client.get_item(key={"id": event_id})
+        if not event:
+            return jsonify({"error": "DR event not found"}), 404
+
+        include_ineligible = (
+            request.args.get("includeIneligible", "false").strip().lower() == "true"
+        )
+        eligibility_result = eligibility_service.evaluate_vessels_for_event(
+            event,
+            include_ineligible=include_ineligible,
+        )
+        return jsonify(eligibility_result), 200
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except Exception as error:
+        return (
+            jsonify({"error": "Failed to evaluate vessel eligibility", "details": str(error)}),
             500,
         )
 

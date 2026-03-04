@@ -1,4 +1,5 @@
 from services.bookings.service import BookingRepository, BookingService, BookingServiceError
+from models.booking import BookingStatus
 
 
 class InMemoryBookingRepository(BookingRepository):
@@ -34,7 +35,7 @@ def test_create_booking_rejects_time_overlap_conflict():
                 "stationId": "station-1",
                 "startTime": "2026-03-04T10:00:00",
                 "endTime": "2026-03-04T11:00:00",
-                "status": "Confirmed",
+                "status": BookingStatus.CONFIRMED.value,
             }
         ]
     )
@@ -65,7 +66,7 @@ def test_create_booking_accepts_non_conflicting_slot():
                 "stationId": "station-1",
                 "startTime": "2026-03-04T10:00:00",
                 "endTime": "2026-03-04T11:00:00",
-                "status": "Confirmed",
+                "status": BookingStatus.CONFIRMED.value,
             }
         ]
     )
@@ -83,7 +84,7 @@ def test_create_booking_accepts_non_conflicting_slot():
     )
 
     assert booking["stationId"] == "station-1"
-    assert booking["status"] == "Pending"
+    assert booking["status"] == BookingStatus.PENDING.value
 
 
 def test_update_booking_validates_status_enum():
@@ -93,7 +94,7 @@ def test_update_booking_validates_status_enum():
                 "id": "b-1",
                 "startTime": "2026-03-04T10:00:00",
                 "endTime": "2026-03-04T11:00:00",
-                "status": "Pending",
+                "status": BookingStatus.PENDING.value,
             }
         ]
     )

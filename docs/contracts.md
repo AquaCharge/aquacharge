@@ -247,3 +247,31 @@ Conflict response:
   - bookings owned by `userId`,
   - `startTime` after current UTC time,
   - status in `Pending` or `Confirmed`.
+
+## Contract Service Rules
+
+The contracts API is backed by a service layer (`ContractService`) and follows the
+existing `Contract` object model fields/status values.
+
+### Validation rules
+
+- Required fields for create: `vesselId`, `drEventId`, `vesselName`,
+  `energyAmount`, `pricePerKwh`, `startTime`, `endTime`, `terms`.
+- Datetimes must be ISO-8601.
+- `endTime` must be strictly after `startTime`.
+- `bookingId` is optional and normalized from blank string to `null`.
+
+### Derived fields
+
+- `totalValue = energyAmount * pricePerKwh` on create.
+
+### Status transition rules
+
+- Update accepts only values in `ContractStatus`.
+- Cancel endpoint allows only contracts currently in `pending`.
+- Complete endpoint allows only contracts currently in `pending` or `active`.
+
+### Filtering/sorting rules
+
+- `GET /api/contracts` supports `status` and `vesselId` filters.
+- Results are sorted by `createdAt` descending (newest first).

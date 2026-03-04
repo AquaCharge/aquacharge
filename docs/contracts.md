@@ -214,3 +214,36 @@ Error JSON schema:
   "details": "string (optional)"
 }
 ```
+
+## Booking Service Rules
+
+The booking API is backed by a service-layer business rule engine (`BookingService`).
+
+### Validation rules
+
+- Required fields for create: `userId`, `vesselId`, `stationId`, `startTime`, `endTime`, `chargerType`.
+- Datetimes must be ISO-8601.
+- `endTime` must be strictly after `startTime`.
+
+### Conflict rules
+
+- A booking conflicts if:
+  - same `stationId`, and
+  - existing booking status is `Pending` or `Confirmed`, and
+  - booking windows overlap (`not (newEnd <= existingStart or newStart >= existingEnd)`).
+
+Conflict response:
+
+- `409`: `{ "error": "Time slot conflicts with existing booking" }`
+
+### Status transition rules
+
+- Cancel is blocked for `Completed` bookings.
+- Status values are validated against `BookingStatus`.
+
+### Upcoming bookings filter
+
+- `GET /api/bookings/upcoming?userId=...` includes only:
+  - bookings owned by `userId`,
+  - `startTime` after current UTC time,
+  - status in `Pending` or `Confirmed`.

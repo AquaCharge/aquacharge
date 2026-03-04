@@ -134,4 +134,3 @@ def test_evaluate_vessels_for_event_requires_station():
         assert False, "Expected LookupError"
     except LookupError as error:
         assert str(error) == "Station not found"
-

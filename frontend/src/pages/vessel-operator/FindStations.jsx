@@ -1,121 +1,117 @@
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useMemo } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, MapPin, Zap, Clock, Filter, Map, List, Star } from 'lucide-react'
+import { Search, MapPin, Zap, Map, List, Star } from 'lucide-react'
 import MapView from '@/components/partialViews/MapView'
+import { getApiEndpoint } from '@/config/api'
+
+// Backend StationStatus: 1=ACTIVE, 2=MAINTENANCE, 3=INACTIVE. Charger status same.
+const STATION_STATUS_ACTIVE = 1
+
+/** Build view-model stations from API stations + chargers (group chargers by station). */
+function buildStationsView(stationsPayload, chargersPayload) {
+  const chargersByStation = (chargersPayload || []).reduce((acc, c) => {
+    const sid = c.chargingStationId
+    if (!sid) return acc
+    if (!acc[sid]) acc[sid] = []
+    acc[sid].push(c)
+    return acc
+  }, {})
+
+  return (stationsPayload || []).map((s) => {
+    const id = s.id
+    const chargers = chargersByStation[id] || []
+    const activeCount = chargers.filter((c) => Number(c.status) === STATION_STATUS_ACTIVE).length
+    const stationActive = Number(s.status) === STATION_STATUS_ACTIVE
+    const lat = typeof s.latitude === 'number' ? s.latitude : Number(s.latitude)
+    const lng = typeof s.longitude === 'number' ? s.longitude : Number(s.longitude)
+    const locationParts = [s.city, s.provinceOrState, s.country].filter(Boolean)
+    const locationStr = locationParts.length ? locationParts.join(', ') : '—'
+    const chargerTypes = [...new Set(chargers.map((c) => c.chargerType).filter(Boolean))]
+
+    return {
+      id,
+      name: s.displayName || 'Unnamed Station',
+      location: locationStr,
+      coordinates: { latitude: lat, longitude: lng },
+      distance: null,
+      availableChargers: stationActive ? activeCount : 0,
+      totalChargers: chargers.length,
+      chargerTypes: chargerTypes.length ? chargerTypes : ['—'],
+      pricing: '—',
+      amenities: [],
+      rating: null,
+      status: stationActive && activeCount > 0 ? 'available' : 'busy'
+    }
+  })
+}
 
 const FindStations = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFilter, setSelectedFilter] = useState('all')
-  const [viewMode, setViewMode] = useState('list') // 'list' or 'map'
+  const [viewMode, setViewMode] = useState('list')
   const [selectedStation, setSelectedStation] = useState(null)
+  const [expandedStationId, setExpandedStationId] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [stationsPayload, setStationsPayload] = useState([])
+  const [chargersPayload, setChargersPayload] = useState([])
 
-  // Comprehensive station data combining both FindChargers and Stations data
-  const stations = [
-    {
-      id: 1,
-      name: "Marina Bay Station",
-      location: "Marina Bay, CA",
-      coordinates: { latitude: 45.9636, longitude: -66.6431 },
-      distance: "0.8 miles",
-      availableChargers: 3,
-      totalChargers: 6,
-      chargerTypes: ["Level 2 - 240V", "DC Fast Charge"],
-      pricing: "$0.25/kWh",
-      amenities: ["WiFi", "Restrooms", "Restaurant"],
-      rating: 4.8,
-      status: "available"
-    },
-    {
-      id: 2,
-      name: "Harbor Point Station",
-      location: "Harbor Point, CA",
-      coordinates: { latitude: 45.9656, longitude: -66.6451 },
-      distance: "1.2 miles",
-      availableChargers: 2,
-      totalChargers: 4,
-      chargerTypes: ["Level 2 - 240V"],
-      pricing: "$0.22/kWh",
-      amenities: ["WiFi", "Convenience Store"],
-      rating: 4.6,
-      status: "available"
-    },
-    {
-      id: 3,
-      name: "Sunset Marina",
-      location: "Sunset Bay, CA",
-      coordinates: { latitude: 45.9616, longitude: -66.6411 },
-      distance: "2.1 miles",
-      availableChargers: 0,
-      totalChargers: 3,
-      chargerTypes: ["Level 2 - 240V", "Level 1 - 120V"],
-      pricing: "$0.20/kWh",
-      amenities: ["WiFi", "Restrooms"],
-      rating: 4.2,
-      status: "busy"
-    },
-    {
-      id: 4,
-      name: "Downtown Marina",
-      location: "Downtown Marina, CA",
-      coordinates: { latitude: 45.9676, longitude: -66.6471 },
-      distance: "2.8 miles",
-      availableChargers: 4,
-      totalChargers: 8,
-      chargerTypes: ["Level 2 - 240V", "DC Fast Charge", "CHAdeMO"],
-      pricing: "$0.28/kWh",
-      amenities: ["WiFi", "Restrooms", "Restaurant", "Shopping"],
-      rating: 4.9,
-      status: "available"
-    },
-    {
-      id: 5,
-      name: "Coastal Power Hub",
-      location: "Coastal Drive, CA",
-      coordinates: { latitude: 45.9596, longitude: -66.6391 },
-      distance: "3.5 miles",
-      availableChargers: 6,
-      totalChargers: 10,
-      chargerTypes: ["DC Fast Charge", "Level 2 - 240V"],
-      pricing: "$0.30/kWh",
-      amenities: ["WiFi", "Restrooms", "Food Court", "EV Service"],
-      rating: 4.7,
-      status: "available"
-    }
-  ]
+  const stations = useMemo(
+    () => buildStationsView(stationsPayload, chargersPayload),
+    [stationsPayload, chargersPayload]
+  )
 
   useEffect(() => {
-    // Simulate loading time
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
+    let cancelled = false
+    const fetchData = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const [stationsRes, chargersRes] = await Promise.all([
+          fetch(getApiEndpoint('/api/stations')),
+          fetch(getApiEndpoint('/api/chargers'))
+        ])
+        if (cancelled) return
+        if (!stationsRes.ok) throw new Error('Failed to load stations')
+        if (!chargersRes.ok) throw new Error('Failed to load chargers')
+        const [stationsData, chargersData] = await Promise.all([
+          stationsRes.json(),
+          chargersRes.json()
+        ])
+        if (cancelled) return
+        setStationsPayload(Array.isArray(stationsData) ? stationsData : [])
+        setChargersPayload(Array.isArray(chargersData) ? chargersData : [])
+      } catch (e) {
+        if (!cancelled) setError(e.message || 'Failed to load data')
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+    fetchData()
+    return () => { cancelled = true }
   }, [])
 
-  // Filter stations based on search query and selected filter
-  const filteredStations = stations.filter(station => {
-    // Search filter
+  const filteredStations = stations.filter((station) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      if (!station.name.toLowerCase().includes(query) && 
-          !station.location.toLowerCase().includes(query)) {
+      if (
+        !station.name.toLowerCase().includes(query) &&
+        !station.location.toLowerCase().includes(query)
+      ) {
         return false
       }
     }
-
-    // Status filter
-    if (selectedFilter === 'available' && station.status !== 'available') {
+    if (selectedFilter === 'available' && station.status !== 'available') return false
+    if (
+      selectedFilter === 'fast-charge' &&
+      !station.chargerTypes.some(
+        (type) => type && (type.includes('DC Fast') || type.includes('CHAdeMO'))
+      )
+    ) {
       return false
     }
-
-    // Fast charging filter
-    if (selectedFilter === 'fast-charge' && 
-        !station.chargerTypes.some(type => type.includes('DC Fast') || type.includes('CHAdeMO'))) {
-      return false
-    }
-
     return true
   })
 
@@ -126,13 +122,21 @@ const FindStations = () => {
   }
 
   const handleStationSelect = (stationId) => {
-    const station = stations.find(s => s.id.toString() === stationId)
+    const station = stations.find((s) => String(s.id) === String(stationId))
     setSelectedStation(station)
   }
 
   const handleStationDeselect = () => {
     setSelectedStation(null)
   }
+
+  const toggleCardExpand = (station) => {
+    setExpandedStationId((prev) =>
+      String(prev) === String(station.id) ? null : station.id
+    )
+  }
+
+  const isExpanded = (station) => String(expandedStationId) === String(station.id)
 
   const handleLocationSelect = (coordinates) => {
     // Handle location selection on map
@@ -156,6 +160,22 @@ const FindStations = () => {
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
           <p className="text-sm text-muted-foreground">Loading stations...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Find Charging Stations</h1>
+          <p className="text-gray-600 mt-2">Discover and book charging stations near you</p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-destructive">{error}</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -285,9 +305,14 @@ const FindStations = () => {
                         <h3 className="text-xl font-semibold">{station.name}</h3>
                         <div className="flex items-center space-x-2 text-gray-600 mt-1">
                           <MapPin className="h-4 w-4" />
-                          <span>{station.location}</span>
-                          <span>•</span>
-                          <span>{station.distance}</span>
+                          <span>{station.location} | {station.coordinates.latitude.toFixed(5)},{' '}
+                          {station.coordinates.longitude.toFixed(5)}</span>
+                          {station.distance != null && (
+                            <>
+                              <span>•</span>
+                              <span>{station.distance}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(station.status)}`}>
@@ -317,35 +342,28 @@ const FindStations = () => {
                       </div>
                     </div>
 
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 mb-1">Amenities</p>
-                      <div className="flex flex-wrap gap-2">
-                        {station.amenities.map((amenity, index) => (
-                          <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
-                            {amenity}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-1">
-                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                        <span className="text-sm font-medium">{station.rating}</span>
-                        <span className="text-sm text-gray-600">rating</span>
+                        {station.rating != null && (
+                          <>
+                            <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                            <span className="text-sm font-medium">{station.rating}</span>
+                            <span className="text-sm text-gray-600">rating</span>
+                          </>
+                        )}
                       </div>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
-                          onClick={() => handleStationSelect(station.id.toString())}
+                          onClick={() => toggleCardExpand(station)}
                         >
-                          View Details
+                          {isExpanded(station) ? 'Hide Details' : 'View Details'}
                         </Button>
-                        <Button 
+                        <Button
                           size="sm"
                           disabled={station.status !== 'available'}
-                          onClick={() => handleReserve(station.id)}
+                          onClick={() => handleReserve(String(station.id))}
                         >
                           {station.status === 'available' ? 'Book Now' : 'Not Available'}
                         </Button>
@@ -353,6 +371,67 @@ const FindStations = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Expanded: station details + chargers */}
+                {isExpanded(station) && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 space-y-4">
+                    
+                    <h4 className="text-sm font-semibold text-gray-900">Chargers</h4>
+                    {(() => {
+                      const stationChargers = (chargersPayload || []).filter(
+                        (c) => String(c.chargingStationId) === String(station.id)
+                      )
+                      if (stationChargers.length === 0) {
+                        return (
+                          <p className="text-sm text-gray-500">No chargers at this station.</p>
+                        )
+                      }
+                      return (
+                        <div className="overflow-x-auto rounded-md border border-gray-200">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-50">
+                                <th className="px-4 py-2 text-left font-medium text-gray-900">
+                                  Charger type
+                                </th>
+                                <th className="px-4 py-2 text-left font-medium text-gray-900">
+                                  Max rate
+                                </th>
+                                <th className="px-4 py-2 text-left font-medium text-gray-900">
+                                  Status
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stationChargers.map((charger) => (
+                                <tr
+                                  key={charger.id}
+                                  className="border-b border-gray-100 last:border-b-0"
+                                >
+                                  <td className="px-4 py-2 text-gray-900">
+                                    {charger.chargerType || '—'}
+                                  </td>
+                                  <td className="px-4 py-2 text-gray-900">
+                                    {charger.maxRate != null
+                                      ? `${Number(charger.maxRate)} kW`
+                                      : '—'}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    {Number(charger.status) === STATION_STATUS_ACTIVE ? (
+                                      <span className="text-green-700">Active</span>
+                                    ) : (
+                                      <span className="text-red-500">Inactive</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

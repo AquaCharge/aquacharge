@@ -481,6 +481,72 @@ Error responses:
 - `400`: contract is not in `pending` status
 - `500`: acceptance failure
 
+### Dispatch endpoint
+
+`POST /api/drevents/{eventId}/dispatch`
+
+Transitions the DR event from `Created` → `Dispatched` and auto-generates one `pending` contract per eligible vessel (up to `maxParticipants`). Requires auth token. Caller must be a `POWER_OPERATOR`.
+
+- Eligibility is evaluated using the existing `EligibilityService`.
+- Contracts are generated only for eligible vessels (up to `maxParticipants`).
+- Each contract's `energyAmount` is `targetEnergyKwh / min(eligibleCount, maxParticipants)`.
+- Each contract's `pricePerKwh`, `startTime`, `endTime`, and `terms` are inherited from the DR event.
+- `createdBy` is set to the caller's user ID.
+- Contracts are **not** created if the event is already in `Dispatched` or later status.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "DR event dispatched successfully",
+  "event": { },
+  "contractsCreated": 3
+}
+```
+
+Error responses:
+
+- `400`: event is not in `Created` status (invalid transition)
+- `401`: missing/invalid auth token
+- `403`: caller is not a `POWER_OPERATOR`
+- `404`: DR event not found
+- `500`: dispatch failure
+
+### Accept endpoint (with schedule conflict and dock reservation)
+
+`POST /api/contracts/{contractId}/accept`
+
+Transition a contract from `pending` → `active`. Only the vessel operator who owns the vessel referenced by `vesselId` may accept.
+
+On acceptance the following checks are run **before** the status transition:
+
+1. **Schedule conflict check** — scans all `Pending` / `Confirmed` bookings for the vessel. If any booking's window overlaps the contract window, returns `409`.
+2. **Dock reservation** — creates a `Pending` booking at the DR event's `stationId` for the contract window, using the vessel's `chargerType`. The new `bookingId` is stored on the contract.
+
+If the booking creation fails (e.g. the dock is already taken by another vessel), `409` is returned and the contract status is **not** changed.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract accepted successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found or associated DR event not found
+- `400`: contract is not in `pending` status
+- `409`: vessel schedule conflict or dock already reserved
+- `500`: acceptance failure
+
 ### Decline endpoint
 
 `POST /api/contracts/{contractId}/decline`

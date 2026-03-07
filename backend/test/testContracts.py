@@ -88,10 +88,35 @@ class InMemoryContractRepo:
         self._store.pop(contract_id, None)
 
 
+class _StubBookingRepo:
+    def list_bookings(self):
+        return []
+    def create_booking(self, data):
+        pass
+
+class _StubVesselRepo:
+    def get_vessel(self, vessel_id):
+        return {"id": vessel_id, "userId": "user-001", "chargerType": "AC"}
+
+class _StubDREventRepo:
+    def get_event(self, event_id):
+        return {
+            "id": event_id,
+            "stationId": "station-xyz",
+            "startTime": "2026-03-10T08:00:00+00:00",
+            "endTime": "2026-03-10T12:00:00+00:00",
+        }
+
+
 class TestAcceptContract:
     def test_accept_pending_contract_transitions_to_active(self):
         repo = InMemoryContractRepo([_make_contract(status="pending", vessel_id="vessel-abc")])
-        service = ContractService(repository=repo)
+        service = ContractService(
+            repository=repo,
+            booking_repository=_StubBookingRepo(),
+            vessel_repository=_StubVesselRepo(),
+            drevent_repository=_StubDREventRepo(),
+        )
 
         result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
 

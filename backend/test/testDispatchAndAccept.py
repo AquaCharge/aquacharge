@@ -7,7 +7,6 @@ Tests for SCRUM-169 (remaining items):
 All tests use in-memory stub repositories — no DynamoDB calls.
 """
 import pytest
-from datetime import datetime, timezone
 from models.booking import BookingStatus
 from models.contract import ContractStatus
 from services.contracts.service import ContractService, ContractServiceError
@@ -70,7 +69,7 @@ class InMemoryDREventRepo:
 # ---------------------------------------------------------------------------
 
 START = "2026-03-10T08:00:00+00:00"
-END   = "2026-03-10T12:00:00+00:00"
+END = "2026-03-10T12:00:00+00:00"
 
 DR_EVENT = {
     "id": "dr-001",
@@ -84,12 +83,14 @@ DR_EVENT = {
     "details": {},
 }
 
+
 VESSEL = {
     "id": "vessel-abc",
     "userId": "user-vo-001",
     "displayName": "Sea Breeze",
     "chargerType": "DC",
 }
+
 
 def _pending_contract(vessel_id="vessel-abc", dr_event_id="dr-001"):
     return {
@@ -110,6 +111,7 @@ def _pending_contract(vessel_id="vessel-abc", dr_event_id="dr-001"):
         "bookingId": None,
     }
 
+
 def _non_overlapping_booking(vessel_id="vessel-abc", station_id="station-xyz"):
     """A booking that does NOT overlap the contract window."""
     return {
@@ -121,6 +123,7 @@ def _non_overlapping_booking(vessel_id="vessel-abc", station_id="station-xyz"):
         "status": BookingStatus.PENDING.value,
     }
 
+
 def _overlapping_vessel_booking(vessel_id="vessel-abc"):
     """A booking for the same vessel that overlaps the contract window."""
     return {
@@ -131,6 +134,7 @@ def _overlapping_vessel_booking(vessel_id="vessel-abc"):
         "endTime":   "2026-03-10T11:00:00+00:00",
         "status": BookingStatus.PENDING.value,
     }
+
 
 def _overlapping_dock_booking(station_id="station-xyz"):
     """A booking at the same station that overlaps the contract window (different vessel)."""

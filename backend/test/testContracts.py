@@ -4,7 +4,6 @@ Uses in-memory stub repositories — no DynamoDB calls.
 """
 import pytest
 from flask import Flask
-from unittest.mock import MagicMock, patch
 from api.contracts import contracts_bp
 from services.contracts.service import ContractService, ContractServiceError
 from models.contract import ContractStatus
@@ -91,12 +90,15 @@ class InMemoryContractRepo:
 class _StubBookingRepo:
     def list_bookings(self):
         return []
+
     def create_booking(self, data):
         pass
+
 
 class _StubVesselRepo:
     def get_vessel(self, vessel_id):
         return {"id": vessel_id, "userId": "user-001", "chargerType": "AC"}
+
 
 class _StubDREventRepo:
     def get_event(self, event_id):

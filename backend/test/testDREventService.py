@@ -157,7 +157,6 @@ def test_monitoring_snapshot_aggregates_measurements():
     assert snapshot["summary"]["totalEnergyDeliveredKwh"] == 90.0
     assert snapshot["summary"]["activeVessels"] == 2
     assert snapshot["summary"]["eventStatus"] == "Active"
-    assert snapshot["baselineAvailable"] is False
     assert len(snapshot["vesselRates"]) == 2
     assert len(snapshot["vesselCurve"]) == 2
     assert snapshot["vesselCurve"][0]["vesselId"] == "vessel-1"
@@ -166,9 +165,9 @@ def test_monitoring_snapshot_aggregates_measurements():
     assert snapshot["vesselCurve"][0]["points"][0]["energyDischargedKwh"] == 30.0
     assert snapshot["vesselCurve"][0]["points"][1]["cumulativeEnergyDischargedKwh"] == 45.0
     assert snapshot["vesselRates"][0]["dischargeRateKw"] == 18.0
-    assert len(snapshot["loadCurve"]) == 3
-    assert snapshot["loadCurve"][0]["energyDischargedKwh"] == 30.0
-    assert snapshot["loadCurve"][-1]["cumulativeEnergyDischargedKwh"] == 90.0
+    assert len(snapshot["dischargeSeries"]["allVessels"]) == 3
+    assert len(snapshot["dischargeSeries"]["vessels"]) == 2
+    assert snapshot["dischargeSeries"]["vessels"][0]["series"]
 
 
 def test_monitoring_snapshot_returns_empty_state_for_no_measurements():

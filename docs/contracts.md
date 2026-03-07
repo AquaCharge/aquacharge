@@ -342,40 +342,32 @@ Success response `200`:
   "vesselRates": [
     {
       "vesselId": "string",
-      "contractId": "string | null",
       "dischargeRateKw": 0.0,
       "currentSoc": 0.0,
       "timestamp": "ISO-8601 datetime"
     }
   ],
-  "vesselCurve": [
-    {
-      "vesselId": "string",
-      "contractId": "string | null",
-      "currentSoc": 0.0,
-      "latestDischargeRateKw": 0.0,
-      "latestTimestamp": "ISO-8601 datetime | null",
-      "points": [
-        {
-          "timestamp": "ISO-8601 datetime",
-          "energyDischargedKwh": 0.0,
-          "cumulativeEnergyDischargedKwh": 0.0,
-          "v2gContributionKw": 0.0
-        }
-      ]
-    }
-  ],
-  "loadCurve": [
-    {
-      "timestamp": "ISO-8601 datetime",
-      "energyDischargedKwh": 0.0,
-      "cumulativeEnergyDischargedKwh": 0.0,
-      "v2gContributionKw": 0.0,
-      "gridLoadWithoutV2GKw": null,
-      "gridLoadWithV2GKw": null
-    }
-  ],
-  "baselineAvailable": false,
+  "dischargeSeries": {
+    "allVessels": [
+      {
+        "timestamp": "ISO-8601 datetime",
+        "powerKw": 0.0
+      }
+    ],
+    "vessels": [
+      {
+        "vesselId": "string",
+        "currentSoc": 0.0,
+        "latestDischargeRateKw": 0.0,
+        "series": [
+          {
+            "timestamp": "ISO-8601 datetime",
+            "powerKw": 0.0
+          }
+        ]
+      }
+    ]
+  },
   "availableEvents": [
     {
       "id": "string",
@@ -396,12 +388,10 @@ Monitoring rules:
 
 - `totalEnergyDeliveredKwh` is the sum of measurement `energyKwh` values in the selected window
 - `vesselRates` use the latest measurement per vessel in the selected window
-- `vesselRates[].contractId` comes from measurement telemetry only and is not a DR event field
-- `vesselCurve` provides a per-vessel time series derived from the same measurement window for dashboard filtering
-- `loadCurve[].energyDischargedKwh` and `vesselCurve[].points[].energyDischargedKwh` represent discharged energy per time bucket
-- `loadCurve[].cumulativeEnergyDischargedKwh` and `vesselCurve[].points[].cumulativeEnergyDischargedKwh` represent cumulative discharged energy over the selected window
+- `dischargeSeries.allVessels` is the aggregate event power contribution over time
+- `dischargeSeries.vessels[].series` supports inspecting a single vessel's power contribution over time
 - `progressPercent = totalEnergyDeliveredKwh / selectedEvent.targetEnergyKwh * 100`
-- `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
+- No baseline grid load comparison is provided; the dashboard reports measurement analytics only
 - Empty datasets return a successful snapshot with `empty = true`
 
 ## Booking Service Rules
@@ -464,3 +454,132 @@ existing `Contract` object model fields/status values.
 
 - `GET /api/contracts` supports `status` and `vesselId` filters.
 - Results are sorted by `createdAt` descending (newest first).
+
+### VO contract list endpoint
+
+`GET /api/contracts/my-contracts`
+
+Returns all contracts assigned to the authenticated vessel operator (matched by `vesselId` against vessels owned by the current user). Requires auth token. Supports optional `status` query parameter.
+
+Success response `200`: array of Contract objects (same shape as `GET /api/contracts`).
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `500`: retrieval failure
+
+### Accept endpoint
+
+`POST /api/contracts/{contractId}/accept`
+
+Transition a contract from `pending` → `active`. Only the vessel operator who owns the vessel referenced by `vesselId` may accept.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract accepted successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found
+- `400`: contract is not in `pending` status
+- `500`: acceptance failure
+
+### Dispatch endpoint
+
+`POST /api/drevents/{eventId}/dispatch`
+
+Transitions the DR event from `Created` → `Dispatched` and auto-generates one `pending` contract per eligible vessel (up to `maxParticipants`). Requires auth token. Caller must be a `POWER_OPERATOR`.
+
+- Eligibility is evaluated using the existing `EligibilityService`.
+- Contracts are generated only for eligible vessels (up to `maxParticipants`).
+- Each contract's `energyAmount` is `targetEnergyKwh / min(eligibleCount, maxParticipants)`.
+- Each contract's `pricePerKwh`, `startTime`, `endTime`, and `terms` are inherited from the DR event.
+- `createdBy` is set to the caller's user ID.
+- Contracts are **not** created if the event is already in `Dispatched` or later status.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "DR event dispatched successfully",
+  "event": { },
+  "contractsCreated": 3
+}
+```
+
+Error responses:
+
+- `400`: event is not in `Created` status (invalid transition)
+- `401`: missing/invalid auth token
+- `403`: caller is not a `POWER_OPERATOR`
+- `404`: DR event not found
+- `500`: dispatch failure
+
+### Accept endpoint (with schedule conflict and dock reservation)
+
+`POST /api/contracts/{contractId}/accept`
+
+Transition a contract from `pending` → `active`. Only the vessel operator who owns the vessel referenced by `vesselId` may accept.
+
+On acceptance the following checks are run **before** the status transition:
+
+1. **Schedule conflict check** — scans all `Pending` / `Confirmed` bookings for the vessel. If any booking's window overlaps the contract window, returns `409`.
+2. **Dock reservation** — creates a `Pending` booking at the DR event's `stationId` for the contract window, using the vessel's `chargerType`. The new `bookingId` is stored on the contract.
+
+If the booking creation fails (e.g. the dock is already taken by another vessel), `409` is returned and the contract status is **not** changed.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract accepted successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found or associated DR event not found
+- `400`: contract is not in `pending` status
+- `409`: vessel schedule conflict or dock already reserved
+- `500`: acceptance failure
+
+### Decline endpoint
+
+`POST /api/contracts/{contractId}/decline`
+
+Transition a contract from `pending` → `cancelled`. Only the vessel operator who owns the vessel referenced by `vesselId` may decline.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract declined successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found
+- `400`: contract is not in `pending` status
+- `500`: decline failure

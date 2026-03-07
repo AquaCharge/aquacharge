@@ -241,3 +241,36 @@ def test_available_battery_capacity_check_blocks_insufficient_vessels():
 
     assert vessel_result["eligible"] is False
     assert "Insufficient available battery capacity" in vessel_result["reasons"]
+
+
+def test_eligibility_derives_soc_from_capacity_when_telemetry_is_missing():
+    vessels = [
+        {
+            "id": "v-1",
+            "displayName": "Derived SOC Vessel",
+            "active": True,
+            "latitude": 44.65,
+            "longitude": -63.57,
+            "rangeMeters": 100000,
+            "chargerType": "Type 2 AC",
+            "capacity": 97.0,
+            "maxCapacity": 100.0,
+        }
+    ]
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
+    soc_by_vessel_id = {}
+
+    service = _build_service(vessels, stations, soc_by_vessel_id)
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "details": {"minimumSoc": 20, "requiredEnergyPerVesselKwh": 5.0},
+    }
+
+    result = service.evaluate_vessels_for_event(dr_event)
+    vessel_result = result["vessels"][0]
+
+    assert vessel_result["eligible"] is True
+    assert vessel_result["currentSoc"] == 97.0

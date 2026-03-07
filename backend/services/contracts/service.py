@@ -65,6 +65,9 @@ class DREventRepository(Protocol):
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
         pass
 
+    def update_event(self, event_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
 
 class DynamoContractRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
@@ -122,6 +125,9 @@ class DynamoDREventRepository:
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
         event = self.client.get_item(key={"id": event_id})
         return event or None
+
+    def update_event(self, event_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        return self.client.update_item(key={"id": event_id}, update_data=update_data)
 
 
 @dataclass
@@ -303,7 +309,7 @@ class ContractService:
         caller_user_id: str,
     ) -> List[Dict[str, Any]]:
         """
-        Generate one pending contract per eligible vessel (up to maxParticipants).
+        Generate one pending contract offer per eligible vessel.
 
         Parameters
         ----------
@@ -318,42 +324,47 @@ class ContractService:
         -------
         List of created contract public dicts.
         """
-        max_participants = int(dr_event.get("maxParticipants") or 0)
-        target_energy_kwh = float(dr_event.get("targetEnergyKwh") or 0)
         price_per_kwh = float(dr_event.get("pricePerKwh") or 0)
         start_time = dr_event.get("startTime", "")
         end_time = dr_event.get("endTime", "")
         event_id = dr_event.get("id", "")
 
-        slots = eligible_vessels[:max_participants] if max_participants > 0 else eligible_vessels
+        slots = eligible_vessels
         n = len(slots)
         if n == 0:
             return []
 
-        energy_per_vessel = round(target_energy_kwh / n, 6) if n > 0 else 0.0
+        existing_contracts = self.repository.list_contracts()
+        existing_pairs = {
+            (str(contract.get("drEventId") or ""), str(contract.get("vesselId") or ""))
+            for contract in existing_contracts
+        }
 
         created: List[Dict[str, Any]] = []
         for vessel_result in slots:
             vessel_id = vessel_result.get("vesselId", "")
             display_name = vessel_result.get("displayName") or vessel_id
+            if (event_id, vessel_id) in existing_pairs:
+                continue
 
             contract_data = {
                 "vesselId": vessel_id,
                 "drEventId": event_id,
                 "vesselName": display_name,
-                "energyAmount": energy_per_vessel,
+                "energyAmount": 0.0,
                 "pricePerKwh": price_per_kwh,
                 "startTime": start_time,
                 "endTime": end_time,
                 "terms": (
                     f"DR event contract for event {event_id}. "
-                    f"Vessel must deliver {energy_per_vessel:.2f} kWh at "
-                    f"${price_per_kwh}/kWh between {start_time} and {end_time}."
+                    f"Vessel operator may accept and commit discharge power for the window "
+                    f"between {start_time} and {end_time} at ${price_per_kwh}/kWh."
                 ),
                 "createdBy": caller_user_id,
             }
             contract = self.create_contract(contract_data)
             created.append(contract)
+            existing_pairs.add((event_id, vessel_id))
 
         return created
 
@@ -361,12 +372,18 @@ class ContractService:
     # Accept: ownership check → schedule conflict check → dock reservation
     # ------------------------------------------------------------------
 
-    def accept_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:
+    def accept_contract(
+        self,
+        contract_id: str,
+        caller_vessel_ids: List[str],
+        acceptance_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         existing_data = self.repository.get_contract(contract_id)
         if not existing_data:
             raise ContractServiceError("Contract not found", 404)
 
         contract = Contract.from_dict(existing_data)
+        acceptance_data = acceptance_data or {}
 
         # --- ownership guard ---
         if contract.vesselId not in caller_vessel_ids:
@@ -375,6 +392,16 @@ class ContractService:
         # --- status guard ---
         if contract.status != ContractStatus.PENDING.value:
             raise ContractServiceError("Only pending contracts can be accepted", 400)
+
+        committed_power_kw = acceptance_data.get("committedPowerKw")
+        if committed_power_kw is None:
+            raise ContractServiceError("committedPowerKw is required", 400)
+        try:
+            committed_power_kw = float(committed_power_kw)
+        except (TypeError, ValueError) as error:
+            raise ContractServiceError("committedPowerKw must be a number", 400) from error
+        if committed_power_kw <= 0:
+            raise ContractServiceError("committedPowerKw must be greater than 0", 400)
 
         # --- resolve window ---
         try:
@@ -390,6 +417,11 @@ class ContractService:
             )
         except (ValueError, AttributeError) as error:
             raise ContractServiceError("Contract has invalid time window", 400) from error
+
+        duration_hours = (contract_end - contract_start).total_seconds() / 3600.0
+        if duration_hours <= 0:
+            raise ContractServiceError("Contract has invalid time window", 400)
+        committed_energy_kwh = round(committed_power_kw * duration_hours, 6)
 
         # --- schedule conflict check (vessel-level) ---
         for existing_booking in self.booking_repository.list_bookings():
@@ -421,10 +453,27 @@ class ContractService:
 
         # Use the vessel's chargerType for the booking.
         vessel_data = self.vessel_repository.get_vessel(contract.vesselId)
-        charger_type = (vessel_data or {}).get("chargerType", "AC")
+        if not vessel_data:
+            raise ContractServiceError("Associated vessel not found", 404)
+
+        max_discharge_rate = vessel_data.get("maxDischargeRate")
+        try:
+            max_discharge_rate = (
+                float(max_discharge_rate) if max_discharge_rate is not None else None
+            )
+        except (TypeError, ValueError):
+            max_discharge_rate = None
+        if max_discharge_rate is not None and max_discharge_rate > 0:
+            if committed_power_kw > max_discharge_rate:
+                raise ContractServiceError(
+                    "committedPowerKw exceeds the vessel's maximum discharge rate",
+                    400,
+                )
+
+        charger_type = vessel_data.get("chargerType", "AC")
 
         # Determine the vessel's owning userId for the booking record.
-        vessel_user_id = (vessel_data or {}).get("userId", "system")
+        vessel_user_id = vessel_data.get("userId", "system")
 
         # Check station-level dock conflict (same station, overlapping Pending/Confirmed booking).
         for existing_booking in self.booking_repository.list_bookings():
@@ -476,15 +525,31 @@ class ContractService:
         # --- transition contract to active, store bookingId ---
         contract.status = ContractStatus.ACTIVE.value
         contract.bookingId = booking.id
-        contract.updatedAt = datetime.now()
+        contract.committedPowerKw = committed_power_kw
+        contract.energyAmount = committed_energy_kwh
+        contract.totalValue = round(committed_energy_kwh * float(contract.pricePerKwh), 6)
+        contract.operatorNotes = str(acceptance_data.get("operatorNotes") or "").strip()
+        contract.acceptedAt = datetime.now(timezone.utc)
+        contract.updatedAt = contract.acceptedAt
         self.repository.update_contract(
             contract_id,
             {
                 "status": contract.status,
                 "bookingId": contract.bookingId,
+                "committedPowerKw": contract.committedPowerKw,
+                "energyAmount": contract.energyAmount,
+                "totalValue": contract.totalValue,
+                "operatorNotes": contract.operatorNotes,
+                "acceptedAt": contract.acceptedAt.isoformat(),
                 "updatedAt": contract.updatedAt.isoformat(),
             },
         )
+
+        if str(dr_event_data.get("status") or "") == "Dispatched":
+            self.drevent_repository.update_event(
+                contract.drEventId,
+                {"status": "Accepted"},
+            )
         return contract.to_public_dict()
 
     def decline_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:

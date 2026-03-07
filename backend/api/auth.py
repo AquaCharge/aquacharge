@@ -3,7 +3,7 @@ from models.user import User, UserRole, UserType
 from datetime import datetime, timedelta
 from typing import Dict, Any
 from db.dynamoClient import DynamoClient
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 from decimal import Decimal
 import hashlib
 import jwt
@@ -16,6 +16,9 @@ auth_bp = Blueprint("auth", __name__)
 # Initialize DynamoDB client
 dynamoDB_client = DynamoClient(
     table_name="aquacharge-users-dev", region_name="us-east-1"
+)
+_vessels_client = DynamoClient(
+    table_name="aquacharge-vessels-dev", region_name="us-east-1"
 )
 
 # In-memory storage for password reset tokens (replace with database in production)
@@ -439,6 +442,8 @@ def get_current_user():
         user_data = user.to_public_dict()
         user_data["role_name"] = UserRole(user.role).name
         user_data["type_name"] = UserType(user.type).name
+        if user_data.get("currentVesselId") == "":
+            user_data["currentVesselId"] = None
 
         # Ensure all Decimals are converted
         user_data = convert_decimals(user_data)
@@ -447,3 +452,65 @@ def get_current_user():
 
     except Exception as e:
         return jsonify({"error": "Failed to get user data", "details": str(e)}), 500
+
+
+@auth_bp.route("/me", methods=["PATCH"])
+def patch_current_user():
+    """Update current user profile (e.g. currentVesselId)."""
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Authentication required"}), 401
+
+        token = auth_header.split(" ")[1]
+        try:
+            payload = decode_jwt_token(token)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 401
+
+        user_id = payload.get("user_id")
+        if not user_id:
+            return jsonify({"error": "Invalid token"}), 401
+        user_id = str(user_id)
+
+        user_data = dynamoDB_client.get_item(key={"id": user_id})
+        if not user_data:
+            return jsonify({"error": "User not found"}), 404
+
+        data = request.get_json(silent=True) or {}
+        current_vessel_id = data.get("currentVesselId")
+
+        # Allow null, missing, or empty string to clear current vessel (store "" in DB)
+        if current_vessel_id is None or current_vessel_id == "":
+            update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+        else:
+            current_vessel_id = str(current_vessel_id).strip()
+            if not current_vessel_id:
+                update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+            else:
+                # Validate that the user owns this vessel
+                vessels = _vessels_client.query_gsi(
+                    index_name="userId-index",
+                    key_condition_expression=Key("userId").eq(user_id),
+                )
+                vessel_ids = [v["id"] for v in vessels] if vessels else []
+                if current_vessel_id not in vessel_ids:
+                    return jsonify({"error": "Vessel not found or you do not own this vessel"}), 403
+                update_data = {"currentVesselId": current_vessel_id, "updatedAt": datetime.utcnow().isoformat()}
+
+        updated = dynamoDB_client.update_item(key={"id": user_id}, update_data=update_data)
+        user_data = prepare_user_data_from_dynamo(updated)
+        user = User(**user_data)
+        if not user.active:
+            return jsonify({"error": "Account is deactivated"}), 401
+
+        out = user.to_public_dict()
+        out["role_name"] = UserRole(user.role).name
+        out["type_name"] = UserType(user.type).name
+        # Normalize empty currentVesselId to None for JSON
+        if out.get("currentVesselId") == "":
+            out["currentVesselId"] = None
+        return jsonify(convert_decimals(out)), 200
+
+    except Exception as e:
+        return jsonify({"error": "Failed to update user", "details": str(e)}), 500

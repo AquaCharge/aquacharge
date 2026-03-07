@@ -28,6 +28,7 @@ Success response `201`:
     "type": 1,
     "active": true,
     "orgId": "string | null",
+    "currentVesselId": "string | null",
     "createdAt": "ISO-8601 datetime",
     "updatedAt": "ISO-8601 datetime | null",
     "role_name": "ADMIN | USER",
@@ -67,6 +68,7 @@ Success response `200`:
     "type": 1,
     "active": true,
     "orgId": "string | null",
+    "currentVesselId": "string | null",
     "createdAt": "ISO-8601 datetime",
     "updatedAt": "ISO-8601 datetime | null",
     "role_name": "ADMIN | USER",
@@ -100,6 +102,7 @@ Success response `200`:
     "type": 1,
     "active": true,
     "orgId": "string | null",
+    "currentVesselId": "string | null",
     "createdAt": "ISO-8601 datetime",
     "updatedAt": "ISO-8601 datetime | null",
     "role_name": "ADMIN | USER",
@@ -130,6 +133,51 @@ Success response `200`:
 Notes:
 
 - JWT is stateless; logout is a client-side token removal action.
+
+### `GET /api/auth/me`
+
+Request headers:
+
+- `Authorization: Bearer <jwt>`
+
+Success response `200`: same user shape as login/verify-token, including optional `currentVesselId` (string or null).
+
+Error responses:
+
+- `401`: no/invalid/expired token, deactivated account
+- `404`: user not found
+- `500`: verification failure
+
+### `PATCH /api/auth/me`
+
+Update current user profile (e.g. current vessel for VO dashboard).
+
+Request headers:
+
+- `Authorization: Bearer <jwt>`
+
+Request JSON:
+
+```json
+{
+  "currentVesselId": "string | null"
+}
+```
+
+- `null` or omitted or empty string clears the current vessel.
+
+Success response `200`: updated user object (same shape as GET /api/auth/me).
+
+Validation:
+
+- If `currentVesselId` is non-null, the authenticated user must own that vessel (vessel’s `userId` must match the caller). Otherwise responds `403` with message "Vessel not found or you do not own this vessel".
+
+Error responses:
+
+- `401`: authentication required
+- `403`: vessel not owned by user
+- `404`: user not found
+- `500`: update failure
 
 ## Auth Error Shape
 
@@ -381,6 +429,56 @@ Monitoring rules:
 - `progressPercent = totalEnergyDeliveredKwh / selectedEvent.targetEnergyKwh * 100`
 - `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
 - Empty datasets return a successful snapshot with `empty = true`
+
+## VO Dashboard
+
+### `GET /api/vo/dashboard`
+
+Vessel-operator dashboard snapshot: current vessel SoC, discharge rate, aggregate metrics, and active contract. Requires authentication.
+
+Request headers:
+
+- `Authorization: Bearer <jwt>`
+
+Success response `200`:
+
+```json
+{
+  "currentVessel": {
+    "id": "string",
+    "displayName": "string",
+    "socPercent": 0.0,
+    "dischargeRateKw": 0.0,
+    "capacityKwh": 0.0,
+    "maxCapacityKwh": 0.0
+  } | null,
+  "activeContract": {
+    "id": "string",
+    "endTime": "ISO-8601 datetime",
+    "timeRemainingSeconds": 0,
+    "estimatedEarnings": 0.0,
+    "energyAmountKwh": 0.0
+  } | null,
+  "metrics": {
+    "contractsCompleted": 0,
+    "totalKwhDischarged": 0.0,
+    "totalEarnings": 0.0
+  },
+  "updatedAt": "ISO-8601 datetime"
+}
+```
+
+Semantics:
+
+- `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` is computed as `(capacity / maxCapacity) * 100` when `maxCapacity > 0`. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
+- `metrics` are over all of the VO’s vessels (contracts completed, total kWh from completed/active contracts, total earnings from completed contracts).
+- `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`.
+
+Error responses:
+
+- `401`: authentication required
+- `404`: user not found
+- `500`: dashboard load failure
 
 ## Booking Service Rules
 

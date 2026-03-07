@@ -280,6 +280,106 @@ def test_get_current_user_unauthorized(client):
     assert "error" in data
 
 
+def test_patch_me_set_current_vessel(client, auth_user_credentials):
+    """PATCH /api/auth/me with currentVesselId (owned vessel) returns 200 and updates user."""
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
+    assert login_rv.status_code == 200
+    token = login_rv.get_json()["token"]
+    user_id = login_rv.get_json()["user"]["id"]
+
+    vessels_client = DynamoClient(
+        table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    )
+    vessel_id = "test-vessel-patch-me-" + str(int(time.time() * 1000))
+    vessels_client.put_item(
+        {
+            "id": vessel_id,
+            "userId": user_id,
+            "displayName": "Test Vessel",
+            "vesselType": "ferry",
+            "chargerType": "AC",
+            "capacity": 50,
+            "maxCapacity": 100,
+        }
+    )
+    try:
+        rv = client.patch(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"currentVesselId": vessel_id},
+        )
+        assert rv.status_code == 200, rv.get_json()
+        data = rv.get_json()
+        assert data.get("currentVesselId") == vessel_id
+
+        get_rv = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert get_rv.status_code == 200
+        assert get_rv.get_json().get("currentVesselId") == vessel_id
+    finally:
+        try:
+            vessels_client.delete_item(key={"id": vessel_id})
+        except Exception:
+            pass
+
+
+def test_patch_me_clear_current_vessel(client, auth_user_credentials):
+    """PATCH /api/auth/me with currentVesselId null clears and returns 200."""
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
+    assert login_rv.status_code == 200
+    token = login_rv.get_json()["token"]
+    user_id = login_rv.get_json()["user"]["id"]
+
+    vessels_client = DynamoClient(
+        table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    )
+    vessel_id = "test-vessel-clear-" + str(int(time.time() * 1000))
+    vessels_client.put_item(
+        {
+            "id": vessel_id,
+            "userId": user_id,
+            "displayName": "Test Vessel",
+            "vesselType": "ferry",
+            "chargerType": "AC",
+            "capacity": 50,
+            "maxCapacity": 100,
+        }
+    )
+    try:
+        client.patch(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"currentVesselId": vessel_id},
+        )
+        rv = client.patch(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"currentVesselId": None},
+        )
+        assert rv.status_code == 200, rv.get_json()
+        assert rv.get_json().get("currentVesselId") is None
+    finally:
+        try:
+            vessels_client.delete_item(key={"id": vessel_id})
+        except Exception:
+            pass
+
+
+def test_patch_me_forbidden_when_vessel_not_owned(client, auth_user_credentials):
+    """PATCH /api/auth/me with a vessel id not owned by user returns 403."""
+    login_rv = client.post("/api/auth/login", json=auth_user_credentials)
+    assert login_rv.status_code == 200
+    token = login_rv.get_json()["token"]
+
+    rv = client.patch(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"currentVesselId": "some-other-users-vessel-id"},
+    )
+    assert rv.status_code == 403
+    data = rv.get_json()
+    assert "error" in data
+
+
 def test_refresh_token(client, auth_user_credentials):
     """Test token refresh"""
     # First login to get a token

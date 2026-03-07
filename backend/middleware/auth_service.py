@@ -148,6 +148,8 @@ class AuthService:
             response_user = user.to_public_dict()
             response_user["role_name"] = UserRole(user.role).name
             response_user["type_name"] = UserType(user.type).name
+            if response_user.get("currentVesselId") == "":
+                response_user["currentVesselId"] = None
 
             return {
                 "token": token,
@@ -201,6 +203,8 @@ class AuthService:
             response_user = user.to_public_dict()
             response_user["role_name"] = UserRole(user.role).name
             response_user["type_name"] = UserType(user.type).name
+            if response_user.get("currentVesselId") == "":
+                response_user["currentVesselId"] = None
 
             return {
                 "token": token,
@@ -236,6 +240,8 @@ class AuthService:
             response_user = user.to_public_dict()
             response_user["role_name"] = UserRole(user.role).name
             response_user["type_name"] = UserType(user.type).name
+            if response_user.get("currentVesselId") == "":
+                response_user["currentVesselId"] = None
 
             return {"user": convert_decimals(response_user), "valid": True}, 200
         except Exception as exc:

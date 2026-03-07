@@ -12,6 +12,7 @@
 | role        | int      | Role of user (normal, admin)     |
 | type        | int      | PSO or VO for normal             |
 | active      | bool     | If user is active or not         |
+| currentVesselId | String? | Current vessel ID for VO dashboard |
 | createdAt   | datetime | Date user created profile        |
 | updatedAt   | datetime | Last time user was updated       |
 

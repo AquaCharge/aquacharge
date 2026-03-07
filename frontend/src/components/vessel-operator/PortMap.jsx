@@ -31,6 +31,97 @@ const MapBoundsTracker = ({ onViewportChange }) => {
   return null
 }
 
+/**
+ * Single child component for MapContainer so the context provider
+ * receives exactly one child (avoids "context consumer" / render2 errors
+ * with react-leaflet when multiple siblings are passed).
+ */
+const MapLayers = ({
+  viewMode,
+  bookingPorts,
+  shouldShowNearbyMarkers,
+  filteredNearbyPorts,
+  handleViewportChange,
+  handleMarkerClick,
+  onBookingFocus
+}) => (
+  <>
+    <TileLayer
+      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    />
+    <MapBoundsTracker onViewportChange={handleViewportChange} />
+
+    {viewMode === 'bookings' &&
+      bookingPorts.map((port) => (
+        <CircleMarker
+          key={`booking-${port.id}`}
+          center={[port.lat, port.lng]}
+          radius={10}
+          pathOptions={{
+            color: '#0f172a',
+            weight: 2,
+            fillColor: '#0ea5e9',
+            fillOpacity: 0.9
+          }}
+          eventHandlers={{
+            click: () => handleMarkerClick(port)
+          }}
+        >
+          <Popup>
+            <div className="space-y-2">
+              <div>
+                <p className="font-semibold">{port.name}</p>
+                {port.country && (
+                  <p className="text-sm text-muted-foreground">{port.country}</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                {port.bookings.map((booking) => (
+                  <button
+                    key={booking.id}
+                    type="button"
+                    className="w-full rounded-md border px-2 py-1 text-left text-sm hover:bg-muted"
+                    onClick={() => onBookingFocus(booking.id)}
+                  >
+                    <p className="font-medium">{booking.stationName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {booking.formattedDate} • {booking.formattedTime}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Popup>
+        </CircleMarker>
+      ))}
+
+    {shouldShowNearbyMarkers &&
+      filteredNearbyPorts.map((port) => (
+        <CircleMarker
+          key={`nearby-${port.id}`}
+          center={[port.lat, port.lng]}
+          radius={6}
+          pathOptions={{
+            color: '#475569',
+            weight: 1,
+            fillColor: '#94a3b8',
+            fillOpacity: 0.7
+          }}
+        >
+          <Popup>
+            <div>
+              <p className="font-medium">{port.name}</p>
+              {port.country && (
+                <p className="text-xs text-muted-foreground">{port.country}</p>
+              )}
+            </div>
+          </Popup>
+        </CircleMarker>
+      ))}
+  </>
+)
+
 const PortMap = ({
   bookings = [],
   viewMode = 'both',
@@ -38,12 +129,17 @@ const PortMap = ({
   defaultCenter = DEFAULT_CENTER,
   defaultZoom = DEFAULT_ZOOM
 }) => {
+  const [mounted, setMounted] = useState(false)
   const [nearbyPorts, setNearbyPorts] = useState([])
   const [isLoadingPorts, setIsLoadingPorts] = useState(false)
   const [loadError, setLoadError] = useState(null)
   const [pendingBounds, setPendingBounds] = useState(null)
   const [currentZoom, setCurrentZoom] = useState(defaultZoom)
   const lastBboxRef = useRef(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const bookingPorts = useMemo(() => {
     const grouped = {}
@@ -149,6 +245,14 @@ const PortMap = ({
     !isLoadingPorts &&
     !loadError
 
+  if (!mounted) {
+    return (
+      <div className="relative h-[420px] w-full overflow-hidden rounded-md border bg-muted/20 flex items-center justify-center text-muted-foreground text-sm">
+        Loading map…
+      </div>
+    )
+  }
+
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-md border bg-muted/20">
       <MapContainer
@@ -160,77 +264,15 @@ const PortMap = ({
         minZoom={2}
         worldCopyJump
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        <MapLayers
+          viewMode={viewMode}
+          bookingPorts={bookingPorts}
+          shouldShowNearbyMarkers={shouldShowNearbyMarkers}
+          filteredNearbyPorts={filteredNearbyPorts}
+          handleViewportChange={handleViewportChange}
+          handleMarkerClick={handleMarkerClick}
+          onBookingFocus={onBookingFocus}
         />
-        <MapBoundsTracker onViewportChange={handleViewportChange} />
-
-        {viewMode === 'bookings' &&
-          bookingPorts.map((port) => (
-            <CircleMarker
-              key={`booking-${port.id}`}
-              center={[port.lat, port.lng]}
-              radius={10}
-              pathOptions={{
-                color: '#0f172a',
-                weight: 2,
-                fillColor: '#0ea5e9',
-                fillOpacity: 0.9
-              }}
-              eventHandlers={{
-                click: () => handleMarkerClick(port)
-              }}
-            >
-              <Popup>
-                <div className="space-y-2">
-                  <div>
-                    <p className="font-semibold">{port.name}</p>
-                    {port.country && (
-                      <p className="text-sm text-muted-foreground">{port.country}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    {port.bookings.map((booking) => (
-                      <button
-                        key={booking.id}
-                        type="button"
-                        className="w-full rounded-md border px-2 py-1 text-left text-sm hover:bg-muted"
-                        onClick={() => onBookingFocus(booking.id)}
-                      >
-                        <p className="font-medium">{booking.stationName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {booking.formattedDate} • {booking.formattedTime}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
-
-        {shouldShowNearbyMarkers &&
-          filteredNearbyPorts.map((port) => (
-            <CircleMarker
-              key={`nearby-${port.id}`}
-              center={[port.lat, port.lng]}
-              radius={6}
-              pathOptions={{
-                color: '#475569',
-                weight: 1,
-                fillColor: '#94a3b8',
-                fillOpacity: 0.7
-              }}
-            >
-              <Popup>
-                <div>
-                  <p className="font-medium">{port.name}</p>
-                  {port.country && <p className="text-xs text-muted-foreground">{port.country}</p>}
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
       </MapContainer>
 
       {isLoadingPorts && (

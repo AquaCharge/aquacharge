@@ -301,7 +301,7 @@ const VesselDashboard = () => {
                 className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <Ship className="h-5 w-5 text-blue-600" />
+                  <Ship className="h-5 w-5 text-black" />
                   <div>
                     <p className="font-medium">Find Charging Station</p>
                     <p className="text-sm text-gray-600">Locate nearby chargers</p>
@@ -313,7 +313,7 @@ const VesselDashboard = () => {
                 className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <Calendar className="h-5 w-5 text-green-600" />
+                  <Calendar className="h-5 w-5 text-black" />
                   <div>
                     <p className="font-medium">My Bookings</p>
                     <p className="text-sm text-gray-600">View and manage reservations</p>
@@ -325,7 +325,7 @@ const VesselDashboard = () => {
                 className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <Ship className="h-5 w-5 text-purple-600" />
+                  <Ship className="h-5 w-5 text-black" />
                   <div>
                     <p className="font-medium">Manage Vessels</p>
                     <p className="text-sm text-gray-600">Add or edit vessel information</p>
@@ -337,7 +337,7 @@ const VesselDashboard = () => {
                 className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <Zap className="h-5 w-5 text-amber-600" />
+                  <Zap className="h-5 w-5 text-black" />
                   <div>
                     <p className="font-medium">My Contracts</p>
                     <p className="text-sm text-gray-600">Review and accept DR contracts</p>

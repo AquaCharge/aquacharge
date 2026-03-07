@@ -1,9 +1,10 @@
 from db.dynamoClient import DynamoClient
 from services.battery_model.battery import BESS
 from datetime import datetime, timezone
+import time
 
 
-INTERVAL_SECONDS = 5 * 60  # 5 minutes
+INTERVAL_SECONDS = 1 * 60  # 1 minutes
 INTERVAL_HOURS = INTERVAL_SECONDS / 3600.0
 
 
@@ -67,7 +68,7 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
                 "DRMeasurements",
                 {
                     "id": f"{event_id}#{contract_id}#{iteration}",
-                    "eventId": event_id,
+                    "vesselId": bess.vessel_id,
                     "contractId": contract_id,
                     "timestamp": now.isoformat(),
                     "energyDelivered": round(energy_delivered, 4),  # kWh
@@ -92,3 +93,5 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
         if active_vessels == 0:
             print(f"[DR {event_id}] All vessels at SOC floor. Ending dispatch loop early.")
             break
+
+        time.sleep(INTERVAL_SECONDS)

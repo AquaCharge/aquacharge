@@ -5,12 +5,18 @@ from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
 from services.dr.dispatcher import _dispatch_loop
+from models.drevent import DREvent, EventStatus
+from db.dynamoClient import DynamoClient
+from decimal import Decimal
 
 drevents_bp = Blueprint("drevents", __name__)
 
 contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
+
+
+dynamoDB_client = DynamoClient(table_name="aquacharge-drevents-dev", region_name="us-east-1")
 
 
 @drevents_bp.route("", methods=["GET"])

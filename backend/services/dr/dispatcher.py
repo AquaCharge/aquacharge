@@ -45,7 +45,7 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
         active_vessels = 0
 
         for contract_id, bess in bess_map.items():
-            
+
             # Skip if vessel has hit the SOC floor
             if bess.at_floor:
                 continue

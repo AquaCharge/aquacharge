@@ -55,4 +55,3 @@ class Measurement(BaseModel):
             data["currentSOC"] = Decimal("0")
 
         return data
-

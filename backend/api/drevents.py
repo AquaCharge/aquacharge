@@ -7,7 +7,6 @@ from services.eligibility import EligibilityService
 from services.dr.dispatcher import _dispatch_loop
 from models.drevent import DREvent, EventStatus
 from db.dynamoClient import DynamoClient
-from decimal import Decimal
 
 drevents_bp = Blueprint("drevents", __name__)
 

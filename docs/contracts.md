@@ -331,3 +331,66 @@ existing `Contract` object model fields/status values.
 
 - `GET /api/contracts` supports `status` and `vesselId` filters.
 - Results are sorted by `createdAt` descending (newest first).
+
+### VO contract list endpoint
+
+`GET /api/contracts/my-contracts`
+
+Returns all contracts assigned to the authenticated vessel operator (matched by `vesselId` against vessels owned by the current user). Requires auth token. Supports optional `status` query parameter.
+
+Success response `200`: array of Contract objects (same shape as `GET /api/contracts`).
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `500`: retrieval failure
+
+### Accept endpoint
+
+`POST /api/contracts/{contractId}/accept`
+
+Transition a contract from `pending` → `active`. Only the vessel operator who owns the vessel referenced by `vesselId` may accept.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract accepted successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found
+- `400`: contract is not in `pending` status
+- `500`: acceptance failure
+
+### Decline endpoint
+
+`POST /api/contracts/{contractId}/decline`
+
+Transition a contract from `pending` → `cancelled`. Only the vessel operator who owns the vessel referenced by `vesselId` may decline.
+
+Request: no body required.
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract declined successfully",
+  "contract": { }
+}
+```
+
+Error responses:
+
+- `401`: missing/invalid auth token
+- `403`: caller does not own the vessel on this contract
+- `404`: contract not found
+- `400`: contract is not in `pending` status
+- `500`: decline failure

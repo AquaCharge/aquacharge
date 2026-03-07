@@ -6,6 +6,7 @@ import { VesselOperatorSidebar } from './VesselOperatorSidebar'
 import VesselDashboard from '../../pages/vessel-operator/VesselDashboard'
 import MyBookings from '../../pages/vessel-operator/MyBookings'
 import FindStations from '../../pages/vessel-operator/FindStations'
+import MyContracts from '../../pages/vessel-operator/MyContracts'
 
 // Import shared pages
 import Vessels from '../../pages/Vessels'
@@ -21,6 +22,7 @@ const VesselOperatorRoutes = () => {
             <Route path="/" element={<VesselDashboard />} />
             <Route path="/find-stations" element={<FindStations />} />
             <Route path="/my-bookings" element={<MyBookings />} />
+            <Route path="/my-contracts" element={<MyContracts />} />
             <Route path="/my-vessels" element={<Vessels />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/" replace />} />

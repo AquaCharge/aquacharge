@@ -228,6 +228,50 @@ class ContractService:
 
         return contract.to_public_dict()
 
+    def accept_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:
+        existing_data = self.repository.get_contract(contract_id)
+        if not existing_data:
+            raise ContractServiceError("Contract not found", 404)
+
+        contract = Contract.from_dict(existing_data)
+        if contract.vesselId not in caller_vessel_ids:
+            raise ContractServiceError("You do not own the vessel on this contract", 403)
+        if contract.status != ContractStatus.PENDING.value:
+            raise ContractServiceError("Only pending contracts can be accepted", 400)
+
+        contract.status = ContractStatus.ACTIVE.value
+        contract.updatedAt = datetime.now()
+        self.repository.update_contract(
+            contract_id,
+            {
+                "status": contract.status,
+                "updatedAt": contract.updatedAt.isoformat(),
+            },
+        )
+        return contract.to_public_dict()
+
+    def decline_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:
+        existing_data = self.repository.get_contract(contract_id)
+        if not existing_data:
+            raise ContractServiceError("Contract not found", 404)
+
+        contract = Contract.from_dict(existing_data)
+        if contract.vesselId not in caller_vessel_ids:
+            raise ContractServiceError("You do not own the vessel on this contract", 403)
+        if contract.status != ContractStatus.PENDING.value:
+            raise ContractServiceError("Only pending contracts can be declined", 400)
+
+        contract.status = ContractStatus.CANCELLED.value
+        contract.updatedAt = datetime.now()
+        self.repository.update_contract(
+            contract_id,
+            {
+                "status": contract.status,
+                "updatedAt": contract.updatedAt.isoformat(),
+            },
+        )
+        return contract.to_public_dict()
+
     def delete_contract(self, contract_id: str) -> None:
         existing_data = self.repository.get_contract(contract_id)
         if not existing_data:

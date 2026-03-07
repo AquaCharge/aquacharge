@@ -215,6 +215,11 @@ Error JSON schema:
 }
 ```
 
+## Vessels
+
+- Model fields: `chargerType` (string), `capacity` (float, kWh), `maxCapacity` (float, kWh).
+- Validation: `capacity` must never exceed `maxCapacity` on create or update.
+- Required fields for create: `userId`, `displayName`, `vesselType`, `chargerType`, `capacity`, `maxCapacity`.
 ## DR Events Endpoints
 
 ### `GET /api/drevents`

@@ -45,10 +45,15 @@ def create_vessel():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity"]
+    required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity", "maxCapacity"]
     for field in required_fields:
         if field not in data:
             return jsonify({"error": f"{field} is required"}), 400
+
+    capacity_val = decimal.Decimal(str(data["capacity"]))
+    max_capacity_val = decimal.Decimal(str(data["maxCapacity"]))
+    if capacity_val > max_capacity_val:
+        return jsonify({"error": "capacity must not exceed maxCapacity"}), 400
 
     # Create vessel instance
     vessel = Vessel(
@@ -56,14 +61,25 @@ def create_vessel():
         displayName=data["displayName"],
         vesselType=data["vesselType"],
         chargerType=data["chargerType"],
-        capacity=decimal.Decimal(data["capacity"]),
+        capacity=float(capacity_val),
+        maxCapacity=float(max_capacity_val),
         maxChargeRate=decimal.Decimal(data.get("maxChargeRate", 0)),
         minChargeRate=decimal.Decimal(data.get("minChargeRate", 0)),
         rangeMeters=decimal.Decimal(data.get("rangeMeters", 0)),
     )
 
-    # Store vessel
-    dynamoDB_client.put_item(vessel.to_dict())
+    # Store vessel (DynamoDB requires Decimal for numeric attributes)
+    vessel_dict = vessel.to_dict()
+    vessel_dict["capacity"] = capacity_val
+    vessel_dict["maxCapacity"] = max_capacity_val
+    numeric_keys = (
+        "maxChargeRate", "minChargeRate", "maxDischargeRate",
+        "longitude", "latitude", "rangeMeters",
+    )
+    for key in numeric_keys:
+        if key in vessel_dict and vessel_dict[key] is not None:
+            vessel_dict[key] = decimal.Decimal(str(vessel_dict[key]))
+    dynamoDB_client.put_item(vessel_dict)
 
     return jsonify(vessel.to_dict()), 201
 
@@ -87,6 +103,7 @@ def update_vessel(vessel_id: str):
         "vesselType": str,
         "chargerType": str,
         "capacity": decimal.Decimal,
+        "maxCapacity": decimal.Decimal,
         "maxChargeRate": decimal.Decimal,
         "minChargeRate": decimal.Decimal,
         "rangeMeters": decimal.Decimal,
@@ -104,7 +121,13 @@ def update_vessel(vessel_id: str):
             else:
                 value = data[field]
             update_data[field] = value
-            setattr(current_vessel, field, value)
+            setattr(current_vessel, field, float(value) if field_type == decimal.Decimal else value)
+
+    # Enforce capacity <= maxCapacity (use current vessel state after updates)
+    cap = getattr(current_vessel, "capacity", 0) or 0
+    max_cap = getattr(current_vessel, "maxCapacity", 0) or 0
+    if max_cap > 0 and cap > max_cap:
+        return jsonify({"error": "capacity must not exceed maxCapacity"}), 400
 
     # Always update the timestamp
     update_data["updatedAt"] = datetime.now().isoformat()

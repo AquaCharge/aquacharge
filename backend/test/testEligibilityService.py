@@ -217,6 +217,7 @@ def test_available_battery_capacity_check_blocks_insufficient_vessels():
             "rangeMeters": 100000,
             "chargerType": "Type 2 AC",
             "capacity": 10.0,
+            "maxCapacity": 10.0,
         }
     ]
     stations = {

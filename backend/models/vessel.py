@@ -14,6 +14,7 @@ class Vessel(BaseModel):
     vesselType: str = ""
     chargerType: str = ""
     capacity: float = 0.0
+    maxCapacity: float = 0.0
     maxChargeRate: float = 0.0
     minChargeRate: float = 0.0
     maxDischargeRate: float = 0.0
@@ -24,6 +25,20 @@ class Vessel(BaseModel):
     createdAt: datetime = field(default_factory=datetime.now)
     updatedAt: Optional[datetime] = None
 
+    def validate(self) -> bool:
+        """Validate model: capacity must not exceed maxCapacity."""
+        if self.maxCapacity > 0 and self.capacity > self.maxCapacity:
+            return False
+        return True
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
-        return cls(**data)
+        # Normalize numeric types from DynamoDB (Decimal -> float)
+        normalized = dict(data)
+        for key in (
+            "capacity", "maxCapacity", "maxChargeRate", "minChargeRate",
+            "maxDischargeRate", "longitude", "latitude", "rangeMeters",
+        ):
+            if key in normalized and normalized[key] is not None:
+                normalized[key] = float(normalized[key])
+        return cls(**normalized)

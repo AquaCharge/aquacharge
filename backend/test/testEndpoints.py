@@ -314,6 +314,101 @@ def test_update_user(client):
     assert rv.status_code == 200
 
 
+# --- Vessels --- #
+def test_create_vessel_requires_max_capacity(client):
+    """Create vessel with maxCapacity; capacity must not exceed maxCapacity."""
+    all_users = client.get("/api/users")
+    users = all_users.get_json()
+    if not users:
+        pytest.skip("No users in database for vessel create test")
+    user_id = users[0]["id"]
+    rv = client.post(
+        "/api/vessels",
+        json={
+            "userId": user_id,
+            "displayName": "Test Vessel",
+            "vesselType": "ferry",
+            "chargerType": "Type 2 AC",
+            "capacity": 50.0,
+            "maxCapacity": 100.0,
+        },
+    )
+    assert rv.status_code == 201
+    body = rv.get_json()
+    assert body["chargerType"] == "Type 2 AC"
+    assert body["capacity"] == 50.0
+    assert body["maxCapacity"] == 100.0
+    created_test_items["vessels"].append(body["id"])
+
+
+def test_create_vessel_capacity_exceeds_max_fails(client):
+    all_users = client.get("/api/users")
+    users = all_users.get_json()
+    if not users:
+        pytest.skip("No users in database for vessel create test")
+    user_id = users[0]["id"]
+    rv = client.post(
+        "/api/vessels",
+        json={
+            "userId": user_id,
+            "displayName": "Bad Vessel",
+            "vesselType": "ferry",
+            "chargerType": "CCS",
+            "capacity": 100.0,
+            "maxCapacity": 50.0,
+        },
+    )
+    assert rv.status_code == 400
+    assert "capacity must not exceed maxCapacity" in rv.get_json()["error"]
+
+
+def test_create_vessel_missing_max_capacity_fails(client):
+    all_users = client.get("/api/users")
+    users = all_users.get_json()
+    if not users:
+        pytest.skip("No users in database for vessel create test")
+    user_id = users[0]["id"]
+    rv = client.post(
+        "/api/vessels",
+        json={
+            "userId": user_id,
+            "displayName": "Bad Vessel",
+            "vesselType": "ferry",
+            "chargerType": "CCS",
+            "capacity": 50.0,
+        },
+    )
+    assert rv.status_code == 400
+    assert "maxCapacity" in rv.get_json()["error"]
+
+
+def test_update_vessel_max_capacity(client):
+    """Update vessel to set maxCapacity and ensure capacity <= maxCapacity validation."""
+    all_vessels = client.get("/api/vessels")
+    vessels = all_vessels.get_json()
+    if not vessels:
+        pytest.skip("No vessels in database for update test")
+    vessel_id = vessels[0]["id"]
+    # First set maxCapacity high so current capacity is valid, then set capacity above it
+    rv = client.put(
+        f"/api/vessels/{vessel_id}",
+        json={"maxCapacity": 1000.0},
+    )
+    assert rv.status_code == 200
+    rv = client.put(
+        f"/api/vessels/{vessel_id}",
+        json={"capacity": 300.0},
+    )
+    assert rv.status_code == 200
+    # Now set capacity above maxCapacity; should fail
+    rv2 = client.put(
+        f"/api/vessels/{vessel_id}",
+        json={"capacity": 2000.0},
+    )
+    assert rv2.status_code == 400
+    assert "capacity must not exceed maxCapacity" in rv2.get_json()["error"]
+
+
 # --- Role-Based Route Separation Tests --- #
 
 

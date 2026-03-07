@@ -77,27 +77,15 @@ export default function Login() {
     );
   }
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50 px-4 py-8">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 px-4 py-8">
       <div className="w-full max-w-md">
         {/* Logo and Branding */}
-        <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center mb-4">
-            <svg
-              className="w-8 h-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">AquaCharge</h1>
-          <p className="text-gray-600 mt-2">Electric Marine Charging Platform</p>
+        <div className="flex flex-col items-center text-center mb-8">
+          <img
+            src="/aquacharge-logo.png"
+            alt="AquaCharge"
+            className="h-50 w-auto max-w-xs object-contain mx-auto group-data-[collapsible=icon]:max-w-none group-data-[collapsible=icon]:w-8"
+          />
         </div>
 
         {/* Login Form */}

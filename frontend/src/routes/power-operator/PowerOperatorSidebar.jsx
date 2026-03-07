@@ -56,20 +56,8 @@ export function PowerOperatorSidebar() {
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader className="flex flex-row items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:justify-center">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-green-600 to-emerald-600">
-          <svg
-            className="h-4 w-4 text-white"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg overflow-hidden">
+          <img src="/aquacharge-icon.png" alt="AquaCharge" className="h-11 w-11 object-contain" />
         </div>
         <div className="min-w-0 flex-1 overflow-hidden transition-[opacity,width] duration-200 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:flex-none">
           <h2 className="truncate text-base font-semibold text-sidebar-foreground">AquaCharge</h2>

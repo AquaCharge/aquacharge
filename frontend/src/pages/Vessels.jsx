@@ -23,7 +23,7 @@ export default function Vessels() {
       .finally(() => setLoading(false))
   }, [])
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-4 p-8 pt-6 bg-gradient-to-br from-blue-50 to-cyan-50">
       <PageTitle
         title="My Vessels"
         subtitle="Manage your vessels and their charging needs"

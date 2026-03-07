@@ -8,6 +8,7 @@ from api.contracts import contracts_bp
 from api.drevents import drevents_bp
 from api.auth import auth_bp
 from api.ports import ports_bp
+from api.vo_dashboard import vo_dashboard_bp
 
 
 def register_blueprints(app: Flask):
@@ -21,3 +22,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(drevents_bp, url_prefix="/api/drevents")
     app.register_blueprint(contracts_bp, url_prefix="/api/contracts")
     app.register_blueprint(ports_bp, url_prefix="/api/ports")
+    app.register_blueprint(vo_dashboard_bp, url_prefix="/api/vo")

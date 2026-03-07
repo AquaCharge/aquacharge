@@ -29,6 +29,7 @@ class User(BaseModel):
     type: int = UserType.VESSEL_OPERATOR.value
     active: bool = True
     orgId: Optional[str] = None
+    currentVesselId: Optional[str] = None
     createdAt: datetime = field(default_factory=datetime.now)
     updatedAt: Optional[datetime] = None
 

@@ -21,7 +21,6 @@ def get_vessels():
         vessels = dynamoDB_client.query_gsi(
             index_name="userId-index",
             key_condition_expression=Key("userId").eq(user_id),
-            expression_attribute_values={":userId": user_id},
         )
     else:
         vessels = dynamoDB_client.scan_items()

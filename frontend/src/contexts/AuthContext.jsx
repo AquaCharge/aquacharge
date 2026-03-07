@@ -97,6 +97,31 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    const token = localStorage.getItem("auth-token");
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    try {
+      const response = await fetch(getApiEndpoint("/api/auth/me"), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        localStorage.removeItem("auth-token");
+        localStorage.removeItem("user-data");
+        setUser(null);
+        return;
+      }
+      const userData = await response.json();
+      localStorage.setItem("user-data", JSON.stringify(userData));
+      setUser(userData);
+    } catch (error) {
+      console.error("Error refreshing user:", error);
+      setUser(null);
+    }
+  };
+
   const value = {
     user,
     isLoading,
@@ -104,6 +129,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

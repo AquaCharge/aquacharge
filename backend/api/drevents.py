@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from models.drevent import DREvent, EventStatus
 from middleware.auth import require_auth, require_role
-from datetime import datetime
+from datetime import datetime, timezone
 from db.dynamoClient import DynamoClient
 from decimal import Decimal
 from services.eligibility import EligibilityService
@@ -15,6 +15,50 @@ dynamoDB_client = DynamoClient(
 eligibility_service = EligibilityService()
 
 
+def convert_decimals(obj):
+    """Convert Decimal objects to float for JSON serialization."""
+    if isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: convert_decimals(value) for key, value in obj.items()}
+    if isinstance(obj, Decimal):
+        return float(obj)
+    return obj
+
+
+def serialize_drevent_item(event):
+    """Normalize a DREvent item from Dynamo for API responses."""
+    serialized = convert_decimals(dict(event))
+
+    for field in ("startTime", "endTime", "createdAt"):
+        value = serialized.get(field)
+        if isinstance(value, datetime):
+            serialized[field] = value.isoformat()
+
+    status = serialized.get("status")
+    if isinstance(status, EventStatus):
+        serialized["status"] = status.value
+
+    return serialized
+
+
+def sort_key_for_drevent(event):
+    start_time = event.get("startTime")
+    if isinstance(start_time, str):
+        try:
+            parsed = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            return datetime.max.replace(tzinfo=timezone.utc)
+    if isinstance(start_time, datetime):
+        if start_time.tzinfo is None:
+            return start_time.replace(tzinfo=timezone.utc)
+        return start_time.astimezone(timezone.utc)
+    return datetime.max.replace(tzinfo=timezone.utc)
+
+
 @drevents_bp.route("", methods=["GET"])
 @require_auth
 def get_drevents():
@@ -24,16 +68,14 @@ def get_drevents():
         status_filter = request.args.get("status")
         drevents = dynamoDB_client.scan_items()
 
-        # Filter events
         filtered_events = []
         for event in drevents:
-            if status_filter and event["status"] != status_filter:
+            normalized_event = serialize_drevent_item(event)
+            if status_filter and normalized_event.get("status") != status_filter:
                 continue
-            drevent = DREvent.from_dict(event)
-            filtered_events.append(drevent.to_dict())
+            filtered_events.append(normalized_event)
 
-        # Sort by start time (soonest first)
-        filtered_events.sort(key=lambda x: x["startTime"])
+        filtered_events.sort(key=sort_key_for_drevent)
 
         return jsonify(filtered_events), 200
 
@@ -52,8 +94,7 @@ def get_drevent_by_id(event_id):
         item = dynamoDB_client.get_item(key={"id": event_id})
         if not item:
             return jsonify({"error": "DR event not found"}), 404
-        drevent = DREvent.from_dict(item)
-        return jsonify(drevent.to_dict()), 200
+        return jsonify(serialize_drevent_item(item)), 200
     except Exception as e:
         return (
             jsonify({"error": "Failed to retrieve DR event", "details": str(e)}),
@@ -118,7 +159,7 @@ def create_drevent():
         # Store DR event
         dynamoDB_client.put_item(item=drevent.to_dict())
 
-        return jsonify(drevent.to_dict()), 201
+        return jsonify(convert_decimals(drevent.to_dict())), 201
 
     except Exception as e:
         return (
@@ -158,7 +199,7 @@ def update_drevent(event_id):
         # Store updated DR event
         dynamoDB_client.put_item(item=drevent.to_dict())
 
-        return jsonify(drevent.to_dict()), 200
+        return jsonify(convert_decimals(drevent.to_dict())), 200
 
     except Exception as e:
         return (

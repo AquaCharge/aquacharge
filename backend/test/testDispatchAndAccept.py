@@ -63,6 +63,10 @@ class InMemoryDREventRepo:
     def get_event(self, event_id):
         return self._store.get(event_id)
 
+    def update_event(self, event_id, update_data):
+        self._store[event_id].update(update_data)
+        return self._store[event_id]
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -98,13 +102,16 @@ def _pending_contract(vessel_id="vessel-abc", dr_event_id="dr-001"):
         "vesselId": vessel_id,
         "drEventId": dr_event_id,
         "vesselName": "Sea Breeze",
-        "energyAmount": 100.0,
+        "energyAmount": 0.0,
         "pricePerKwh": 0.18,
-        "totalValue": 18.0,
+        "totalValue": 0.0,
         "startTime": START,
         "endTime": END,
         "status": "pending",
         "terms": "Standard terms",
+        "committedPowerKw": None,
+        "operatorNotes": "",
+        "acceptedAt": None,
         "createdAt": "2026-03-07T00:00:00",
         "updatedAt": None,
         "createdBy": "pso-001",
@@ -172,7 +179,7 @@ class TestDispatchEvent:
         contracts = service.dispatch_event(DR_EVENT, eligible, caller_user_id="pso-001")
         assert len(contracts) == 2
 
-    def test_respects_max_participants_cap(self):
+    def test_dispatch_creates_contracts_for_all_eligible_vessels(self):
         event = {**DR_EVENT, "maxParticipants": 2}
         service = _make_service()
         eligible = [
@@ -181,9 +188,9 @@ class TestDispatchEvent:
             {"vesselId": "v3", "displayName": "Ferry C"},
         ]
         contracts = service.dispatch_event(event, eligible, caller_user_id="pso-001")
-        assert len(contracts) == 2
+        assert len(contracts) == 3
 
-    def test_energy_split_evenly_across_vessels(self):
+    def test_pending_offers_do_not_preallocate_event_energy(self):
         event = {**DR_EVENT, "targetEnergyKwh": 300.0, "maxParticipants": 3}
         service = _make_service()
         eligible = [
@@ -193,7 +200,8 @@ class TestDispatchEvent:
         ]
         contracts = service.dispatch_event(event, eligible, caller_user_id="pso-001")
         for contract in contracts:
-            assert abs(float(contract["energyAmount"]) - 100.0) < 0.01
+            assert float(contract["energyAmount"]) == pytest.approx(0.0)
+            assert float(contract["totalValue"]) == pytest.approx(0.0)
 
     def test_contracts_inherit_price_and_window_from_event(self):
         service = _make_service()
@@ -214,6 +222,36 @@ class TestDispatchEvent:
         service = _make_service()
         contracts = service.dispatch_event(DR_EVENT, [], caller_user_id="pso-001")
         assert contracts == []
+
+    def test_dispatch_skips_existing_contract_for_same_event_and_vessel(self):
+        existing_contract = {
+            **_pending_contract(vessel_id="v1"),
+            "id": "contract-existing",
+            "drEventId": DR_EVENT["id"],
+            "vesselName": "Ferry A",
+        }
+        service = _make_service(contracts=[existing_contract])
+        eligible = [
+            {"vesselId": "v1", "displayName": "Ferry A"},
+            {"vesselId": "v2", "displayName": "Ferry B"},
+        ]
+
+        contracts = service.dispatch_event(DR_EVENT, eligible, caller_user_id="pso-001")
+
+        assert len(contracts) == 1
+        assert contracts[0]["vesselId"] == "v2"
+
+    def test_dispatch_ignores_duplicate_eligible_rows_for_same_vessel(self):
+        service = _make_service()
+        eligible = [
+            {"vesselId": "v1", "displayName": "Ferry A"},
+            {"vesselId": "v1", "displayName": "Ferry A"},
+        ]
+
+        contracts = service.dispatch_event(DR_EVENT, eligible, caller_user_id="pso-001")
+
+        assert len(contracts) == 1
+        assert contracts[0]["vesselId"] == "v1"
 
     def test_created_by_is_set_to_caller(self):
         service = _make_service()
@@ -240,8 +278,15 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45, "operatorNotes": "Ready to discharge"},
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["committedPowerKw"] == 45
+        assert result["energyAmount"] == pytest.approx(180.0)
+        assert result["totalValue"] == pytest.approx(32.4)
 
     def test_accept_succeeds_when_existing_booking_does_not_overlap(self):
         service = _make_service(
@@ -250,7 +295,11 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
     def test_accept_rejected_when_vessel_has_overlapping_booking(self):
@@ -261,7 +310,11 @@ class TestScheduleConflictOnAccept:
             dr_event=DR_EVENT,
         )
         with pytest.raises(ContractServiceError) as exc_info:
-            service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
         assert exc_info.value.status_code == 409
         assert "conflict" in exc_info.value.message.lower()
 
@@ -275,7 +328,11 @@ class TestScheduleConflictOnAccept:
             dr_event=DR_EVENT,
         )
         # Should NOT raise — cancelled bookings are ignored
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
     def test_conflict_check_only_applies_to_same_vessel(self):
@@ -287,7 +344,11 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
 
@@ -305,7 +366,11 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         bookings = booking_repo.list_bookings()
         assert len(bookings) == 1
         booking = bookings[0]
@@ -320,7 +385,11 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         booking = booking_repo.list_bookings()[0]
         # Times should be within the same day as the contract
         assert "2026-03-10" in booking["startTime"]
@@ -335,7 +404,11 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([vessel]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert booking_repo.list_bookings()[0]["chargerType"] == "DC"
 
     def test_booking_id_stored_on_contract(self):
@@ -347,7 +420,11 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         saved_booking_id = booking_repo.list_bookings()[0]["id"]
         assert contract_repo.get_contract("contract-001")["bookingId"] == saved_booking_id
 
@@ -360,7 +437,11 @@ class TestDockReservationOnAccept:
             dr_event=DR_EVENT,
         )
         with pytest.raises(ContractServiceError) as exc_info:
-            service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
         assert exc_info.value.status_code == 409
         assert "dock" in exc_info.value.message.lower()
 
@@ -374,7 +455,11 @@ class TestDockReservationOnAccept:
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
         try:
-            service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
         except ContractServiceError:
             pass
         # Still only the original dock booking, nothing new added
@@ -390,7 +475,11 @@ class TestDockReservationOnAccept:
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
         try:
-            service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
         except ContractServiceError:
             pass
         assert contract_repo.get_contract("contract-001")["status"] == "pending"
@@ -402,7 +491,11 @@ class TestDockReservationOnAccept:
             dr_event=None,  # event not in repo
         )
         with pytest.raises(ContractServiceError) as exc_info:
-            service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
         assert exc_info.value.status_code == 404
 
     def test_booking_status_is_pending(self):
@@ -413,5 +506,45 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert booking_repo.list_bookings()[0]["status"] == BookingStatus.PENDING.value
+
+    def test_accept_rejects_commitment_above_max_discharge_rate(self):
+        low_rate_vessel = {**VESSEL, "maxDischargeRate": 30}
+        service = _make_service(
+            contracts=[_pending_contract()],
+            vessel=low_rate_vessel,
+            dr_event=DR_EVENT,
+        )
+
+        with pytest.raises(ContractServiceError) as exc_info:
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 45},
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "maximum discharge rate" in exc_info.value.message
+
+    def test_accept_transitions_dispatched_event_to_accepted(self):
+        dispatched_event = {**DR_EVENT, "status": "Dispatched"}
+        drevent_repo = InMemoryDREventRepo([dispatched_event])
+        service = ContractService(
+            repository=InMemoryContractRepo([_pending_contract()]),
+            booking_repository=InMemoryBookingRepo([]),
+            vessel_repository=InMemoryVesselRepo([VESSEL]),
+            drevent_repository=drevent_repo,
+        )
+
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
+
+        assert drevent_repo.get_event("dr-001")["status"] == "Accepted"

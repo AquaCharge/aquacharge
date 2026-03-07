@@ -3,11 +3,42 @@ from boto3.dynamodb.conditions import Key
 from db.dynamoClient import DynamoClient
 from middleware.auth import require_auth, require_role
 from services.contracts import ContractService, ContractServiceError, convert_decimals
+from services.eligibility import EligibilityService
 
 _vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
 
 contracts_bp = Blueprint("contracts", __name__)
 contract_service = ContractService()
+eligibility_service = EligibilityService()
+
+
+def _get_current_user_id():
+    caller = request.current_user or {}
+    user_id = caller.get("user_id") or caller.get("id")
+    return None if user_id is None else str(user_id)
+
+
+def _get_owned_vessel_ids(user_id: str):
+    vessels = _vessels_client.query_gsi(
+        index_name="userId-index",
+        key_condition_expression=Key("userId").eq(user_id),
+    )
+    return [v["id"] for v in vessels] if vessels else []
+
+
+def _get_current_eligibility(contract):
+    dr_event = contract_service.drevent_repository.get_event(contract.get("drEventId"))
+    if not dr_event:
+        return None
+
+    eligibility_result = eligibility_service.evaluate_vessels_for_event(
+        dr_event,
+        include_ineligible=True,
+    )
+    for vessel_result in eligibility_result.get("vessels", []):
+        if vessel_result.get("vesselId") == contract.get("vesselId"):
+            return vessel_result
+    return None
 
 
 @contracts_bp.route("", methods=["GET"])
@@ -153,17 +184,12 @@ def complete_contract(contract_id: str):
 def get_my_contracts():
     """Get contracts for the authenticated vessel operator"""
     try:
-        user_id = request.current_user.get("user_id")
+        user_id = _get_current_user_id()
         if user_id is None:
             return jsonify({"error": "Authentication required"}), 401
-        user_id = str(user_id)  # GSI partition key is STRING
         status_filter = request.args.get("status")
 
-        vessels = _vessels_client.query_gsi(
-            index_name="userId-index",
-            key_condition_expression=Key("userId").eq(user_id),
-        )
-        vessel_ids = [v["id"] for v in vessels] if vessels else []
+        vessel_ids = _get_owned_vessel_ids(user_id)
 
         all_contracts = []
         for vid in vessel_ids:
@@ -172,8 +198,22 @@ def get_my_contracts():
             )
             all_contracts.extend(vessel_contracts)
 
-        all_contracts.sort(key=lambda c: c["createdAt"], reverse=True)
-        return jsonify(convert_decimals(all_contracts)), 200
+        visible_contracts = []
+        for contract in all_contracts:
+            if contract.get("status") != "pending":
+                visible_contracts.append(contract)
+                continue
+
+            eligibility = _get_current_eligibility(contract)
+            if not eligibility or not eligibility.get("eligible"):
+                continue
+
+            contract_with_eligibility = dict(contract)
+            contract_with_eligibility["eligibility"] = eligibility
+            visible_contracts.append(contract_with_eligibility)
+
+        visible_contracts.sort(key=lambda c: c["createdAt"], reverse=True)
+        return jsonify(convert_decimals(visible_contracts)), 200
 
     except ContractServiceError as error:
         return jsonify({"error": error.message}), error.status_code
@@ -186,18 +226,25 @@ def get_my_contracts():
 def accept_contract(contract_id: str):
     """Accept a pending contract (vessel operator only)"""
     try:
-        user_id = request.current_user.get("user_id")
+        user_id = _get_current_user_id()
         if user_id is None:
             return jsonify({"error": "Authentication required"}), 401
-        user_id = str(user_id)  # GSI partition key is STRING
+        vessel_ids = _get_owned_vessel_ids(user_id)
 
-        vessels = _vessels_client.query_gsi(
-            index_name="userId-index",
-            key_condition_expression=Key("userId").eq(user_id),
+        contract_snapshot = contract_service.get_contract(contract_id)
+        eligibility = _get_current_eligibility(contract_snapshot)
+        if contract_snapshot.get("status") == "pending" and (
+            not eligibility or not eligibility.get("eligible")
+        ):
+            reasons = eligibility.get("reasons") if eligibility else None
+            reason_text = ", ".join(reasons) if reasons else "Vessel is no longer eligible"
+            return jsonify({"error": reason_text}), 409
+
+        contract = contract_service.accept_contract(
+            contract_id,
+            vessel_ids,
+            request.get_json(silent=True) or {},
         )
-        vessel_ids = [v["id"] for v in vessels] if vessels else []
-
-        contract = contract_service.accept_contract(contract_id, vessel_ids)
         return jsonify(convert_decimals({"message": "Contract accepted successfully", "contract": contract})), 200
 
     except ContractServiceError as error:
@@ -211,16 +258,10 @@ def accept_contract(contract_id: str):
 def decline_contract(contract_id: str):
     """Decline a pending contract (vessel operator only)"""
     try:
-        user_id = request.current_user.get("user_id")
+        user_id = _get_current_user_id()
         if user_id is None:
             return jsonify({"error": "Authentication required"}), 401
-        user_id = str(user_id)  # GSI partition key is STRING
-
-        vessels = _vessels_client.query_gsi(
-            index_name="userId-index",
-            key_condition_expression=Key("userId").eq(user_id),
-        )
-        vessel_ids = [v["id"] for v in vessels] if vessels else []
+        vessel_ids = _get_owned_vessel_ids(user_id)
 
         contract = contract_service.decline_contract(contract_id, vessel_ids)
         return jsonify(convert_decimals({"message": "Contract declined successfully", "contract": contract})), 200

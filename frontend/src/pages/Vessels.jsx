@@ -5,13 +5,25 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Ship } from 'lucide-react'
 import PageTitle from '@/components/shared/PageTitle'
 import { VesselCardGrid } from '@/components/vessel-operator/VesselCardGrid'
+import { useAuth } from '@/contexts/AuthContext'
+import { getApiEndpoint } from '@/config/api'
 export default function Vessels() {
+  const { user } = useAuth()
   const [vessels, setVessels] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetch('/api/vessels')
+    if (!user?.id) {
+      setVessels([])
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    fetch(getApiEndpoint(`/api/vessels?userId=${encodeURIComponent(user.id)}`))
       .then(response => {
         if (!response.ok) {
           throw new Error('Failed to fetch vessels')
@@ -21,7 +33,7 @@ export default function Vessels() {
       .then(setVessels)
       .catch(setError)
       .finally(() => setLoading(false))
-  }, [])
+  }, [user?.id])
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 bg-gradient-to-br from-blue-50 to-cyan-50">
       <PageTitle

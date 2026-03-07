@@ -235,6 +235,7 @@ Success response `200`:
 Forecast formula:
 
 - `forecastedSoc = currentSoc - (distanceKm * kwhPerKm)`
+- Eligibility resolves `currentSoc` from latest measurement telemetry first, then `vessel.currentSoc`, then derives it from `(capacity / maxCapacity) * 100` when telemetry is missing.
 
 Schedule compatibility rules:
 
@@ -547,18 +548,102 @@ existing `Contract` object model fields/status values.
 - Datetimes must be ISO-8601.
 - `endTime` must be strictly after `startTime`.
 - `bookingId` is optional and normalized from blank string to `null`.
+- `energyAmount` may be `0` for a pending contract offer before the vessel operator commits.
 
 ### Derived fields
 
-- `totalValue = energyAmount * pricePerKwh` on create.
+- `totalValue = energyAmount * pricePerKwh` when a committed energy amount is known.
 
 ### Status transition rules
 
 - Update accepts only values in `ContractStatus`.
 - Cancel endpoint allows only contracts currently in `pending`.
 - Complete endpoint allows only contracts currently in `pending` or `active`.
+- Accept endpoint requires `committedPowerKw` and accepts optional `operatorNotes`.
+- Successful accept stores `committedPowerKw`, `operatorNotes`, `acceptedAt`, and `bookingId`.
+- Successful accept derives `energyAmount` from `committedPowerKw * eventDurationHours`.
+- Successful accept recalculates `totalValue` from the committed energy contribution.
+- Successful accept transitions the contract from `pending` to `active`.
+- Successful accept transitions a DR event from `Dispatched` to `Accepted`.
 
 ### Filtering/sorting rules
 
 - `GET /api/contracts` supports `status` and `vesselId` filters.
 - Results are sorted by `createdAt` descending (newest first).
+
+## DR Event Dispatch Contract
+
+### `POST /api/drevents/{eventId}/dispatch`
+
+Dispatches a `Created` DR event to eligible vessels and issues one pending contract offer
+per eligible vessel.
+
+Rules:
+
+- Only power operators can dispatch.
+- Dispatch is idempotent for the same `drEventId` + `vesselId` pair.
+- Re-dispatching an already `Dispatched` event skips existing offers instead of duplicating them.
+- Events outside `Created` or `Dispatched` cannot generate new offers.
+- Pending offers are open invitations; they do not pre-allocate the event target energy across vessels.
+
+Success response `200`:
+
+```json
+{
+  "message": "DR event dispatched successfully",
+  "event": {
+    "id": "string",
+    "status": "Dispatched"
+  },
+  "eligibleVessels": 0,
+  "contractsCreated": 0,
+  "contractsSkipped": 0
+}
+```
+
+Error responses:
+
+- `400`: invalid lifecycle state for dispatch
+- `403`: caller is not a power operator
+- `404`: DR event not found
+- `500`: dispatch failure
+
+### `POST /api/contracts/{contractId}/accept`
+
+Request JSON:
+
+```json
+{
+  "committedPowerKw": 0.0,
+  "operatorNotes": "string (optional)"
+}
+```
+
+Success response `200`:
+
+```json
+{
+  "message": "Contract accepted successfully",
+  "contract": {
+    "id": "string",
+    "bookingId": "string | null",
+    "vesselId": "string",
+    "drEventId": "string",
+    "vesselName": "string",
+    "energyAmount": 0.0,
+    "pricePerKwh": 0.0,
+    "totalValue": 0.0,
+    "status": "active",
+    "committedPowerKw": 0.0,
+    "operatorNotes": "string",
+    "acceptedAt": "ISO-8601 datetime | null"
+  }
+}
+```
+
+Error responses:
+
+- `400`: missing/invalid `committedPowerKw`
+- `403`: caller does not own the vessel on the contract
+- `404`: contract, vessel, or DR event not found
+- `409`: booking or dock conflict blocks acceptance

@@ -11,16 +11,24 @@ import { Badge } from "@/components/ui/badge";
 // DynamoDB can return numbers as strings. This coerces all numeric fields
 // on the Vessel model so .toFixed() and arithmetic never throw.
 function parseVessel(v) {
+  const capacity = parseFloat(v.capacity) || 0
+  const maxCapacity = parseFloat(v.maxCapacity) || 0
+  const explicitSoc = parseFloat(v.currentSoc ?? v.soc)
+  const derivedSoc = maxCapacity > 0 ? (capacity / maxCapacity) * 100 : 0
+
   return {
     ...v,
-    capacity:         parseFloat(v.capacity)         || 0,
+    capacity,
+    maxCapacity,
     maxChargeRate:    parseFloat(v.maxChargeRate)     || 0,
     minChargeRate:    parseFloat(v.minChargeRate)     || 0,
     maxDischargeRate: parseFloat(v.maxDischargeRate)  || 0,
     rangeMeters:      parseFloat(v.rangeMeters)       || 0,
     latitude:         parseFloat(v.latitude)          || 0,
     longitude:        parseFloat(v.longitude)         || 0,
-    soc:              parseFloat(v.soc)               || 0,
+    soc:              Number.isFinite(explicitSoc)
+      ? explicitSoc
+      : Math.max(0, Math.min(100, derivedSoc)),
   };
 }
 
@@ -229,8 +237,6 @@ function VesselCard({ vessel, onSelect }) {
 export function VesselCardGrid({ vessels = [] }) {
   const [selected, setSelected] = useState(null);
   const parsed = vessels.map(parseVessel);
-  console.log(vessels)
-console.log(parsed)
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

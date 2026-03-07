@@ -30,6 +30,9 @@ class Contract(BaseModel):
     endTime: datetime = field(default_factory=datetime.now)
     status: str = ContractStatus.PENDING.value
     terms: str = ""
+    committedPowerKw: Optional[float] = None
+    operatorNotes: str = ""
+    acceptedAt: Optional[datetime] = None
     createdAt: datetime = field(default_factory=datetime.now)
     updatedAt: Optional[datetime] = None
     createdBy: str = ""  # User ID who created the contract
@@ -47,8 +50,8 @@ class Contract(BaseModel):
             raise ValueError("DR event ID is required")
         if not self.vesselName:
             raise ValueError("Vessel name is required")
-        if self.energyAmount <= 0:
-            raise ValueError("Energy amount must be greater than 0")
+        if self.energyAmount < 0:
+            raise ValueError("Energy amount must be greater than or equal to 0")
         if self.pricePerKwh <= 0:
             raise ValueError("Price per kWh must be greater than 0")
         if self.startTime >= self.endTime:
@@ -71,6 +74,10 @@ class Contract(BaseModel):
         if isinstance(data.get("createdAt"), str):
             data["createdAt"] = datetime.fromisoformat(
                 data["createdAt"].replace("Z", "+00:00")
+            )
+        if isinstance(data.get("acceptedAt"), str):
+            data["acceptedAt"] = datetime.fromisoformat(
+                data["acceptedAt"].replace("Z", "+00:00")
             )
         if isinstance(data.get("updatedAt"), str):
             data["updatedAt"] = datetime.fromisoformat(
@@ -102,6 +109,13 @@ class Contract(BaseModel):
             ),
             "status": self.status,
             "terms": self.terms,
+            "committedPowerKw": self.committedPowerKw,
+            "operatorNotes": self.operatorNotes,
+            "acceptedAt": (
+                self.acceptedAt.isoformat()
+                if self.acceptedAt and isinstance(self.acceptedAt, datetime)
+                else self.acceptedAt
+            ),
             "createdAt": (
                 self.createdAt.isoformat()
                 if isinstance(self.createdAt, datetime)

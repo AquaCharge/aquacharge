@@ -36,7 +36,7 @@ def get_vessel(vessel_id: str):
     if not vessel:
         return jsonify({"error": "Vessel not found"}), 404
 
-    return jsonify(vessel), 200 
+    return jsonify(vessel), 200
 
 
 @vessels_bp.route("", methods=["POST"])

@@ -1,5 +1,5 @@
 import { Home, Ship, MapPin, LogOut, User } from "lucide-react"
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 import {
@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  SidebarTrigger,
 } from "@/components/ui/sidebar"
 
 // Menu items.
@@ -36,34 +37,28 @@ const items = [
 
 export function AppSidebar() {
   const { user, logout } = useAuth()
+  const location = useLocation()
 
   const handleLogout = () => {
     logout()
   }
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <div className="flex items-center space-x-2 px-4 py-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg flex items-center justify-center">
-            <svg
-              className="w-4 h-4 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-          <span className="font-semibold text-lg">AquaCharge</span>
+    <Sidebar collapsible="icon" variant="floating">
+      <SidebarHeader className="flex flex-row items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:justify-center">
+        <div className="flex h-9 shrink-0 items-center justify-center overflow-hidden group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:flex-none">
+          <img
+            src="/aquacharge-logo.png"
+            alt="AquaCharge"
+            className="h-8 w-auto max-w-[10rem] object-contain object-left group-data-[collapsible=icon]:max-w-none group-data-[collapsible=icon]:w-8"
+          />
         </div>
+        <div className="min-w-0 flex-1 overflow-hidden transition-[opacity,width] duration-200 group-data-[collapsible=icon]:hidden group-data-[collapsible=icon]:flex-none">
+          <span className="truncate text-base font-semibold text-sidebar-foreground">AquaCharge</span>
+        </div>
+        <SidebarTrigger />
       </SidebarHeader>
-      
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
@@ -71,9 +66,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {items.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip={item.title} isActive={location.pathname === item.url}>
                     <Link to={item.url}>
-                      <item.icon />
+                      <item.icon className="size-4" />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -84,31 +79,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* User Info */}
               <SidebarMenuItem>
-                <div className="flex items-center space-x-2 px-3 py-2 rounded-md">
-                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {user?.displayName || 'Demo User'}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {user?.email || 'demo@aquacharge.com'}
-                    </p>
-                  </div>
-                </div>
+                <SidebarMenuButton asChild tooltip={user?.displayName || "Profile"}>
+                  <Link to="/profile">
+                    <User className="size-4" />
+                    <span>Profile</span>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
-              
-              {/* Logout Button */}
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleLogout}>
-                  <LogOut />
+                <SidebarMenuButton onClick={handleLogout} tooltip="Sign Out">
+                  <LogOut className="size-4" />
                   <span>Sign Out</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

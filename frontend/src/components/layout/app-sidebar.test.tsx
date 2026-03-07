@@ -42,6 +42,7 @@ vi.mock('@/components/ui/sidebar', () => ({
   SidebarFooter: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="sidebar-footer">{children}</div>
   ),
+  SidebarTrigger: () => <button type="button" aria-label="Toggle Sidebar">Toggle</button>,
 }))
 
 test('renders AppSidebar with navigation items', () => {
@@ -57,14 +58,13 @@ test('renders AppSidebar with navigation items', () => {
   expect(screen.getByText('Vessels')).toBeInTheDocument()
 })
 
-test('renders user section with default values when no user', () => {
+test('renders footer with Profile and Sign Out', () => {
   render(
     <BrowserRouter>
       <AppSidebar />
     </BrowserRouter>
   )
 
-  expect(screen.getByText('Demo User')).toBeInTheDocument()
-  expect(screen.getByText('demo@aquacharge.com')).toBeInTheDocument()
+  expect(screen.getByText('Profile')).toBeInTheDocument()
   expect(screen.getByText('Sign Out')).toBeInTheDocument()
 })

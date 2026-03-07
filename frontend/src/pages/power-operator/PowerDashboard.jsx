@@ -45,11 +45,11 @@ const formatTimestamp = (value) => {
 
 const buildPath = (points, width, height) => {
   if (points.length === 0) return ''
-  const maxValue = Math.max(...points.map((point) => point.v2gContributionKw), 1)
+  const maxValue = Math.max(...points.map((point) => point.powerKw), 1)
   return points
     .map((point, index) => {
       const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width
-      const y = height - (point.v2gContributionKw / maxValue) * height
+      const y = height - (point.powerKw / maxValue) * height
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
     })
     .join(' ')
@@ -75,6 +75,7 @@ const PowerDashboard = () => {
     region: '',
     periodHours: '24',
   })
+  const [selectedSeries, setSelectedSeries] = useState('all')
   const [snapshot, setSnapshot] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -140,12 +141,31 @@ const PowerDashboard = () => {
 
   const selectedEvent = snapshot?.selectedEvent
   const summary = snapshot?.summary || {}
-  const loadCurve = snapshot?.loadCurve || []
+  const dischargeSeries = snapshot?.dischargeSeries || { allVessels: [], vessels: [] }
   const vesselRates = snapshot?.vesselRates || []
   const availableEvents = snapshot?.availableEvents || []
-  const chartPath = buildPath(loadCurve, 540, 180)
-  const maxCurveValue = loadCurve.length
-    ? Math.max(...loadCurve.map((point) => point.v2gContributionKw), 0)
+
+  useEffect(() => {
+    if (selectedSeries === 'all') {
+      return
+    }
+    const stillExists = dischargeSeries.vessels.some((vessel) => vessel.vesselId === selectedSeries)
+    if (!stillExists) {
+      setSelectedSeries('all')
+    }
+  }, [dischargeSeries, selectedSeries])
+
+  const chartSeries = useMemo(() => {
+    if (selectedSeries === 'all') {
+      return dischargeSeries.allVessels || []
+    }
+    return dischargeSeries.vessels.find((vessel) => vessel.vesselId === selectedSeries)?.series || []
+  }, [dischargeSeries, selectedSeries])
+
+  const chartTitle = selectedSeries === 'all' ? 'All vessels in event' : `Vessel ${selectedSeries}`
+  const chartPath = buildPath(chartSeries, 540, 180)
+  const maxCurveValue = chartSeries.length
+    ? Math.max(...chartSeries.map((point) => point.powerKw), 0)
     : 0
 
   if (!canViewDashboard) {
@@ -166,7 +186,7 @@ const PowerDashboard = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">DR Monitoring Dashboard</h1>
           <p className="mt-2 text-gray-600">
-            Real-time visibility into dispatch progress, vessel discharge rates, and event telemetry.
+            Measurement analytics for the selected DR event, including event totals and vessel-level power contribution.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => {
@@ -312,22 +332,40 @@ const PowerDashboard = () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>V2G Contribution Curve</CardTitle>
-            <CardDescription>
-              Measurement-backed vessel contribution over time. Baseline grid load is not yet available in the current schema.
-            </CardDescription>
+          <CardHeader className="gap-4">
+            <div>
+              <CardTitle>Discharge Over Time</CardTitle>
+              <CardDescription>
+                View total event power contributed or inspect a single vessel&apos;s contribution.
+              </CardDescription>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="seriesScope">Series</Label>
+              <select
+                id="seriesScope"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={selectedSeries}
+                onChange={(event) => setSelectedSeries(event.target.value)}
+              >
+                <option value="all">All vessels in event</option>
+                {dischargeSeries.vessels.map((vessel) => (
+                  <option key={vessel.vesselId} value={vessel.vesselId}>
+                    {vessel.vesselId}
+                  </option>
+                ))}
+              </select>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-64 w-full" />
-            ) : loadCurve.length ? (
+            ) : chartSeries.length ? (
               <div className="space-y-3">
                 <svg
                   viewBox="0 0 560 220"
                   className="h-64 w-full rounded-lg border bg-gradient-to-br from-slate-50 to-white"
                   role="img"
-                  aria-label="V2G contribution curve"
+                  aria-label="Discharge over time"
                 >
                   <defs>
                     <linearGradient id="curve-fill" x1="0" x2="0" y1="0" y2="1">
@@ -349,25 +387,23 @@ const PowerDashboard = () => {
                       strokeLinecap="round"
                     />
                   ) : null}
-                  {loadCurve.map((point, index) => {
-                    const x = loadCurve.length === 1 ? 280 : 10 + (index / (loadCurve.length - 1)) * 540
-                    const y = 190 - (point.v2gContributionKw / Math.max(maxCurveValue, 1)) * 170
+                  {chartSeries.map((point, index) => {
+                    const x = chartSeries.length === 1 ? 280 : 10 + (index / (chartSeries.length - 1)) * 540
+                    const y = 190 - (point.powerKw / Math.max(maxCurveValue, 1)) * 170
                     return <circle key={point.timestamp} cx={x} cy={y} r="3.5" fill="#0f766e" />
                   })}
                   <text x="18" y="18" fill="#475569" fontSize="12">
                     Peak {formatNumber(maxCurveValue || 0)} kW
                   </text>
                   <text x="18" y="208" fill="#64748b" fontSize="12">
-                    {loadCurve[0] ? new Date(loadCurve[0].timestamp).toLocaleTimeString() : ''}
+                    {chartSeries[0] ? new Date(chartSeries[0].timestamp).toLocaleTimeString() : ''}
                   </text>
                   <text x="458" y="208" fill="#64748b" fontSize="12">
-                    {loadCurve.at(-1) ? new Date(loadCurve.at(-1).timestamp).toLocaleTimeString() : ''}
+                    {chartSeries.at(-1) ? new Date(chartSeries.at(-1).timestamp).toLocaleTimeString() : ''}
                   </text>
                 </svg>
                 <p className="text-xs text-slate-500">
-                  {snapshot?.baselineAvailable
-                    ? 'Baseline grid load data is included.'
-                    : 'Baseline grid load is unavailable in the current telemetry model, so this chart shows V2G contribution only.'}
+                  Showing {chartTitle.toLowerCase()} for the selected DR event and time window.
                 </p>
               </div>
             ) : (
@@ -400,7 +436,7 @@ const PowerDashboard = () => {
                 >
                   <div>
                     <div className="font-medium text-slate-900">{vessel.vesselId}</div>
-                    <div className="text-sm text-slate-600">Contract {vessel.contractId || 'unlinked'} · {formatTimestamp(vessel.timestamp)}</div>
+                    <div className="text-sm text-slate-600">{formatTimestamp(vessel.timestamp)}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 md:w-80">
                     <div>

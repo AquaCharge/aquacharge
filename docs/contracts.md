@@ -342,21 +342,32 @@ Success response `200`:
   "vesselRates": [
     {
       "vesselId": "string",
-      "contractId": "string | null",
       "dischargeRateKw": 0.0,
       "currentSoc": 0.0,
       "timestamp": "ISO-8601 datetime"
     }
   ],
-  "loadCurve": [
-    {
-      "timestamp": "ISO-8601 datetime",
-      "v2gContributionKw": 0.0,
-      "gridLoadWithoutV2GKw": null,
-      "gridLoadWithV2GKw": null
-    }
-  ],
-  "baselineAvailable": false,
+  "dischargeSeries": {
+    "allVessels": [
+      {
+        "timestamp": "ISO-8601 datetime",
+        "powerKw": 0.0
+      }
+    ],
+    "vessels": [
+      {
+        "vesselId": "string",
+        "currentSoc": 0.0,
+        "latestDischargeRateKw": 0.0,
+        "series": [
+          {
+            "timestamp": "ISO-8601 datetime",
+            "powerKw": 0.0
+          }
+        ]
+      }
+    ]
+  },
   "availableEvents": [
     {
       "id": "string",
@@ -377,9 +388,10 @@ Monitoring rules:
 
 - `totalEnergyDeliveredKwh` is the sum of measurement `energyKwh` values in the selected window
 - `vesselRates` use the latest measurement per vessel in the selected window
-- `vesselRates[].contractId` comes from measurement telemetry only and is not a DR event field
+- `dischargeSeries.allVessels` is the aggregate event power contribution over time
+- `dischargeSeries.vessels[].series` supports inspecting a single vessel's power contribution over time
 - `progressPercent = totalEnergyDeliveredKwh / selectedEvent.targetEnergyKwh * 100`
-- `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
+- No baseline grid load comparison is provided; the dashboard reports measurement analytics only
 - Empty datasets return a successful snapshot with `empty = true`
 
 ## Booking Service Rules

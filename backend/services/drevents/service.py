@@ -306,7 +306,8 @@ class DREventService:
 
         vessel_latest: Dict[str, Dict[str, Any]] = {}
         energy_delivered = 0.0
-        time_series: Dict[str, Dict[str, Any]] = {}
+        all_vessels_series: Dict[str, Dict[str, Any]] = {}
+        vessel_series_map: Dict[str, Dict[str, Dict[str, Any]]] = {}
         for measurement in measurements:
             energy_delivered += measurement["energyKwh"]
             vessel_id = measurement.get("vesselId")
@@ -315,16 +316,24 @@ class DREventService:
                 vessel_latest[vessel_id] = measurement
 
             bucket = measurement["timestamp"].replace(second=0, microsecond=0).isoformat()
-            bucket_item = time_series.setdefault(
+            bucket_item = all_vessels_series.setdefault(
                 bucket,
                 {
                     "timestamp": bucket,
-                    "v2gContributionKw": 0.0,
-                    "gridLoadWithoutV2GKw": None,
-                    "gridLoadWithV2GKw": None,
+                    "powerKw": 0.0,
                 },
             )
-            bucket_item["v2gContributionKw"] += measurement["powerKw"]
+            bucket_item["powerKw"] += measurement["powerKw"]
+
+            vessel_buckets = vessel_series_map.setdefault(vessel_id, {})
+            vessel_bucket = vessel_buckets.setdefault(
+                bucket,
+                {
+                    "timestamp": bucket,
+                    "powerKw": 0.0,
+                },
+            )
+            vessel_bucket["powerKw"] += measurement["powerKw"]
 
         vessel_rates = []
         for vessel_id, measurement in vessel_latest.items():
@@ -338,6 +347,20 @@ class DREventService:
                 }
             )
         vessel_rates.sort(key=lambda item: item["dischargeRateKw"], reverse=True)
+
+        vessels = []
+        for item in vessel_rates:
+            vessels.append(
+                {
+                    "vesselId": item["vesselId"],
+                    "currentSoc": item["currentSoc"],
+                    "latestDischargeRateKw": item["dischargeRateKw"],
+                    "series": sorted(
+                        vessel_series_map.get(item["vesselId"], {}).values(),
+                        key=lambda point: point["timestamp"],
+                    ),
+                }
+            )
 
         target_energy = float(selected_event.get("targetEnergyKwh", 0) or 0) if selected_event else 0.0
         progress_percent = round((energy_delivered / target_energy) * 100, 2) if target_energy > 0 else 0.0
@@ -382,8 +405,13 @@ class DREventService:
                     "targetEnergyKwh": round(target_energy, 2),
                 },
                 "vesselRates": vessel_rates,
-                "loadCurve": sorted(time_series.values(), key=lambda item: item["timestamp"]),
-                "baselineAvailable": False,
+                "dischargeSeries": {
+                    "allVessels": sorted(
+                        all_vessels_series.values(),
+                        key=lambda item: item["timestamp"],
+                    ),
+                    "vessels": vessels,
+                },
                 "availableEvents": available_events,
                 "empty": len(measurements) == 0,
                 "updatedAt": now.isoformat(),

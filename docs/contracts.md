@@ -220,6 +220,56 @@ Error JSON schema:
 - Model fields: `chargerType` (string), `capacity` (float, kWh), `maxCapacity` (float, kWh).
 - Validation: `capacity` must never exceed `maxCapacity` on create or update.
 - Required fields for create: `userId`, `displayName`, `vesselType`, `chargerType`, `capacity`, `maxCapacity`.
+## DR Events Endpoints
+
+### `GET /api/drevents`
+
+Query parameters:
+
+- `status` (optional): filter by event status string.
+
+Success response `200`:
+
+```json
+[
+  {
+    "id": "string",
+    "stationId": "string",
+    "pricePerKwh": 0.0,
+    "targetEnergyKwh": 0.0,
+    "maxParticipants": 0,
+    "startTime": "ISO-8601 datetime",
+    "endTime": "ISO-8601 datetime",
+    "status": "Created",
+    "details": {}
+  }
+]
+```
+
+### `POST /api/drevents`
+
+Request JSON:
+
+```json
+{
+  "stationId": "string",
+  "pricePerKwh": 0.0,
+  "targetEnergyKwh": 0.0,
+  "maxParticipants": 0,
+  "startTime": "ISO-8601 datetime",
+  "endTime": "ISO-8601 datetime",
+  "details": {}
+}
+```
+
+Success response `201`: created DREvent object.
+
+Error responses:
+
+- `400`: missing required field or invalid datetime
+- `401`: missing/invalid auth token
+- `403`: non-admin user
+- `500`: creation failure
 
 ## Booking Service Rules
 

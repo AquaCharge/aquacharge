@@ -48,7 +48,7 @@ export function AppSidebar() {
       <SidebarHeader className="flex flex-row items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3 group-data-[collapsible=icon]:justify-center">
         <div className="flex h-9 shrink-0 items-center justify-center overflow-hidden group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:flex-none">
           <img
-            src="/aquacharge-logo.png"
+            src="/aquacharge-icon.png"
             alt="AquaCharge"
             className="h-8 w-auto max-w-[10rem] object-contain object-left group-data-[collapsible=icon]:max-w-none group-data-[collapsible=icon]:w-8"
           />

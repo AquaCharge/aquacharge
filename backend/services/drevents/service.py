@@ -307,6 +307,7 @@ class DREventService:
         vessel_latest: Dict[str, Dict[str, Any]] = {}
         energy_delivered = 0.0
         time_series: Dict[str, Dict[str, Any]] = {}
+        vessel_series: Dict[str, Dict[str, Any]] = {}
         for measurement in measurements:
             energy_delivered += measurement["energyKwh"]
             vessel_id = measurement.get("vesselId")
@@ -319,12 +320,38 @@ class DREventService:
                 bucket,
                 {
                     "timestamp": bucket,
+                    "energyDischargedKwh": 0.0,
+                    "cumulativeEnergyDischargedKwh": 0.0,
                     "v2gContributionKw": 0.0,
                     "gridLoadWithoutV2GKw": None,
                     "gridLoadWithV2GKw": None,
                 },
             )
+            bucket_item["energyDischargedKwh"] += measurement["energyKwh"]
             bucket_item["v2gContributionKw"] += measurement["powerKw"]
+
+            if vessel_id:
+                vessel_item = vessel_series.setdefault(
+                    vessel_id,
+                    {
+                        "vesselId": vessel_id,
+                        "contractId": measurement.get("contractId"),
+                        "points": {},
+                    },
+                )
+                if measurement.get("contractId"):
+                    vessel_item["contractId"] = measurement.get("contractId")
+                point = vessel_item["points"].setdefault(
+                    bucket,
+                    {
+                        "timestamp": bucket,
+                        "energyDischargedKwh": 0.0,
+                        "cumulativeEnergyDischargedKwh": 0.0,
+                        "v2gContributionKw": 0.0,
+                    },
+                )
+                point["energyDischargedKwh"] += measurement["energyKwh"]
+                point["v2gContributionKw"] += measurement["powerKw"]
 
         vessel_rates = []
         for vessel_id, measurement in vessel_latest.items():
@@ -338,6 +365,35 @@ class DREventService:
                 }
             )
         vessel_rates.sort(key=lambda item: item["dischargeRateKw"], reverse=True)
+
+        vessel_curve = []
+        for vessel_id, series in vessel_series.items():
+            latest_measurement = vessel_latest.get(vessel_id, {})
+            points = sorted(series["points"].values(), key=lambda item: item["timestamp"])
+            cumulative_energy = 0.0
+            for point in points:
+                cumulative_energy += point["energyDischargedKwh"]
+                point["cumulativeEnergyDischargedKwh"] = round(cumulative_energy, 2)
+            vessel_curve.append(
+                {
+                    "vesselId": vessel_id,
+                    "contractId": series.get("contractId"),
+                    "currentSoc": round(float(latest_measurement.get("currentSOC", 0) or 0), 2),
+                    "latestDischargeRateKw": round(float(latest_measurement.get("powerKw", 0) or 0), 2),
+                    "totalEnergyDischargedKwh": round(sum(point["energyDischargedKwh"] for point in points), 2),
+                    "latestTimestamp": latest_measurement.get("timestamp").isoformat()
+                    if latest_measurement.get("timestamp")
+                    else None,
+                    "points": points,
+                }
+            )
+        vessel_curve.sort(key=lambda item: item["totalEnergyDischargedKwh"], reverse=True)
+
+        load_curve = sorted(time_series.values(), key=lambda item: item["timestamp"])
+        cumulative_energy = 0.0
+        for point in load_curve:
+            cumulative_energy += point["energyDischargedKwh"]
+            point["cumulativeEnergyDischargedKwh"] = round(cumulative_energy, 2)
 
         target_energy = float(selected_event.get("targetEnergyKwh", 0) or 0) if selected_event else 0.0
         progress_percent = round((energy_delivered / target_energy) * 100, 2) if target_energy > 0 else 0.0
@@ -382,7 +438,8 @@ class DREventService:
                     "targetEnergyKwh": round(target_energy, 2),
                 },
                 "vesselRates": vessel_rates,
-                "loadCurve": sorted(time_series.values(), key=lambda item: item["timestamp"]),
+                "vesselCurve": vessel_curve,
+                "loadCurve": load_curve,
                 "baselineAvailable": False,
                 "availableEvents": available_events,
                 "empty": len(measurements) == 0,

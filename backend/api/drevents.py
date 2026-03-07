@@ -4,12 +4,18 @@ from middleware.auth import require_auth, require_role
 from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
+from services.dr.dispatcher import _dispatch_loop
+from models.drevent import DREvent, EventStatus
+from db.dynamoClient import DynamoClient
 
 drevents_bp = Blueprint("drevents", __name__)
 
 contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
+
+
+dynamoDB_client = DynamoClient(table_name="aquacharge-drevents-dev", region_name="us-east-1")
 
 
 @drevents_bp.route("", methods=["GET"])
@@ -158,7 +164,7 @@ def dispatch_drevent(event_id):
         return jsonify({"error": "Failed to dispatch DR event", "details": str(error)}), 500
 
 
-@drevents_bp.route("/<event_id>", methods=["PUT"])
+@drevents_bp.route("/<event_id>/cancel", methods=["PUT"])
 @require_auth
 def update_drevent(event_id):
     """Update an existing DR event with lifecycle guards."""
@@ -171,3 +177,34 @@ def update_drevent(event_id):
             jsonify({"error": "Failed to update DR event", "details": str(error)}),
             500,
         )
+
+
+@drevents_bp.route("/<event_id>/start", methods=["POST"])
+@require_auth
+@require_role("ADMIN")
+def start_drevent(event_id):
+    """Start dispatching a DR event"""
+    try:
+
+        item = dynamoDB_client.get_item(key={"id": event_id})
+        if not item:
+            return jsonify({"error": "DR event not found"}), 404
+
+        drevent = DREvent.from_dict(item)
+
+        if drevent.status == EventStatus.CANCELLED.value:
+            return jsonify({"error": "Cannot start a cancelled event"}), 400
+
+        contracts_client = DynamoClient(table_name="aquacharge-contracts-dev", region_name="us-east-1")
+        valid_contracts = contracts_client.scan_items()
+        valid_contracts = [c for c in valid_contracts if c.get("drEventId") == drevent.id]
+
+        if not valid_contracts:
+            return jsonify({"error": "No valid contracts found for this event"}), 404
+
+        _dispatch_loop(event_id, valid_contracts, dynamoDB_client)
+
+        return jsonify({"message": f"Dispatch completed for event {event_id}"}), 200
+
+    except Exception as e:
+        return jsonify({"error": "Failed to start DR event", "details": str(e)}), 500

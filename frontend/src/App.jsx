@@ -8,7 +8,7 @@ import ForgotPassword from './pages/ForgotPassword'
 
 // Loading component
 const LoadingSpinner = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50">
+  <div className="min-h-screen flex items-center justify-center bg-gray-100">
     <div className="text-center">
       <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center mb-4">
         <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>

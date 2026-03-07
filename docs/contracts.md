@@ -215,6 +215,12 @@ Error JSON schema:
 }
 ```
 
+## Vessels
+
+- Model fields: `chargerType` (string), `capacity` (float, kWh), `maxCapacity` (float, kWh).
+- Validation: `capacity` must never exceed `maxCapacity` on create or update.
+- Required fields for create: `userId`, `displayName`, `vesselType`, `chargerType`, `capacity`, `maxCapacity`.
+
 ## Booking Service Rules
 
 The booking API is backed by a service-layer business rule engine (`BookingService`).

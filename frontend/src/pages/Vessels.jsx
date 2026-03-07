@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Ship } from 'lucide-react'
-
+import PageTitle from '@/components/shared/PageTitle'
+import { VesselCardGrid } from '@/components/vessel-operator/VesselCardGrid'
 export default function Vessels() {
   const [vessels, setVessels] = useState([])
   const [loading, setLoading] = useState(true)
@@ -22,16 +22,12 @@ export default function Vessels() {
       .catch(setError)
       .finally(() => setLoading(false))
   }, [])
-
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">My Vessels</h2>
-        <div className="flex items-center space-x-2">
-          <Ship className="h-6 w-6 text-blue-600" />
-        </div>
-      </div>
-      <Separator />
+      <PageTitle
+        title="My Vessels"
+        subtitle="Manage your vessels and their charging needs"
+      />
       
       <div className="space-y-4">
         {/* Overview Card */}
@@ -75,33 +71,7 @@ export default function Vessels() {
             </CardContent>
           </Card>
         ) : vessels.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {vessels.map((vessel) => (
-              <Card key={vessel.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Ship className="h-5 w-5 text-blue-600" />
-                    {vessel.name}
-                  </CardTitle>
-                  <CardDescription>Vessel ID: {vessel.id}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Battery Capacity</span>
-                      <Badge variant="outline">
-                        {vessel.capacity} {vessel.units}
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Status</span>
-                      <Badge variant="default">Active</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <VesselCardGrid vessels={vessels} />
         ) : (
           <Card>
             <CardContent className="pt-6">

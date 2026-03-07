@@ -81,7 +81,17 @@ def create_vessel():
             vessel_dict[key] = decimal.Decimal(str(vessel_dict[key]))
     dynamoDB_client.put_item(vessel_dict)
 
-    return jsonify(vessel.to_dict()), 201
+    # Prepare response: convert Decimal fields back to native types for JSON
+    resp = vessel.to_dict()
+    try:
+        if isinstance(resp.get("capacity"), decimal.Decimal):
+            resp["capacity"] = float(resp["capacity"])
+        if isinstance(resp.get("maxCapacity"), decimal.Decimal):
+            resp["maxCapacity"] = float(resp["maxCapacity"])
+    except Exception:
+        pass
+
+    return jsonify(resp), 201
 
 
 @vessels_bp.route("/<vessel_id>", methods=["PUT"])

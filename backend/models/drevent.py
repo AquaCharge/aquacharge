@@ -57,6 +57,7 @@ class DREvent(BaseModel):
     status: EventStatus = EventStatus.CREATED
     details: Optional[Dict[str, Any]] = None
     createdAt: Optional[str] = None
+    updatedAt: Optional[datetime] = None
 
     def validate(self):
         """Validate event data"""

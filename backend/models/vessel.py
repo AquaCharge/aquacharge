@@ -42,3 +42,17 @@ class Vessel(BaseModel):
             if key in normalized and normalized[key] is not None:
                 normalized[key] = float(normalized[key])
         return cls(**normalized)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a dict suitable for DynamoDB; ensure numeric capacity fields are Decimal."""
+        data = super().to_dict()
+        try:
+            from decimal import Decimal
+
+            if "capacity" in data and data["capacity"] is not None:
+                data["capacity"] = Decimal(str(data["capacity"]))
+            if "maxCapacity" in data and data["maxCapacity"] is not None:
+                data["maxCapacity"] = Decimal(str(data["maxCapacity"]))
+        except Exception:
+            pass
+        return data

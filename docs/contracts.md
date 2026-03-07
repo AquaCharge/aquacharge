@@ -264,12 +264,123 @@ Request JSON:
 
 Success response `201`: created DREvent object.
 
+Notes:
+
+- Creating a DR event does **not** create a contract.
+- Contracts are created later in the participation/acceptance flow.
+
 Error responses:
 
 - `400`: missing required field or invalid datetime
 - `401`: missing/invalid auth token
 - `403`: non-admin user
 - `500`: creation failure
+
+### `PUT /api/drevents/{eventId}`
+
+Update an existing DR event, including lifecycle transitions.
+
+Request JSON:
+
+```json
+{
+  "status": "Dispatched",
+  "pricePerKwh": 0.0,
+  "targetEnergyKwh": 0.0,
+  "maxParticipants": 0,
+  "startTime": "ISO-8601 datetime",
+  "endTime": "ISO-8601 datetime",
+  "details": {}
+}
+```
+
+Success response `200`: updated DREvent object.
+
+Lifecycle transition rules:
+
+- Primary lifecycle: `Created -> Dispatched -> Accepted -> Committed -> Active -> Completed -> Settled -> Archived`
+- Existing schema side-state: `Cancelled`
+- Allowed cancel transitions: `Created|Dispatched|Accepted|Committed|Active -> Cancelled`
+- Same-status updates are allowed.
+- Invalid transitions return `400`.
+
+### `GET /api/drevents/monitoring`
+
+Power-operator monitoring snapshot for the dashboard.
+
+Query parameters:
+
+- `eventId` (optional): filter to a specific DR event
+- `region` (optional): substring match against station `city`, `provinceOrState`, or `country`
+- `periodHours` (optional, default `24`): lookback window in hours, clamped to `1..168`
+
+Success response `200`:
+
+```json
+{
+  "filters": {
+    "eventId": "string | null",
+    "region": "string",
+    "periodHours": 24
+  },
+  "selectedEvent": {
+    "id": "string",
+    "stationId": "string",
+    "status": "Active",
+    "targetEnergyKwh": 0.0,
+    "startTime": "ISO-8601 datetime",
+    "endTime": "ISO-8601 datetime",
+    "regionLabel": "string"
+  },
+  "summary": {
+    "totalEnergyDeliveredKwh": 0.0,
+    "progressPercent": 0.0,
+    "activeVessels": 0,
+    "eventStatus": "Active",
+    "targetEnergyKwh": 0.0
+  },
+  "vesselRates": [
+    {
+      "vesselId": "string",
+      "contractId": "string | null",
+      "dischargeRateKw": 0.0,
+      "currentSoc": 0.0,
+      "timestamp": "ISO-8601 datetime"
+    }
+  ],
+  "loadCurve": [
+    {
+      "timestamp": "ISO-8601 datetime",
+      "v2gContributionKw": 0.0,
+      "gridLoadWithoutV2GKw": null,
+      "gridLoadWithV2GKw": null
+    }
+  ],
+  "baselineAvailable": false,
+  "availableEvents": [
+    {
+      "id": "string",
+      "stationId": "string",
+      "status": "Active",
+      "startTime": "ISO-8601 datetime",
+      "endTime": "ISO-8601 datetime",
+      "targetEnergyKwh": 0.0,
+      "regionLabel": "string"
+    }
+  ],
+  "empty": false,
+  "updatedAt": "ISO-8601 datetime"
+}
+```
+
+Monitoring rules:
+
+- `totalEnergyDeliveredKwh` is the sum of measurement `energyKwh` values in the selected window
+- `vesselRates` use the latest measurement per vessel in the selected window
+- `vesselRates[].contractId` comes from measurement telemetry only and is not a DR event field
+- `progressPercent = totalEnergyDeliveredKwh / selectedEvent.targetEnergyKwh * 100`
+- `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
+- Empty datasets return a successful snapshot with `empty = true`
 
 ## Booking Service Rules
 

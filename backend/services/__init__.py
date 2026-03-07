@@ -2,6 +2,7 @@
 
 from .bookings import BookingService, BookingServiceError
 from .contracts import ContractService, ContractServiceError
+from .drevents import DREventService, DREventServiceError
 from .eligibility import EligibilityService
 
 __all__ = [
@@ -9,5 +10,7 @@ __all__ = [
     "BookingServiceError",
     "ContractService",
     "ContractServiceError",
+    "DREventService",
+    "DREventServiceError",
     "EligibilityService",
 ]

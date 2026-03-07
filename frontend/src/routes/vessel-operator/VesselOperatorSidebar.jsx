@@ -1,4 +1,4 @@
-import { Home, Ship, MapPin, Calendar, Search, LogOut, User } from "lucide-react"
+import { Home, Ship, MapPin, Calendar, FileText, LogOut, User } from "lucide-react"
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -36,6 +36,11 @@ const vesselOperatorItems = [
     title: "My Vessels",
     url: "/my-vessels",
     icon: Ship,
+  },
+  {
+    title: "My Contracts",
+    url: "/my-contracts",
+    icon: FileText,
   },
 ]
 

@@ -37,17 +37,28 @@ const monitoringPayload = {
   vesselRates: [
     {
       vesselId: 'vessel-1',
-      contractId: 'contract-1',
       dischargeRateKw: 18,
       currentSoc: 54,
       timestamp: '2026-03-07T11:55:00+00:00',
     },
   ],
-  loadCurve: [
-    { timestamp: '2026-03-07T11:40:00+00:00', v2gContributionKw: 12, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
-    { timestamp: '2026-03-07T11:50:00+00:00', v2gContributionKw: 18, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
-  ],
-  baselineAvailable: false,
+  dischargeSeries: {
+    allVessels: [
+      { timestamp: '2026-03-07T11:40:00+00:00', powerKw: 12 },
+      { timestamp: '2026-03-07T11:50:00+00:00', powerKw: 18 },
+    ],
+    vessels: [
+      {
+        vesselId: 'vessel-1',
+        currentSoc: 54,
+        latestDischargeRateKw: 18,
+        series: [
+          { timestamp: '2026-03-07T11:40:00+00:00', powerKw: 12 },
+          { timestamp: '2026-03-07T11:50:00+00:00', powerKw: 18 },
+        ],
+      },
+    ],
+  },
   availableEvents: [
     {
       id: 'event-1',
@@ -97,6 +108,7 @@ describe('PowerDashboard', () => {
     })
     expect(screen.getByText('Dashboard refreshes automatically every 10 seconds.')).toBeInTheDocument()
     expect(screen.getByText('Individual Vessel Discharge Rates')).toBeInTheDocument()
+    expect(screen.getByText('Discharge Over Time')).toBeInTheDocument()
   })
 
   test('applies region filter and refetches dashboard data', async () => {
@@ -133,7 +145,10 @@ describe('PowerDashboard', () => {
             activeVessels: 0,
           },
           vesselRates: [],
-          loadCurve: [],
+          dischargeSeries: {
+            allVessels: [],
+            vessels: [],
+          },
           empty: true,
         }),
       })

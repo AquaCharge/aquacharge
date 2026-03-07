@@ -26,7 +26,7 @@ class Measurement(BaseModel):
         if "createdAt" in data and isinstance(data["createdAt"], str):
             data["createdAt"] = datetime.fromisoformat(data["createdAt"])
         return cls(**data)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         data = {
             "id": self.id,

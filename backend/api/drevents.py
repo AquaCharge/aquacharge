@@ -250,7 +250,7 @@ def start_drevent(event_id):
 
         contracts_client = DynamoClient(table_name="aquacharge-contracts-dev", region_name="us-east-1")
         valid_contracts = contracts_client.scan_items()
-        valid_contracts = [c for c in valid_contracts if c.get("stationId") == drevent.stationId]
+        valid_contracts = [c for c in valid_contracts if c.get("drEventId") == drevent.id]
 
         if not valid_contracts:
             return jsonify({"error": "No valid contracts found for this event"}), 404

@@ -1,7 +1,9 @@
 from db.dynamoClient import DynamoClient
 from services.battery_model.battery import BESS
+from models.measurments import Measurement
 from datetime import datetime, timezone
 import time
+from decimal import Decimal
 
 
 INTERVAL_SECONDS = 1 * 60  # 1 minutes
@@ -9,34 +11,30 @@ INTERVAL_HOURS = INTERVAL_SECONDS / 3600.0
 
 
 def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: DynamoClient):
-    """
-    Core 5-minute dispatch loop. Runs in a background thread.
 
-    Each iteration:
-      1. Skip vessels that have hit the SOC floor.
-      2. Run the battery model to calculate energy transfer.
-      3. Apply the transfer to the in-memory BESS state.
-      4. Write an energy measurement to DynamoDB.
-      5. Update the vessel's SOC in DynamoDB.
+    # Prepare clients for vessels and measurements
+    vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
+    measurements_client = DynamoClient(table_name="aquacharge-measurements-dev", region_name="us-east-1")
 
-    Stops when:
-      - stop_event is set (triggered by the /stop endpoint), OR
-      - All vessels have hit the SOC floor.
-    """
-
-    # Build BESS instances keyed by contract id
-    bess_map: dict[str, BESS] = {
-        c["id"]: BESS(c["_vessel"]) for c in valid_contracts
-    }
-    contract_map: dict[str, dict] = {c["id"]: c for c in valid_contracts}
+    # Build BESS instances keyed by contract id by loading the vessel record for each contract
+    bess_map: dict[str, BESS] = {}
+    contract_map: dict[str, dict] = {}
+    for c in valid_contracts:
+        contract_id = c.get("id")
+        vessel_id = c.get("vesselId")
+        if not contract_id or not vessel_id:
+            continue
+        vessel = vessels_client.get_item(key={"id": vessel_id})
+        if not vessel:
+            print(f"[DR {event_id}] Vessel record not found for contract {contract_id}, skipping.")
+            continue
+        bess_map[contract_id] = BESS(vessel)
+        contract_map[contract_id] = c
 
     # Update event status → ACTIVE
     dynamo_client.update_item(
-        "DREvents",
-        {"id": event_id},
-        update_expr="SET #s = :s, updatedAt = :t",
-        expr_names={"#s": "status"},
-        expr_values={":s": "ACTIVE", ":t": datetime.now(timezone.utc).isoformat()},
+        key={"id": event_id},
+        update_data={"status": "ACTIVE", "updatedAt": datetime.now(timezone.utc).isoformat()},
     )
 
     iteration = 0
@@ -63,27 +61,28 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
             # Apply transfer to in-memory battery state
             bess.apply_transfer(transfer)
 
-            # Write measurement to DynamoDB
-            dynamo_client.put_item(
-                "DRMeasurements",
-                {
-                    "id": f"{event_id}#{contract_id}#{iteration}",
-                    "vesselId": bess.vessel_id,
-                    "contractId": contract_id,
-                    "timestamp": now.isoformat(),
-                    "energyDelivered": round(energy_delivered, 4),  # kWh
-                    "dischargeSetpoint": round(discharge_setpoint, 4),  # kW
-                    "socPercent": round(bess.soc_percent, 2),  # %
-                },
+            meas = Measurement(
+                vesselId=bess.vessel_id,
+                contractId=contract_id,
+                drEventId=event_id,
+                timestamp=now,
+                energyKwh=energy_delivered,
+                powerKw=discharge_setpoint,
+                currentSOC=bess.soc_percent,
             )
 
-            # Persist updated SOC back to the vessel record
-            dynamo_client.update_item(
-                "Vessels",
-                {"id": bess.vessel_id},
-                update_expr="SET currentSoc = :s, updatedAt = :t",
-                expr_names={},
-                expr_values={":s": round(bess.soc, 4), ":t": now.isoformat()},
+            # Write measurement to measurements table
+            measurements_client.put_item(meas.to_dict())
+
+            # Persist updated SOC back to the vessel record (use Decimal for DynamoDB)
+            try:
+                capacity_decimal = Decimal(str(round(bess.soc, 4)))
+            except Exception:
+                capacity_decimal = Decimal("0")
+
+            vessels_client.update_item(
+                key={"id": bess.vessel_id},
+                update_data={"capacity": capacity_decimal, "updatedAt": now.isoformat()},
             )
 
             if bess.at_floor:

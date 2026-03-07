@@ -20,6 +20,27 @@ class EventStatus(Enum):
     ARCHIVED = "Archived"
 
 
+def parse_event_status(value: Any) -> EventStatus:
+    if isinstance(value, EventStatus):
+        return value
+    if not isinstance(value, str):
+        raise ValueError(f"{value!r} is not a valid EventStatus")
+
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{value!r} is not a valid EventStatus")
+
+    try:
+        return EventStatus(normalized)
+    except ValueError:
+        pass
+
+    try:
+        return EventStatus[normalized.upper()]
+    except KeyError as error:
+        raise ValueError(f"{value!r} is not a valid EventStatus") from error
+
+
 @dataclass
 class DREvent(BaseModel):
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -65,8 +86,8 @@ class DREvent(BaseModel):
             normalized["createdAt"] = datetime.fromisoformat(
                 normalized["createdAt"].replace("Z", "+00:00")
             )
-        if isinstance(normalized.get("status"), str):
-            normalized["status"] = EventStatus(normalized["status"])
+        if "status" in normalized:
+            normalized["status"] = parse_event_status(normalized["status"])
 
         allowed_fields = {field_definition.name for field_definition in fields(cls)}
         filtered = {

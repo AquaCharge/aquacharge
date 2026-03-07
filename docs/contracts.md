@@ -348,9 +348,28 @@ Success response `200`:
       "timestamp": "ISO-8601 datetime"
     }
   ],
+  "vesselCurve": [
+    {
+      "vesselId": "string",
+      "contractId": "string | null",
+      "currentSoc": 0.0,
+      "latestDischargeRateKw": 0.0,
+      "latestTimestamp": "ISO-8601 datetime | null",
+      "points": [
+        {
+          "timestamp": "ISO-8601 datetime",
+          "energyDischargedKwh": 0.0,
+          "cumulativeEnergyDischargedKwh": 0.0,
+          "v2gContributionKw": 0.0
+        }
+      ]
+    }
+  ],
   "loadCurve": [
     {
       "timestamp": "ISO-8601 datetime",
+      "energyDischargedKwh": 0.0,
+      "cumulativeEnergyDischargedKwh": 0.0,
       "v2gContributionKw": 0.0,
       "gridLoadWithoutV2GKw": null,
       "gridLoadWithV2GKw": null
@@ -378,6 +397,9 @@ Monitoring rules:
 - `totalEnergyDeliveredKwh` is the sum of measurement `energyKwh` values in the selected window
 - `vesselRates` use the latest measurement per vessel in the selected window
 - `vesselRates[].contractId` comes from measurement telemetry only and is not a DR event field
+- `vesselCurve` provides a per-vessel time series derived from the same measurement window for dashboard filtering
+- `loadCurve[].energyDischargedKwh` and `vesselCurve[].points[].energyDischargedKwh` represent discharged energy per time bucket
+- `loadCurve[].cumulativeEnergyDischargedKwh` and `vesselCurve[].points[].cumulativeEnergyDischargedKwh` represent cumulative discharged energy over the selected window
 - `progressPercent = totalEnergyDeliveredKwh / selectedEvent.targetEnergyKwh * 100`
 - `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
 - Empty datasets return a successful snapshot with `empty = true`

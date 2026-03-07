@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Gauge, MapPin, RefreshCw, Ship, Zap } from 'lucide-react'
+import { Activity, Gauge, LineChart, MapPin, RefreshCw, Ship, Zap } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,16 +43,48 @@ const formatTimestamp = (value) => {
   return date.toLocaleString()
 }
 
+const getSeriesValue = (point) =>
+  Number(
+    point?.cumulativeEnergyDischargedKwh
+      ?? point?.energyDischargedKwh
+      ?? point?.v2gContributionKw
+      ?? 0
+  )
+
 const buildPath = (points, width, height) => {
   if (points.length === 0) return ''
-  const maxValue = Math.max(...points.map((point) => point.v2gContributionKw), 1)
+  const maxValue = Math.max(...points.map(getSeriesValue), 1)
   return points
     .map((point, index) => {
       const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width
-      const y = height - (point.v2gContributionKw / maxValue) * height
+      const y = height - (getSeriesValue(point) / maxValue) * height
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
     })
     .join(' ')
+}
+
+const getCurveBounds = (points) => {
+  const maxValue = points.length ? Math.max(...points.map(getSeriesValue), 0) : 0
+  const minValue = points.length ? Math.min(...points.map(getSeriesValue), 0) : 0
+  return {
+    maxValue,
+    minValue: Math.min(minValue, 0),
+    valueRange: Math.max(maxValue - Math.min(minValue, 0), 1),
+  }
+}
+
+const getPointCoordinates = (point, pointIndex, points, width, height, minValue, valueRange) => {
+  const x = points.length === 1 ? width / 2 : (pointIndex / (points.length - 1)) * width
+  const normalizedValue = (getSeriesValue(point) - minValue) / valueRange
+  const y = height - normalizedValue * height
+  return { x, y }
+}
+
+const getTickValues = (maxValue, minValue) => {
+  const top = Math.max(maxValue, 0)
+  const bottom = Math.min(minValue, 0)
+  const mid = bottom + (top - bottom) / 2
+  return [top, mid, bottom]
 }
 
 const MetricCard = ({ title, value, helper, icon: Icon, loading }) => (
@@ -78,6 +110,7 @@ const PowerDashboard = () => {
   const [snapshot, setSnapshot] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedCurveId, setSelectedCurveId] = useState('all')
 
   const authToken = localStorage.getItem('auth-token')
   const canViewDashboard = user?.type_name === 'POWER_OPERATOR'
@@ -142,11 +175,31 @@ const PowerDashboard = () => {
   const summary = snapshot?.summary || {}
   const loadCurve = snapshot?.loadCurve || []
   const vesselRates = snapshot?.vesselRates || []
+  const vesselCurve = snapshot?.vesselCurve || []
   const availableEvents = snapshot?.availableEvents || []
-  const chartPath = buildPath(loadCurve, 540, 180)
-  const maxCurveValue = loadCurve.length
-    ? Math.max(...loadCurve.map((point) => point.v2gContributionKw), 0)
-    : 0
+  const selectedSeries = selectedCurveId === 'all'
+    ? loadCurve
+    : vesselCurve.find((series) => series.vesselId === selectedCurveId)?.points || []
+  const selectedCurveMeta = selectedCurveId === 'all'
+    ? null
+    : vesselCurve.find((series) => series.vesselId === selectedCurveId) || null
+  const chartPath = buildPath(selectedSeries, 540, 180)
+  const { maxValue: maxCurveValue, minValue: minCurveValue, valueRange } = getCurveBounds(selectedSeries)
+  const tickValues = getTickValues(maxCurveValue, minCurveValue)
+  const graphSummaryLabel = selectedCurveMeta
+    ? `Filtered to ${selectedCurveMeta.vesselId}`
+    : `Aggregate across ${vesselRates.length} vessels`
+  const latestEnergyValue = selectedSeries.at(-1)?.cumulativeEnergyDischargedKwh
+    ?? selectedSeries.at(-1)?.energyDischargedKwh
+    ?? 0
+
+  useEffect(() => {
+    if (selectedCurveId === 'all') return
+    const stillExists = vesselCurve.some((series) => series.vesselId === selectedCurveId)
+    if (!stillExists) {
+      setSelectedCurveId('all')
+    }
+  }, [selectedCurveId, vesselCurve])
 
   if (!canViewDashboard) {
     return (
@@ -313,61 +366,133 @@ const PowerDashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>V2G Contribution Curve</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <LineChart className="h-5 w-5" />
+              Energy Discharged Over Time
+            </CardTitle>
             <CardDescription>
-              Measurement-backed vessel contribution over time. Baseline grid load is not yet available in the current schema.
+              Measurement-backed discharged energy, aggregated by default and filterable by vessel. Baseline grid load is not yet available in the current schema.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-64 w-full" />
-            ) : loadCurve.length ? (
-              <div className="space-y-3">
-                <svg
-                  viewBox="0 0 560 220"
-                  className="h-64 w-full rounded-lg border bg-gradient-to-br from-slate-50 to-white"
-                  role="img"
-                  aria-label="V2G contribution curve"
-                >
-                  <defs>
-                    <linearGradient id="curve-fill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#0f766e" stopOpacity="0.22" />
-                      <stop offset="100%" stopColor="#0f766e" stopOpacity="0.04" />
-                    </linearGradient>
-                  </defs>
-                  <line x1="10" y1="190" x2="550" y2="190" stroke="#cbd5e1" strokeWidth="1" />
-                  <line x1="10" y1="20" x2="10" y2="190" stroke="#cbd5e1" strokeWidth="1" />
-                  {chartPath ? <path d={`${chartPath} L 540 180 L 20 180 Z`} fill="url(#curve-fill)" transform="translate(10,10)" /> : null}
-                  {chartPath ? (
-                    <path
-                      d={chartPath}
-                      transform="translate(10,10)"
-                      fill="none"
-                      stroke="#0f766e"
-                      strokeWidth="3"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
-                  ) : null}
-                  {loadCurve.map((point, index) => {
-                    const x = loadCurve.length === 1 ? 280 : 10 + (index / (loadCurve.length - 1)) * 540
-                    const y = 190 - (point.v2gContributionKw / Math.max(maxCurveValue, 1)) * 170
-                    return <circle key={point.timestamp} cx={x} cy={y} r="3.5" fill="#0f766e" />
-                  })}
-                  <text x="18" y="18" fill="#475569" fontSize="12">
-                    Peak {formatNumber(maxCurveValue || 0)} kW
-                  </text>
-                  <text x="18" y="208" fill="#64748b" fontSize="12">
-                    {loadCurve[0] ? new Date(loadCurve[0].timestamp).toLocaleTimeString() : ''}
-                  </text>
-                  <text x="458" y="208" fill="#64748b" fontSize="12">
-                    {loadCurve.at(-1) ? new Date(loadCurve.at(-1).timestamp).toLocaleTimeString() : ''}
-                  </text>
-                </svg>
+            ) : (selectedSeries.length || vesselCurve.length) ? (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                  <div className="grid gap-3 sm:grid-cols-3 xl:flex-1">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Scope</div>
+                      <div className="mt-1 text-sm font-semibold leading-5 text-slate-900">{graphSummaryLabel}</div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Peak</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">{formatNumber(maxCurveValue || 0, 2)} kWh</div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Latest</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {selectedCurveMeta
+                          ? `${formatNumber(selectedCurveMeta.totalEnergyDischargedKwh || latestEnergyValue, 2)} kWh`
+                          : `${formatNumber(latestEnergyValue, 2)} kWh total`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 xl:w-72">
+                    <Label htmlFor="curveFilter">Graph Filter</Label>
+                    <select
+                      id="curveFilter"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={selectedCurveId}
+                      onChange={(event) => setSelectedCurveId(event.target.value)}
+                    >
+                      <option value="all">All vessels</option>
+                      {vesselCurve.map((series) => (
+                        <option key={series.vesselId} value={series.vesselId}>
+                          {series.vesselId} · {formatNumber(series.totalEnergyDischargedKwh || 0, 2)} kWh
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-[linear-gradient(180deg,_rgba(248,250,252,0.92),_rgba(255,255,255,1))] p-4">
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {selectedCurveMeta ? selectedCurveMeta.vesselId : 'All participating vessels'}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {selectedCurveMeta ? `Contract ${selectedCurveMeta.contractId || 'unlinked'}` : 'Aggregate discharged energy'}
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {selectedSeries[0] ? new Date(selectedSeries[0].timestamp).toLocaleTimeString() : ''}
+                      {' '}to{' '}
+                      {selectedSeries.at(-1) ? new Date(selectedSeries.at(-1).timestamp).toLocaleTimeString() : ''}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
+                    <div className="flex h-72 flex-col justify-between pb-8 pr-1 text-[11px] font-medium text-slate-500">
+                      {tickValues.map((tick) => (
+                        <span key={tick}>{formatNumber(tick, 1)} kWh</span>
+                      ))}
+                    </div>
+                    <svg
+                      viewBox="0 0 560 220"
+                      className="h-72 w-full overflow-visible"
+                      role="img"
+                      aria-label="Energy discharged over time"
+                    >
+                      <defs>
+                        <linearGradient id="curve-fill" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#0f766e" stopOpacity="0.18" />
+                          <stop offset="100%" stopColor="#0f766e" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      {[0, 1, 2].map((gridLine) => {
+                        const y = 20 + gridLine * 85
+                        return <line key={gridLine} x1="10" y1={y} x2="550" y2={y} stroke="#dbe4ee" strokeDasharray="4 8" strokeWidth="1" />
+                      })}
+                      <line x1="10" y1="190" x2="550" y2="190" stroke="#94a3b8" strokeWidth="1" />
+                      <line x1="10" y1="20" x2="10" y2="190" stroke="#cbd5e1" strokeWidth="1" />
+                      {chartPath ? <path d={`${chartPath} L 540 180 L 20 180 Z`} fill="url(#curve-fill)" transform="translate(10,10)" /> : null}
+                      {chartPath ? (
+                        <path
+                          d={chartPath}
+                          transform="translate(10,10)"
+                          fill="none"
+                          stroke="#0f766e"
+                          strokeWidth="3"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                        />
+                      ) : null}
+                      {selectedSeries.map((point, index) => {
+                        const { x, y } = getPointCoordinates(point, index, selectedSeries, 540, 170, minCurveValue, valueRange)
+                        return (
+                          <g key={point.timestamp}>
+                            <circle cx={10 + x} cy={10 + y} r="4" fill="#0f766e" />
+                            <circle cx={10 + x} cy={10 + y} r="7.5" fill="#0f766e" fillOpacity="0.10" />
+                          </g>
+                        )
+                      })}
+                      {selectedSeries[0] ? (
+                        <text x="10" y="214" fill="#64748b" fontSize="12">
+                          {new Date(selectedSeries[0].timestamp).toLocaleTimeString()}
+                        </text>
+                      ) : null}
+                      {selectedSeries.at(-1) ? (
+                        <text x="442" y="214" fill="#64748b" fontSize="12">
+                          {new Date(selectedSeries.at(-1).timestamp).toLocaleTimeString()}
+                        </text>
+                      ) : null}
+                    </svg>
+                  </div>
+                </div>
                 <p className="text-xs text-slate-500">
                   {snapshot?.baselineAvailable
                     ? 'Baseline grid load data is included.'
-                    : 'Baseline grid load is unavailable in the current telemetry model, so this chart shows V2G contribution only.'}
+                    : 'Baseline grid load is unavailable in the current telemetry model, so this chart shows discharged energy only.'}
                 </p>
               </div>
             ) : (
@@ -379,49 +504,6 @@ const PowerDashboard = () => {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Individual Vessel Discharge Rates</CardTitle>
-          <CardDescription>Latest telemetry for each participating vessel in the selected window.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((row) => (
-                <Skeleton key={row} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : vesselRates.length ? (
-            <div className="space-y-3">
-              {vesselRates.map((vessel) => (
-                <div
-                  key={vessel.vesselId}
-                  className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <div className="font-medium text-slate-900">{vessel.vesselId}</div>
-                    <div className="text-sm text-slate-600">Contract {vessel.contractId || 'unlinked'} · {formatTimestamp(vessel.timestamp)}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 md:w-80">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-500">Discharge Rate</div>
-                      <div className="font-semibold text-slate-900">{formatNumber(vessel.dischargeRateKw, 2)} kW</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-slate-500">Current SOC</div>
-                      <div className="font-semibold text-slate-900">{formatNumber(vessel.currentSoc, 1)}%</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed p-6 text-sm text-slate-600">
-              No vessel discharge measurements matched the current filters.
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

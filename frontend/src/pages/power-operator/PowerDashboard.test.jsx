@@ -43,9 +43,23 @@ const monitoringPayload = {
       timestamp: '2026-03-07T11:55:00+00:00',
     },
   ],
+  vesselCurve: [
+    {
+      vesselId: 'vessel-1',
+      contractId: 'contract-1',
+      currentSoc: 54,
+      latestDischargeRateKw: 18,
+      totalEnergyDischargedKwh: 30,
+      latestTimestamp: '2026-03-07T11:55:00+00:00',
+      points: [
+        { timestamp: '2026-03-07T11:40:00+00:00', energyDischargedKwh: 12, cumulativeEnergyDischargedKwh: 12, v2gContributionKw: 12 },
+        { timestamp: '2026-03-07T11:50:00+00:00', energyDischargedKwh: 18, cumulativeEnergyDischargedKwh: 30, v2gContributionKw: 18 },
+      ],
+    },
+  ],
   loadCurve: [
-    { timestamp: '2026-03-07T11:40:00+00:00', v2gContributionKw: 12, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
-    { timestamp: '2026-03-07T11:50:00+00:00', v2gContributionKw: 18, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
+    { timestamp: '2026-03-07T11:40:00+00:00', energyDischargedKwh: 12, cumulativeEnergyDischargedKwh: 12, v2gContributionKw: 12, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
+    { timestamp: '2026-03-07T11:50:00+00:00', energyDischargedKwh: 18, cumulativeEnergyDischargedKwh: 30, v2gContributionKw: 18, gridLoadWithoutV2GKw: null, gridLoadWithV2GKw: null },
   ],
   baselineAvailable: false,
   availableEvents: [
@@ -96,7 +110,9 @@ describe('PowerDashboard', () => {
       )
     })
     expect(screen.getByText('Dashboard refreshes automatically every 10 seconds.')).toBeInTheDocument()
-    expect(screen.getByText('Individual Vessel Discharge Rates')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Graph Filter')).toBeInTheDocument()
+    expect(await screen.findByText('Aggregate across 1 vessels')).toBeInTheDocument()
+    expect(await screen.findByText('30.00 kWh total')).toBeInTheDocument()
   })
 
   test('applies region filter and refetches dashboard data', async () => {
@@ -133,6 +149,7 @@ describe('PowerDashboard', () => {
             activeVessels: 0,
           },
           vesselRates: [],
+          vesselCurve: [],
           loadCurve: [],
           empty: true,
         }),
@@ -142,6 +159,18 @@ describe('PowerDashboard', () => {
     render(<PowerDashboard />)
 
     expect(await screen.findByText('No telemetry has been recorded in the selected time window.')).toBeInTheDocument()
-    expect(screen.getByText('No vessel discharge measurements matched the current filters.')).toBeInTheDocument()
+  })
+
+  test('filters the graph to a selected vessel curve', async () => {
+    const user = userEvent.setup()
+    render(<PowerDashboard />)
+
+    await screen.findByText('DR Monitoring Dashboard')
+    const curveFilter = await screen.findByLabelText('Graph Filter')
+    await user.selectOptions(curveFilter, 'vessel-1')
+
+    expect(screen.getByText('Filtered to vessel-1')).toBeInTheDocument()
+    expect(screen.getByText('Contract contract-1')).toBeInTheDocument()
+    expect(screen.getAllByText('30.00 kWh').length).toBeGreaterThan(0)
   })
 })

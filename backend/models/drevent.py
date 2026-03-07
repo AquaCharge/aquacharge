@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
@@ -38,7 +38,6 @@ class DREvent(BaseModel):
     createdAt: Optional[str] = None
     updatedAt: Optional[datetime] = None
 
-    @classmethod
     def validate(self):
         """Validate event data"""
         if self.targetEnergyKwh <= 0:
@@ -53,28 +52,37 @@ class DREvent(BaseModel):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]):
         """Create Contract instance from dictionary"""
+        normalized = dict(data)
         # Handle datetime parsing
-        if isinstance(data.get("startTime"), str):
-            data["startTime"] = datetime.fromisoformat(
-                data["startTime"].replace("Z", "+00:00")
+        if isinstance(normalized.get("startTime"), str):
+            normalized["startTime"] = datetime.fromisoformat(
+                normalized["startTime"].replace("Z", "+00:00")
             )
-        if isinstance(data.get("endTime"), str):
-            data["endTime"] = datetime.fromisoformat(
-                data["endTime"].replace("Z", "+00:00")
+        if isinstance(normalized.get("endTime"), str):
+            normalized["endTime"] = datetime.fromisoformat(
+                normalized["endTime"].replace("Z", "+00:00")
             )
-        if isinstance(data.get("createdAt"), str):
-            data["createdAt"] = datetime.fromisoformat(
-                data["createdAt"].replace("Z", "+00:00")
+        if isinstance(normalized.get("createdAt"), str):
+            normalized["createdAt"] = datetime.fromisoformat(
+                normalized["createdAt"].replace("Z", "+00:00")
             )
+        if isinstance(normalized.get("status"), str):
+            normalized["status"] = EventStatus(normalized["status"])
 
-        return cls(**data)
+        allowed_fields = {field_definition.name for field_definition in fields(cls)}
+        filtered = {
+            key: value
+            for key, value in normalized.items()
+            if key in allowed_fields
+        }
+
+        return cls(**filtered)
 
     def to_public_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses"""
         return {
             "id": self.id,
             "stationId": self.stationId,
-            "contractId": self.contractId,
             "pricePerKwh": self.pricePerKwh,
             "targetEnergyKwh": self.targetEnergyKwh,
             "maxParticipants": self.maxParticipants,
@@ -89,6 +97,6 @@ class DREvent(BaseModel):
                 else self.endTime
             ),
             "createdAt": self.createdAt,
-            "status": self.status.value,
+            "status": self.status.value if isinstance(self.status, EventStatus) else self.status,
             "details": self.details,
         }

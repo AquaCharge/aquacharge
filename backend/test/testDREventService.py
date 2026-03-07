@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from models.drevent import DREvent, parse_event_status
 from services.drevents.service import DREventService, DREventServiceError
 
 
@@ -158,8 +159,16 @@ def test_monitoring_snapshot_aggregates_measurements():
     assert snapshot["summary"]["eventStatus"] == "Active"
     assert snapshot["baselineAvailable"] is False
     assert len(snapshot["vesselRates"]) == 2
+    assert len(snapshot["vesselCurve"]) == 2
+    assert snapshot["vesselCurve"][0]["vesselId"] == "vessel-1"
+    assert len(snapshot["vesselCurve"][0]["points"]) == 2
+    assert snapshot["vesselCurve"][0]["totalEnergyDischargedKwh"] == 45.0
+    assert snapshot["vesselCurve"][0]["points"][0]["energyDischargedKwh"] == 30.0
+    assert snapshot["vesselCurve"][0]["points"][1]["cumulativeEnergyDischargedKwh"] == 45.0
     assert snapshot["vesselRates"][0]["dischargeRateKw"] == 18.0
     assert len(snapshot["loadCurve"]) == 3
+    assert snapshot["loadCurve"][0]["energyDischargedKwh"] == 30.0
+    assert snapshot["loadCurve"][-1]["cumulativeEnergyDischargedKwh"] == 90.0
 
 
 def test_monitoring_snapshot_returns_empty_state_for_no_measurements():
@@ -170,6 +179,52 @@ def test_monitoring_snapshot_returns_empty_state_for_no_measurements():
     assert snapshot["empty"] is True
     assert snapshot["summary"]["totalEnergyDeliveredKwh"] == 0.0
     assert snapshot["vesselRates"] == []
+    assert snapshot["vesselCurve"] == []
+
+
+def test_from_dict_accepts_legacy_uppercase_status():
+    event = DREvent.from_dict(make_event(status="ACTIVE"))
+
+    assert event.status.value == "Active"
+    assert event.to_public_dict()["status"] == "Active"
+
+
+def test_parse_event_status_rejects_unknown_status():
+    with pytest.raises(ValueError) as error:
+        parse_event_status("NOT_A_REAL_STATUS")
+
+    assert "'NOT_A_REAL_STATUS' is not a valid EventStatus" == str(error.value)
+
+
+def test_list_events_accepts_legacy_uppercase_status():
+    service = create_service(events=[make_event(status="ACTIVE")])
+
+    events = service.list_events()
+
+    assert len(events) == 1
+    assert events[0]["status"] == "Active"
+
+
+def test_monitoring_snapshot_accepts_legacy_uppercase_event_status():
+    now = datetime.now(timezone.utc)
+    measurements = [
+        {
+            "id": "m1",
+            "drEventId": "event-1",
+            "contractId": "contract-1",
+            "vesselId": "vessel-1",
+            "timestamp": (now - timedelta(minutes=10)).isoformat(),
+            "energyKwh": 12,
+            "powerKw": 9,
+            "currentSOC": 72,
+        }
+    ]
+    service = create_service(events=[make_event(status="ACTIVE")], measurements=measurements)
+
+    snapshot = service.get_monitoring_snapshot(event_id="event-1", period_hours=24)
+
+    assert snapshot["selectedEvent"]["status"] == "Active"
+    assert snapshot["summary"]["eventStatus"] == "Active"
 
 
 def test_create_event_ignores_contract_id_in_payload():

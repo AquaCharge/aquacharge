@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 
 from middleware.auth import require_auth, require_role
+from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
 
 drevents_bp = Blueprint("drevents", __name__)
 
+contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
 
@@ -112,6 +114,48 @@ def create_drevent():
             jsonify({"error": "Failed to create DR event", "details": str(error)}),
             500,
         )
+
+
+@drevents_bp.route("/<event_id>/dispatch", methods=["POST"])
+@require_auth
+def dispatch_drevent(event_id):
+    """Dispatch a DR event: generate contracts for eligible vessels and advance state to Dispatched."""
+    try:
+        caller = request.current_user or {}
+        if caller.get("type_name") != "POWER_OPERATOR":
+            return jsonify({"error": "Only power operators can dispatch DR events"}), 403
+
+        caller_user_id = str(caller.get("user_id") or caller.get("id") or "system")
+
+        event = drevent_service.get_event(event_id)
+
+        eligibility_result = eligibility_service.evaluate_vessels_for_event(
+            event, include_ineligible=False
+        )
+        eligible_vessels = eligibility_result.get("vessels", [])
+
+        created_contracts = contract_service.dispatch_event(
+            dr_event=event,
+            eligible_vessels=eligible_vessels,
+            caller_user_id=caller_user_id,
+        )
+
+        updated_event = drevent_service.update_event(event_id, {"status": "Dispatched"})
+
+        return jsonify({
+            "message": "DR event dispatched successfully",
+            "event": updated_event,
+            "contractsCreated": len(created_contracts),
+        }), 200
+
+    except DREventServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except LookupError as error:
+        return jsonify({"error": str(error)}), 404
+    except Exception as error:
+        return jsonify({"error": "Failed to dispatch DR event", "details": str(error)}), 500
 
 
 @drevents_bp.route("/<event_id>", methods=["PUT"])

@@ -92,9 +92,7 @@ class DREvent(BaseModel):
 
         allowed_fields = {field_definition.name for field_definition in fields(cls)}
         filtered = {
-            key: value
-            for key, value in normalized.items()
-            if key in allowed_fields
+            key: value for key, value in normalized.items() if key in allowed_fields
         }
 
         return cls(**filtered)
@@ -118,6 +116,10 @@ class DREvent(BaseModel):
                 else self.endTime
             ),
             "createdAt": self.createdAt,
-            "status": self.status.value if isinstance(self.status, EventStatus) else self.status,
+            "status": (
+                self.status.value
+                if isinstance(self.status, EventStatus)
+                else self.status
+            ),
             "details": self.details,
         }

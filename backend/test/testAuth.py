@@ -312,7 +312,9 @@ def test_patch_me_set_current_vessel(client, auth_user_credentials):
         data = rv.get_json()
         assert data.get("currentVesselId") == vessel_id
 
-        get_rv = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        get_rv = client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+        )
         assert get_rv.status_code == 200
         assert get_rv.get_json().get("currentVesselId") == vessel_id
     finally:
@@ -431,4 +433,6 @@ def test_change_password(client, auth_user_credentials):
         "/api/auth/login",
         json={"email": auth_user_credentials["email"], "password": new_password},
     )
-    assert login_new.status_code == 200, f"Login with new password failed: {login_new.get_json()}"
+    assert (
+        login_new.status_code == 200
+    ), f"Login with new password failed: {login_new.get_json()}"

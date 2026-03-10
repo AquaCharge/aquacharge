@@ -29,6 +29,7 @@ setup_logging()
 # Request lifecycle hooks for CloudWatch metrics
 # ---------------------------------------------------------------------------
 
+
 @app.before_request
 def _before():
     record_request_start(g)
@@ -43,6 +44,7 @@ def _after(response):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/api/health")
 def health():

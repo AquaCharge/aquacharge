@@ -1,7 +1,11 @@
 from datetime import datetime
 
 from models.contract import ContractStatus
-from services.contracts.service import ContractRepository, ContractService, ContractServiceError
+from services.contracts.service import (
+    ContractRepository,
+    ContractService,
+    ContractServiceError,
+)
 
 
 class InMemoryContractRepository(ContractRepository):

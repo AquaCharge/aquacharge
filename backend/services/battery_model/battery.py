@@ -34,15 +34,17 @@ class BESS:
         """
         if decision == "charge":
             proposed = self.soc + (self.maxChargeRate * delta_t)
-            transfer = (self.max - self.soc) if proposed > self.max else (proposed - self.soc)
+            transfer = (
+                (self.max - self.soc) if proposed > self.max else (proposed - self.soc)
+            )
 
         elif decision == "discharge":
             proposed = self.soc - (self.maxDischargeRate * delta_t)
             # Respect the SOC floor - never discharge below self.min
             if proposed < self.min:
-                transfer = self.min - self.soc   # negative: drains only down to floor
+                transfer = self.min - self.soc  # negative: drains only down to floor
             else:
-                transfer = proposed - self.soc   # negative: normal discharge
+                transfer = proposed - self.soc  # negative: normal discharge
 
         else:
             transfer = 0.0

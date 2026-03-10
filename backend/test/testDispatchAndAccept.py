@@ -6,6 +6,7 @@ Tests for SCRUM-169 (remaining items):
 
 All tests use in-memory stub repositories — no DynamoDB calls.
 """
+
 import pytest
 from models.booking import BookingStatus
 from models.contract import ContractStatus
@@ -15,6 +16,7 @@ from services.contracts.service import ContractService, ContractServiceError
 # ---------------------------------------------------------------------------
 # In-memory stubs
 # ---------------------------------------------------------------------------
+
 
 class InMemoryContractRepo:
     def __init__(self, contracts=None):
@@ -119,7 +121,7 @@ def _non_overlapping_booking(vessel_id="vessel-abc", station_id="station-xyz"):
         "vesselId": vessel_id,
         "stationId": station_id,
         "startTime": "2026-03-09T08:00:00+00:00",
-        "endTime":   "2026-03-09T12:00:00+00:00",
+        "endTime": "2026-03-09T12:00:00+00:00",
         "status": BookingStatus.PENDING.value,
     }
 
@@ -131,7 +133,7 @@ def _overlapping_vessel_booking(vessel_id="vessel-abc"):
         "vesselId": vessel_id,
         "stationId": "some-other-station",
         "startTime": "2026-03-10T09:00:00+00:00",
-        "endTime":   "2026-03-10T11:00:00+00:00",
+        "endTime": "2026-03-10T11:00:00+00:00",
         "status": BookingStatus.PENDING.value,
     }
 
@@ -143,7 +145,7 @@ def _overlapping_dock_booking(station_id="station-xyz"):
         "vesselId": "vessel-other",
         "stationId": station_id,
         "startTime": "2026-03-10T09:00:00+00:00",
-        "endTime":   "2026-03-10T11:00:00+00:00",
+        "endTime": "2026-03-10T11:00:00+00:00",
         "status": BookingStatus.CONFIRMED.value,
     }
 
@@ -160,6 +162,7 @@ def _make_service(contracts=None, bookings=None, vessel=None, dr_event=None):
 # ===========================================================================
 # DISPATCH TESTS
 # ===========================================================================
+
 
 class TestDispatchEvent:
 
@@ -232,6 +235,7 @@ class TestDispatchEvent:
 # SCHEDULE CONFLICT CHECK TESTS
 # ===========================================================================
 
+
 class TestScheduleConflictOnAccept:
 
     def test_accept_succeeds_when_no_bookings_exist(self):
@@ -240,7 +244,9 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001", caller_vessel_ids=["vessel-abc"]
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
     def test_accept_succeeds_when_existing_booking_does_not_overlap(self):
@@ -250,7 +256,9 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001", caller_vessel_ids=["vessel-abc"]
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
     def test_accept_rejected_when_vessel_has_overlapping_booking(self):
@@ -267,7 +275,10 @@ class TestScheduleConflictOnAccept:
 
     def test_accept_rejected_when_cancelled_booking_overlaps(self):
         """Cancelled bookings should not block acceptance."""
-        cancelled = {**_overlapping_vessel_booking(), "status": BookingStatus.CANCELLED.value}
+        cancelled = {
+            **_overlapping_vessel_booking(),
+            "status": BookingStatus.CANCELLED.value,
+        }
         service = _make_service(
             contracts=[_pending_contract()],
             bookings=[cancelled],
@@ -275,7 +286,9 @@ class TestScheduleConflictOnAccept:
             dr_event=DR_EVENT,
         )
         # Should NOT raise — cancelled bookings are ignored
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001", caller_vessel_ids=["vessel-abc"]
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
     def test_conflict_check_only_applies_to_same_vessel(self):
@@ -287,13 +300,16 @@ class TestScheduleConflictOnAccept:
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        result = service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.accept_contract(
+            "contract-001", caller_vessel_ids=["vessel-abc"]
+        )
         assert result["status"] == ContractStatus.ACTIVE.value
 
 
 # ===========================================================================
 # DOCK RESERVATION TESTS
 # ===========================================================================
+
 
 class TestDockReservationOnAccept:
 
@@ -349,7 +365,9 @@ class TestDockReservationOnAccept:
         )
         service.accept_contract("contract-001", caller_vessel_ids=["vessel-abc"])
         saved_booking_id = booking_repo.list_bookings()[0]["id"]
-        assert contract_repo.get_contract("contract-001")["bookingId"] == saved_booking_id
+        assert (
+            contract_repo.get_contract("contract-001")["bookingId"] == saved_booking_id
+        )
 
     def test_dock_conflict_blocks_acceptance(self):
         """If the dock is already taken, acceptance must fail with 409."""

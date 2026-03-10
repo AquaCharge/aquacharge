@@ -19,7 +19,9 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 CLOUDWATCH_ENABLED = os.environ.get("CLOUDWATCH_ENABLED", "false").lower() == "true"
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
-AWS_ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL")  # None → real AWS; set for LocalStack
+AWS_ENDPOINT_URL = os.environ.get(
+    "AWS_ENDPOINT_URL"
+)  # None → real AWS; set for LocalStack
 LOG_GROUP = os.environ.get("CLOUDWATCH_LOG_GROUP", "/aquacharge/backend")
 METRICS_NAMESPACE = os.environ.get("CLOUDWATCH_NAMESPACE", "AquaCharge/Backend")
 
@@ -30,6 +32,7 @@ def _boto_client(service: str):
     if AWS_ENDPOINT_URL:
         kwargs["endpoint_url"] = AWS_ENDPOINT_URL
     return boto3.client(service, **kwargs)
+
 
 logger = logging.getLogger("aquacharge")
 
@@ -70,7 +73,9 @@ def setup_logging() -> logging.Logger:
             import watchtower  # noqa: PLC0415 – optional dependency
 
             cw_logs_client = _boto_client("logs")
-            send_interval = 5 if AWS_ENDPOINT_URL else 60  # flush faster against LocalStack
+            send_interval = (
+                5 if AWS_ENDPOINT_URL else 60
+            )  # flush faster against LocalStack
             cw_handler = watchtower.CloudWatchLogHandler(
                 log_group_name=LOG_GROUP,
                 log_stream_name="{strftime:%Y-%m-%d}",
@@ -80,7 +85,9 @@ def setup_logging() -> logging.Logger:
             )
             cw_handler.setFormatter(_JsonFormatter())
             logger.addHandler(cw_handler)
-            logger.info("CloudWatch Logs handler attached", extra={"log_group": LOG_GROUP})
+            logger.info(
+                "CloudWatch Logs handler attached", extra={"log_group": LOG_GROUP}
+            )
         except ImportError:
             logger.warning("watchtower not installed – CloudWatch Logs disabled")
         except (BotoCoreError, ClientError) as exc:
@@ -137,6 +144,7 @@ def emit_metric(
 # ---------------------------------------------------------------------------
 # Flask integration helpers
 # ---------------------------------------------------------------------------
+
 
 def record_request_start(g) -> None:
     """Store request start time on Flask's g object."""

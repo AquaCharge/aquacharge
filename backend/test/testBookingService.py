@@ -1,4 +1,8 @@
-from services.bookings.service import BookingRepository, BookingService, BookingServiceError
+from services.bookings.service import (
+    BookingRepository,
+    BookingService,
+    BookingServiceError,
+)
 from models.booking import BookingStatus
 
 
@@ -24,7 +28,9 @@ class InMemoryBookingRepository(BookingRepository):
         return booking
 
     def delete_booking(self, booking_id):
-        self.bookings = [booking for booking in self.bookings if booking.get("id") != booking_id]
+        self.bookings = [
+            booking for booking in self.bookings if booking.get("id") != booking_id
+        ]
 
 
 def test_create_booking_rejects_time_overlap_conflict():

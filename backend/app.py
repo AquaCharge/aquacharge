@@ -1,8 +1,9 @@
-from flask import Flask, jsonify
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from api import register_blueprints
+from monitoring import record_request_end, record_request_start, setup_logging
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -20,6 +21,28 @@ limiter = Limiter(
 # Register all API blueprints
 register_blueprints(app)
 
+# Set up structured logging (+ optional CloudWatch Logs)
+setup_logging()
+
+
+# ---------------------------------------------------------------------------
+# Request lifecycle hooks for CloudWatch metrics
+# ---------------------------------------------------------------------------
+
+@app.before_request
+def _before():
+    record_request_start(g)
+
+
+@app.after_request
+def _after(response):
+    record_request_end(g, response, request.endpoint or request.path, request.method)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 @app.get("/api/health")
 def health():

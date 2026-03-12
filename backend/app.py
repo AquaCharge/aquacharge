@@ -37,7 +37,8 @@ def _before():
 
 @app.after_request
 def _after(response):
-    record_request_end(g, response, request.endpoint or request.path, request.method)
+    if getattr(g, "request_start", None) is not None:
+        record_request_end(g, response, request.endpoint or request.path, request.method)
     return response
 
 

@@ -58,7 +58,7 @@ class _JsonFormatter(logging.Formatter):
         for key, value in record.__dict__.items():
             if key not in _LOG_RECORD_BUILTINS:
                 payload[key] = value
-        return json.dumps(payload)
+        return json.dumps(payload, default=str)
 
 
 def setup_logging() -> logging.Logger:
@@ -165,7 +165,12 @@ def record_request_end(g, response, endpoint: str, method: str) -> None:
     Emit RequestCount, ResponseLatency, and (when applicable) ErrorCount metrics.
     Also log the completed request at INFO level.
     """
-    elapsed_ms = (time.monotonic() - g.request_start) * 1000
+    start_time = getattr(g, "request_start", None)
+    if start_time is None:
+        logger.debug("record_request_end called without request_start on g; skipping metrics")
+        return
+
+    elapsed_ms = (time.monotonic() - start_time) * 1000
     status_code = response.status_code
 
     dims = [

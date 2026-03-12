@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Card,
@@ -8,7 +8,9 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Ship, Calendar, Zap, DollarSign, Clock, Battery, Activity } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { MetricCard, StateOfChargeCard, WeeklyEarningsCard, AllTimeCard } from '@/components/ui/DashboardCards'
+import { Ship, Calendar, Zap } from 'lucide-react'
 import { getApiEndpoint } from '@/config/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -25,34 +27,64 @@ const formatTimeRemaining = (seconds) => {
   return `${m}:${String(s).padStart(2, '0')} left`
 }
 
-const MetricCard = ({ title, value, helper, icon: Icon, loading }) => (
-  <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <Icon className="h-4 w-4 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      {loading ? (
-        <Skeleton className="h-8 w-24" />
-      ) : (
-        <div className="text-2xl font-bold">{value}</div>
-      )}
-      <p className="text-xs text-muted-foreground">{helper}</p>
-    </CardContent>
-  </Card>
-)
+const HISTORY_STATUSES = ['completed', 'failed', 'cancelled']
+
+const formatContractDate = (iso) => {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const formatDuration = (startIso, endIso) => {
+  if (!startIso || !endIso) return '—'
+  const start = new Date(startIso).getTime()
+  const end = new Date(endIso).getTime()
+  const ms = end - start
+  if (ms <= 0) return '—'
+  const totalMinutes = Math.floor(ms / 60_000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
+const formatAmount = (value) =>
+  typeof value === 'number' ? `$${Number(value).toFixed(2)}` : '—'
+
+const historyStatusBadgeClass = (status) => {
+  switch (status) {
+    case 'completed':
+      return 'bg-emerald-100 text-emerald-800'
+    case 'failed':
+      return 'bg-red-100 text-red-800'
+    case 'cancelled':
+      return 'bg-gray-100 text-gray-800'
+    default:
+      return 'bg-gray-100 text-gray-800'
+  }
+}
 
 const VesselDashboard = () => {
   const { user, refreshUser } = useAuth()
   const [dashboard, setDashboard] = useState(null)
   const [vessels, setVessels] = useState([])
+  const [myContracts, setMyContracts] = useState([])
+  const [contractsHistoryLoading, setContractsHistoryLoading] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [vesselSelectLoading, setVesselSelectLoading] = useState(false)
+  const contractsHistoryLoadedOnce = useRef(false)
 
   const authToken = localStorage.getItem('auth-token')
   const userId = user?.id
-
+  const sampleWeeklyEarnings = {
+    total: 1238.65,
+    dailyEarnings: [128, 320.5, 362, 284.15, 421, 0, 0],
+    todayIndex: 4,  // 0=Mon, 6=Sun; e.g. 4 = Friday
+  }
   const loadDashboard = async () => {
     if (!authToken) {
       setError('Missing authentication token.')
@@ -98,9 +130,60 @@ const VesselDashboard = () => {
     }
   }
 
+  const loadMyContracts = async () => {
+    if (!authToken) {
+      setContractsHistoryLoading(false)
+      return
+    }
+    const isFirstLoad = !contractsHistoryLoadedOnce.current
+    if (isFirstLoad) setContractsHistoryLoading(true)
+    try {
+      const response = await fetch(getApiEndpoint('/api/contracts/my-contracts'), {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || 'Failed to load contracts')
+      }
+      const raw = await response.json()
+      const nextList = Array.isArray(raw) ? raw : []
+      setMyContracts((prev) => {
+        if (prev.length !== nextList.length) return nextList
+        const byId = (a, b) => (a.id || '').localeCompare(b.id || '')
+        const prevSorted = [...prev].sort(byId)
+        const nextSorted = [...nextList].sort(byId)
+        const same = nextSorted.every(
+          (c, i) => c.id === prevSorted[i].id && c.updatedAt === prevSorted[i].updatedAt
+        )
+        return same ? prev : nextList
+      })
+      contractsHistoryLoadedOnce.current = true
+    } catch (err) {
+      console.error('Failed to load contract history', err)
+      setMyContracts([])
+      contractsHistoryLoadedOnce.current = true
+    } finally {
+      if (isFirstLoad) setContractsHistoryLoading(false)
+    }
+  }
+
+  const contractsHistory = myContracts
+    .filter((c) => HISTORY_STATUSES.includes(c.status))
+    .sort((a, b) => {
+      const aEnd = a.endTime ? new Date(a.endTime).getTime() : 0
+      const bEnd = b.endTime ? new Date(b.endTime).getTime() : 0
+      return bEnd - aEnd
+    })
+
   useEffect(() => {
     loadDashboard()
     const timer = window.setInterval(loadDashboard, POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [authToken])
+
+  useEffect(() => {
+    loadMyContracts()
+    const timer = window.setInterval(loadMyContracts, POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [authToken])
 
@@ -144,15 +227,15 @@ const VesselDashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="space-y-2">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900">Vessel Operator Dashboard</h1>
           <p className="text-gray-600 mt-2">
             Welcome to your AquaCharge vessel management center
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
           <label className="text-sm font-medium text-muted-foreground">Current vessel</label>
           <select
             className="rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -189,12 +272,9 @@ const VesselDashboard = () => {
       )}
 
       {/* Quick Stats: current vessel + metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="Current vessel SoC"
-          value={currentVessel?.socPercent != null ? `${currentVessel.socPercent}%` : '—'}
-          helper="State of charge"
-          icon={Battery}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        <StateOfChargeCard
+          percent={currentVessel?.socPercent}
           loading={isLoading}
         />
         <MetricCard
@@ -205,60 +285,22 @@ const VesselDashboard = () => {
               : '—'
           }
           helper="Max discharge rate"
-          icon={Zap}
           loading={isLoading}
         />
         <MetricCard
           title="Time remaining"
           value={formatTimeRemaining(activeContract?.timeRemainingSeconds)}
           helper="Active contract"
-          icon={Clock}
-          loading={isLoading}
-        />
-        <MetricCard
-          title="Estimated earnings"
-          value={
-            activeContract?.estimatedEarnings != null
-              ? `$${Number(activeContract.estimatedEarnings).toFixed(2)}`
-              : metrics.totalEarnings != null
-                ? `$${Number(metrics.totalEarnings).toFixed(2)} total`
-                : '—'
-          }
-          helper="From active contract or total"
-          icon={DollarSign}
           loading={isLoading}
         />
       </div>
 
-      {/* Real metrics: contracts completed, total kW, earnings */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <MetricCard
-          title="Contracts completed"
-          value={metrics.contractsCompleted ?? 0}
-          helper="All time"
-          icon={Ship}
-          loading={isLoading}
-        />
-        <MetricCard
-          title="Total kW discharged"
-          value={
-            metrics.totalKwhDischarged != null
-              ? Number(metrics.totalKwhDischarged).toFixed(1)
-              : '0'
-          }
-          helper="kWh delivered"
-          icon={Activity}
-          loading={isLoading}
-        />
-        <MetricCard
-          title="Earnings"
-          value={
-            metrics.totalEarnings != null
-              ? `$${Number(metrics.totalEarnings).toFixed(2)}`
-              : '$0.00'
-          }
-          helper="From completed contracts"
-          icon={DollarSign}
+      {/* All time stats + weekly earnings */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <AllTimeCard metrics={metrics} loading={isLoading} />
+        <WeeklyEarningsCard
+          // weeklyEarnings={dashboard?.weeklyEarnings}
+          weeklyEarnings={sampleWeeklyEarnings}
           loading={isLoading}
         />
       </div>
@@ -273,7 +315,7 @@ const VesselDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <p className="text-muted-foreground">Energy (this contract)</p>
                 <p className="font-semibold">{Number(activeContract.energyAmountKwh ?? 0).toFixed(1)} kWh</p>
@@ -288,14 +330,14 @@ const VesselDashboard = () => {
       )}
 
       {/* Quick Actions with links */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Common tasks for vessel operators</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-1">
               <Link
                 to="/find-stations"
                 className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
@@ -365,6 +407,65 @@ const VesselDashboard = () => {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Contracts History */}
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900">Contracts History</h2>
+        {contractsHistoryLoading ? (
+          <div className="rounded-lg border bg-card p-4">
+            <Skeleton className="h-8 w-full mb-2" />
+            <Skeleton className="h-10 w-full mb-1" />
+            <Skeleton className="h-10 w-full mb-1" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : contractsHistory.length === 0 ? (
+          <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+            No contract history yet
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left font-medium text-gray-700 px-4 py-3">Vessel</th>
+                  <th className="text-left font-medium text-gray-700 px-4 py-3">Date</th>
+                  <th className="text-left font-medium text-gray-700 px-4 py-3">Status</th>
+                  <th className="text-left font-medium text-gray-700 px-4 py-3">Duration</th>
+                  <th className="text-left font-medium text-gray-700 px-4 py-3">Energy</th>
+                  <th className="text-right font-medium text-gray-700 px-4 py-3">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractsHistory.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-left">{c.vesselName || '—'}</td>
+                    <td className="px-4 py-3 text-left">{formatContractDate(c.endTime)}</td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        className={`${historyStatusBadgeClass(c.status)} font-normal capitalize`}
+                      >
+                        {c.status.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-left">
+                      {formatDuration(c.startTime, c.endTime)}
+                    </td>
+                    <td className="px-4 py-3 text-left">
+                      {c.energyAmount != null ? `${Number(c.energyAmount).toFixed(1)} kWh` : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      {formatAmount(c.totalValue)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 """VO (Vessel Operator) dashboard API: aggregated metrics and current vessel."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request
 from boto3.dynamodb.conditions import Key
 
@@ -21,6 +21,43 @@ def _parse_iso(dt_string):
     if isinstance(dt_string, datetime):
         return dt_string
     return datetime.fromisoformat(str(dt_string).replace("Z", "+00:00"))
+
+
+def _week_start_utc(dt):
+    """Monday 00:00:00 UTC for the week containing dt."""
+    # weekday(): Monday=0, Sunday=6
+    days_since_monday = dt.weekday()
+    return (dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            - timedelta(days=days_since_monday))
+
+
+def _weekly_earnings_from_contracts(contracts, now):
+    """
+    From completed contracts, compute earnings for the current week (Mon–Sun UTC).
+    Returns dict: total, dailyEarnings (list of 7 floats, Mon..Sun), todayIndex (0–6).
+    """
+    week_start = _week_start_utc(now)
+    week_end = week_start + timedelta(days=7)
+    daily = [0.0] * 7  # Monday=0 .. Sunday=6
+    for c in contracts:
+        if c.get("status") != "completed":
+            continue
+        end_dt = _parse_iso(c.get("endTime"))
+        if not end_dt:
+            continue
+        end_utc = end_dt if end_dt.tzinfo else end_dt.replace(tzinfo=timezone.utc)
+        if not (week_start <= end_utc < week_end):
+            continue
+        weekday = end_utc.weekday()  # Monday=0, Sunday=6
+        daily[weekday] += float(c.get("totalValue") or 0)
+    total = round(sum(daily), 2)
+    daily_rounded = [round(x, 2) for x in daily]
+    today_index = now.weekday()  # 0=Mon, 6=Sun
+    return {
+        "total": total,
+        "dailyEarnings": daily_rounded,
+        "todayIndex": today_index,
+    }
 
 
 @vo_dashboard_bp.route("/dashboard", methods=["GET"])
@@ -75,6 +112,7 @@ def get_vo_dashboard():
             for c in all_contracts
             if c.get("status") == "completed"
         )
+        weekly_earnings = _weekly_earnings_from_contracts(all_contracts, now)
 
         active_contract = None
         for c in all_contracts:
@@ -118,6 +156,7 @@ def get_vo_dashboard():
                 "totalKwhDischarged": round(total_kwh_discharged, 2),
                 "totalEarnings": round(total_earnings, 2),
             },
+            "weeklyEarnings": weekly_earnings,
             "updatedAt": now.isoformat(),
         }
         return jsonify(convert_decimals(payload)), 200

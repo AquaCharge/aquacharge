@@ -487,6 +487,11 @@ Success response `200`:
     "totalKwhDischarged": 0.0,
     "totalEarnings": 0.0
   },
+  "weeklyEarnings": {
+    "total": 0.0,
+    "dailyEarnings": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "todayIndex": 0
+  },
   "updatedAt": "ISO-8601 datetime"
 }
 ```
@@ -496,12 +501,15 @@ Semantics:
 - `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` is computed as `(capacity / maxCapacity) * 100` when `maxCapacity > 0`. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
 - `metrics` are over all of the VO’s vessels (contracts completed, total kWh from completed/active contracts, total earnings from completed contracts).
 - `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`.
+- `weeklyEarnings`: current week (Monday–Sunday UTC). `dailyEarnings` is 7 values for Mon..Sun from completed contracts whose `endTime` falls in that week; `todayIndex` is 0–6 (Mon=0, Sun=6).
 
 Error responses:
 
 - `401`: authentication required
 - `404`: user not found
 - `500`: dashboard load failure
+
+The VO dashboard UI also shows a **Contracts History** list, sourced from `GET /api/contracts/my-contracts`, displaying only contracts with status `completed`, `failed`, or `cancelled`.
 
 ## Booking Service Rules
 

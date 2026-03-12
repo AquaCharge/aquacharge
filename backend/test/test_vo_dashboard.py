@@ -56,8 +56,15 @@ def test_vo_dashboard_returns_structure(client, vo_user_credentials):
     assert "currentVessel" in data
     assert "activeContract" in data
     assert "metrics" in data
+    assert "weeklyEarnings" in data
     assert "updatedAt" in data
     assert data["currentVessel"] is None
     assert data["metrics"]["contractsCompleted"] >= 0
     assert "totalKwhDischarged" in data["metrics"]
     assert "totalEarnings" in data["metrics"]
+    we = data["weeklyEarnings"]
+    assert "total" in we
+    assert "dailyEarnings" in we
+    assert "todayIndex" in we
+    assert len(we["dailyEarnings"]) == 7
+    assert 0 <= we["todayIndex"] <= 6

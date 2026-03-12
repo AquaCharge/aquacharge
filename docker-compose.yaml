@@ -42,7 +42,6 @@ services:
       - VITE_API_URL=http://backend:5050
     depends_on:
       - backend
-      - localstack
 
 volumes:
   localstack_data:

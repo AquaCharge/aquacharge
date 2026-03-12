@@ -12,6 +12,7 @@ Controlled by env vars:
 import json
 import logging
 import os
+import sys
 import time
 
 import boto3
@@ -37,8 +38,13 @@ def _boto_client(service: str):
 logger = logging.getLogger("aquacharge")
 
 
+_LOG_RECORD_BUILTINS = frozenset(logging.LogRecord(
+    "", 0, "", 0, "", (), None
+).__dict__.keys()) | {"message", "asctime"}
+
+
 class _JsonFormatter(logging.Formatter):
-    """Emit log records as single-line JSON."""
+    """Emit log records as single-line JSON, including any extra fields."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload = {
@@ -49,6 +55,9 @@ class _JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
+        for key, value in record.__dict__.items():
+            if key not in _LOG_RECORD_BUILTINS:
+                payload[key] = value
         return json.dumps(payload)
 
 
@@ -64,7 +73,7 @@ def setup_logging() -> logging.Logger:
 
     logger.setLevel(logging.INFO)
 
-    stream_handler = logging.StreamHandler()
+    stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(_JsonFormatter())
     logger.addHandler(stream_handler)
 

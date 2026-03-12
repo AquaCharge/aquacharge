@@ -150,9 +150,7 @@ class DynamoMeasurementRepository:
                 continue
 
             timestamp = str(
-                measurement.get("timestamp")
-                or measurement.get("createdAt")
-                or ""
+                measurement.get("timestamp") or measurement.get("createdAt") or ""
             )
 
             current_best = self._latest_soc_by_vessel_id.get(vessel_id)
@@ -177,7 +175,9 @@ class EligibilityService:
     ):
         self.vessel_repository = vessel_repository or DynamoVesselRepository()
         self.station_repository = station_repository or DynamoStationRepository()
-        self.measurement_repository = measurement_repository or DynamoMeasurementRepository()
+        self.measurement_repository = (
+            measurement_repository or DynamoMeasurementRepository()
+        )
 
     def evaluate_vessels_for_event(
         self,
@@ -203,11 +203,17 @@ class EligibilityService:
         vessel_results.sort(
             key=lambda result: (
                 0 if result["eligible"] else 1,
-                result["distanceMeters"] if result["distanceMeters"] is not None else float("inf"),
+                (
+                    result["distanceMeters"]
+                    if result["distanceMeters"] is not None
+                    else float("inf")
+                ),
             )
         )
 
-        eligible_count = len([result for result in vessel_results if result["eligible"]])
+        eligible_count = len(
+            [result for result in vessel_results if result["eligible"]]
+        )
         duration_ms = round((perf_counter() - started_at) * 1000.0, 2)
         return {
             "eventId": dr_event.get("id"),
@@ -234,7 +240,12 @@ class EligibilityService:
 
         distance_meters: Optional[float] = None
         distance_km: Optional[float] = None
-        if None in (vessel_latitude, vessel_longitude, station_latitude, station_longitude):
+        if None in (
+            vessel_latitude,
+            vessel_longitude,
+            station_latitude,
+            station_longitude,
+        ):
             rejection_reasons.append("Missing vessel or station coordinates")
         else:
             distance_meters = _distance_meters(
@@ -288,7 +299,11 @@ class EligibilityService:
         if required_energy_per_vessel_kwh is None:
             target_energy_kwh = _to_float(dr_event.get("targetEnergyKwh"))
             max_participants = _to_float(dr_event.get("maxParticipants"))
-            if target_energy_kwh is not None and max_participants and max_participants > 0:
+            if (
+                target_energy_kwh is not None
+                and max_participants
+                and max_participants > 0
+            ):
                 required_energy_per_vessel_kwh = target_energy_kwh / max_participants
 
         if required_energy_per_vessel_kwh is not None:

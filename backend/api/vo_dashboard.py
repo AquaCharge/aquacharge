@@ -11,7 +11,9 @@ from services.contracts import ContractService, convert_decimals
 vo_dashboard_bp = Blueprint("vo_dashboard", __name__)
 
 _users_client = DynamoClient(table_name="aquacharge-users-dev", region_name="us-east-1")
-_vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
+_vessels_client = DynamoClient(
+    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+)
 contract_service = ContractService()
 
 
@@ -52,7 +54,10 @@ def get_vo_dashboard():
             first_vessel_id = vessel_ids[0]
             _users_client.update_item(
                 key={"id": user_id},
-                update_data={"currentVesselId": first_vessel_id, "updatedAt": now.isoformat()},
+                update_data={
+                    "currentVesselId": first_vessel_id,
+                    "updatedAt": now.isoformat(),
+                },
             )
             current_vessel_id = first_vessel_id
             user_data = _users_client.get_item(key={"id": user_id}) or user_data
@@ -64,7 +69,9 @@ def get_vo_dashboard():
             )
 
         now = datetime.now(timezone.utc)
-        contracts_completed = sum(1 for c in all_contracts if c.get("status") == "completed")
+        contracts_completed = sum(
+            1 for c in all_contracts if c.get("status") == "completed"
+        )
         total_kwh_discharged = sum(
             float(c.get("energyAmount") or 0)
             for c in all_contracts
@@ -88,7 +95,9 @@ def get_vo_dashboard():
                 active_contract = {
                     "id": c.get("id"),
                     "endTime": c.get("endTime"),
-                    "timeRemainingSeconds": max(0, int((end_utc - now).total_seconds())),
+                    "timeRemainingSeconds": max(
+                        0, int((end_utc - now).total_seconds())
+                    ),
                     "estimatedEarnings": float(c.get("totalValue") or 0),
                     "energyAmountKwh": float(c.get("energyAmount") or 0),
                 }

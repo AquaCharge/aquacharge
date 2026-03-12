@@ -34,7 +34,9 @@ class BookingRepository(Protocol):
     def create_booking(self, booking: Dict[str, Any]) -> None:
         pass
 
-    def update_booking(self, booking_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_booking(
+        self, booking_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         pass
 
     def delete_booking(self, booking_id: str) -> None:
@@ -57,7 +59,9 @@ class DynamoBookingRepository:
     def create_booking(self, booking: Dict[str, Any]) -> None:
         self.client.put_item(booking)
 
-    def update_booking(self, booking_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_booking(
+        self, booking_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return self.client.update_item(key={"id": booking_id}, update_data=update_data)
 
     def delete_booking(self, booking_id: str) -> None:
@@ -79,7 +83,9 @@ class BookingService:
         bookings = self.repository.list_bookings()
 
         if user_id:
-            bookings = [booking for booking in bookings if booking.get("userId") == user_id]
+            bookings = [
+                booking for booking in bookings if booking.get("userId") == user_id
+            ]
 
         if status:
             try:

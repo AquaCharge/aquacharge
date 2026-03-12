@@ -36,8 +36,14 @@ class Vessel(BaseModel):
         # Normalize numeric types from DynamoDB (Decimal -> float)
         normalized = dict(data)
         for key in (
-            "capacity", "maxCapacity", "maxChargeRate", "minChargeRate",
-            "maxDischargeRate", "longitude", "latitude", "rangeMeters",
+            "capacity",
+            "maxCapacity",
+            "maxChargeRate",
+            "minChargeRate",
+            "maxDischargeRate",
+            "longitude",
+            "latitude",
+            "rangeMeters",
         ):
             if key in normalized and normalized[key] is not None:
                 normalized[key] = float(normalized[key])

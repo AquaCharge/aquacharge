@@ -482,11 +482,17 @@ def patch_current_user():
 
         # Allow null, missing, or empty string to clear current vessel (store "" in DB)
         if current_vessel_id is None or current_vessel_id == "":
-            update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+            update_data = {
+                "currentVesselId": "",
+                "updatedAt": datetime.utcnow().isoformat(),
+            }
         else:
             current_vessel_id = str(current_vessel_id).strip()
             if not current_vessel_id:
-                update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+                update_data = {
+                    "currentVesselId": "",
+                    "updatedAt": datetime.utcnow().isoformat(),
+                }
             else:
                 # Validate that the user owns this vessel
                 vessels = _vessels_client.query_gsi(
@@ -495,10 +501,20 @@ def patch_current_user():
                 )
                 vessel_ids = [v["id"] for v in vessels] if vessels else []
                 if current_vessel_id not in vessel_ids:
-                    return jsonify({"error": "Vessel not found or you do not own this vessel"}), 403
-                update_data = {"currentVesselId": current_vessel_id, "updatedAt": datetime.utcnow().isoformat()}
+                    return (
+                        jsonify(
+                            {"error": "Vessel not found or you do not own this vessel"}
+                        ),
+                        403,
+                    )
+                update_data = {
+                    "currentVesselId": current_vessel_id,
+                    "updatedAt": datetime.utcnow().isoformat(),
+                }
 
-        updated = dynamoDB_client.update_item(key={"id": user_id}, update_data=update_data)
+        updated = dynamoDB_client.update_item(
+            key={"id": user_id}, update_data=update_data
+        )
         user_data = prepare_user_data_from_dynamo(updated)
         user = User(**user_data)
         if not user.active:

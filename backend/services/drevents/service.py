@@ -51,7 +51,9 @@ class DREventRepository(Protocol):
     def put_event(self, event_data: Dict[str, Any]) -> None:
         pass
 
-    def update_event(self, event_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_event(
+        self, event_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         pass
 
 
@@ -80,7 +82,9 @@ class DynamoDREventRepository:
     def put_event(self, event_data: Dict[str, Any]) -> None:
         self.client.put_item(item=event_data)
 
-    def update_event(self, event_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_event(
+        self, event_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return self.client.update_item(key={"id": event_id}, update_data=update_data)
 
 
@@ -113,11 +117,26 @@ def serialize_event(event: Dict[str, Any]) -> Dict[str, Any]:
 
 
 ALLOWED_TRANSITIONS = {
-    EventStatus.CREATED.value: {EventStatus.DISPATCHED.value, EventStatus.CANCELLED.value},
-    EventStatus.DISPATCHED.value: {EventStatus.ACCEPTED.value, EventStatus.CANCELLED.value},
-    EventStatus.ACCEPTED.value: {EventStatus.COMMITTED.value, EventStatus.CANCELLED.value},
-    EventStatus.COMMITTED.value: {EventStatus.ACTIVE.value, EventStatus.CANCELLED.value},
-    EventStatus.ACTIVE.value: {EventStatus.COMPLETED.value, EventStatus.CANCELLED.value},
+    EventStatus.CREATED.value: {
+        EventStatus.DISPATCHED.value,
+        EventStatus.CANCELLED.value,
+    },
+    EventStatus.DISPATCHED.value: {
+        EventStatus.ACCEPTED.value,
+        EventStatus.CANCELLED.value,
+    },
+    EventStatus.ACCEPTED.value: {
+        EventStatus.COMMITTED.value,
+        EventStatus.CANCELLED.value,
+    },
+    EventStatus.COMMITTED.value: {
+        EventStatus.ACTIVE.value,
+        EventStatus.CANCELLED.value,
+    },
+    EventStatus.ACTIVE.value: {
+        EventStatus.COMPLETED.value,
+        EventStatus.CANCELLED.value,
+    },
     EventStatus.COMPLETED.value: {EventStatus.SETTLED.value},
     EventStatus.SETTLED.value: {EventStatus.ARCHIVED.value},
     EventStatus.ARCHIVED.value: set(),
@@ -138,14 +157,19 @@ class DREventService:
         station_repository: Optional[StationRepository] = None,
     ):
         self.event_repository = event_repository or DynamoDREventRepository()
-        self.measurement_repository = measurement_repository or DynamoMeasurementRepository()
+        self.measurement_repository = (
+            measurement_repository or DynamoMeasurementRepository()
+        )
         self.station_repository = station_repository or DynamoStationRepository()
 
     def list_events(self, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         events = [serialize_event(item) for item in self.event_repository.list_events()]
         if status_filter:
             events = [event for event in events if event.get("status") == status_filter]
-        events.sort(key=lambda item: parse_datetime(item.get("startTime")) or datetime.max.replace(tzinfo=timezone.utc))
+        events.sort(
+            key=lambda item: parse_datetime(item.get("startTime"))
+            or datetime.max.replace(tzinfo=timezone.utc)
+        )
         return events
 
     def get_event(self, event_id: str) -> Dict[str, Any]:
@@ -174,8 +198,12 @@ class DREventService:
                 pricePerKwh=Decimal(str(sanitized_data["pricePerKwh"])),
                 targetEnergyKwh=Decimal(str(sanitized_data["targetEnergyKwh"])),
                 maxParticipants=int(sanitized_data["maxParticipants"]),
-                startTime=datetime.fromisoformat(sanitized_data["startTime"].replace("Z", "+00:00")),
-                endTime=datetime.fromisoformat(sanitized_data["endTime"].replace("Z", "+00:00")),
+                startTime=datetime.fromisoformat(
+                    sanitized_data["startTime"].replace("Z", "+00:00")
+                ),
+                endTime=datetime.fromisoformat(
+                    sanitized_data["endTime"].replace("Z", "+00:00")
+                ),
                 status=EventStatus.CREATED,
                 details=sanitized_data.get("details", {}),
                 createdAt=datetime.now(timezone.utc).isoformat(),
@@ -208,9 +236,13 @@ class DREventService:
         if "maxParticipants" in sanitized_data:
             drevent.maxParticipants = int(sanitized_data["maxParticipants"])
         if "startTime" in sanitized_data:
-            drevent.startTime = datetime.fromisoformat(sanitized_data["startTime"].replace("Z", "+00:00"))
+            drevent.startTime = datetime.fromisoformat(
+                sanitized_data["startTime"].replace("Z", "+00:00")
+            )
         if "endTime" in sanitized_data:
-            drevent.endTime = datetime.fromisoformat(sanitized_data["endTime"].replace("Z", "+00:00"))
+            drevent.endTime = datetime.fromisoformat(
+                sanitized_data["endTime"].replace("Z", "+00:00")
+            )
         if "details" in sanitized_data:
             drevent.details = sanitized_data["details"]
 
@@ -276,20 +308,25 @@ class DREventService:
 
         selected_event = None
         if event_id:
-            selected_event = next((event for event in filtered_events if event["id"] == event_id), None)
+            selected_event = next(
+                (event for event in filtered_events if event["id"] == event_id), None
+            )
             if selected_event is None:
                 raise DREventServiceError("DR event not found", 404)
         elif filtered_events:
             selected_event = sorted(
                 filtered_events,
-                key=lambda item: parse_datetime(item.get("startTime")) or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda item: parse_datetime(item.get("startTime"))
+                or datetime.min.replace(tzinfo=timezone.utc),
                 reverse=True,
             )[0]
 
         selected_event_id = selected_event.get("id") if selected_event else None
         measurements = []
         for measurement in self.measurement_repository.list_measurements():
-            measurement_time = parse_datetime(measurement.get("timestamp") or measurement.get("createdAt"))
+            measurement_time = parse_datetime(
+                measurement.get("timestamp") or measurement.get("createdAt")
+            )
             if measurement_time is None or measurement_time < period_start:
                 continue
             if selected_event_id and measurement.get("drEventId") != selected_event_id:
@@ -315,7 +352,9 @@ class DREventService:
             if previous is None or measurement["timestamp"] >= previous["timestamp"]:
                 vessel_latest[vessel_id] = measurement
 
-            bucket = measurement["timestamp"].replace(second=0, microsecond=0).isoformat()
+            bucket = (
+                measurement["timestamp"].replace(second=0, microsecond=0).isoformat()
+            )
             bucket_item = time_series.setdefault(
                 bucket,
                 {
@@ -369,7 +408,9 @@ class DREventService:
         vessel_curve = []
         for vessel_id, series in vessel_series.items():
             latest_measurement = vessel_latest.get(vessel_id, {})
-            points = sorted(series["points"].values(), key=lambda item: item["timestamp"])
+            points = sorted(
+                series["points"].values(), key=lambda item: item["timestamp"]
+            )
             cumulative_energy = 0.0
             for point in points:
                 cumulative_energy += point["energyDischargedKwh"]
@@ -378,16 +419,26 @@ class DREventService:
                 {
                     "vesselId": vessel_id,
                     "contractId": series.get("contractId"),
-                    "currentSoc": round(float(latest_measurement.get("currentSOC", 0) or 0), 2),
-                    "latestDischargeRateKw": round(float(latest_measurement.get("powerKw", 0) or 0), 2),
-                    "totalEnergyDischargedKwh": round(sum(point["energyDischargedKwh"] for point in points), 2),
-                    "latestTimestamp": latest_measurement.get("timestamp").isoformat()
-                    if latest_measurement.get("timestamp")
-                    else None,
+                    "currentSoc": round(
+                        float(latest_measurement.get("currentSOC", 0) or 0), 2
+                    ),
+                    "latestDischargeRateKw": round(
+                        float(latest_measurement.get("powerKw", 0) or 0), 2
+                    ),
+                    "totalEnergyDischargedKwh": round(
+                        sum(point["energyDischargedKwh"] for point in points), 2
+                    ),
+                    "latestTimestamp": (
+                        latest_measurement.get("timestamp").isoformat()
+                        if latest_measurement.get("timestamp")
+                        else None
+                    ),
                     "points": points,
                 }
             )
-        vessel_curve.sort(key=lambda item: item["totalEnergyDischargedKwh"], reverse=True)
+        vessel_curve.sort(
+            key=lambda item: item["totalEnergyDischargedKwh"], reverse=True
+        )
 
         load_curve = sorted(time_series.values(), key=lambda item: item["timestamp"])
         cumulative_energy = 0.0
@@ -395,8 +446,16 @@ class DREventService:
             cumulative_energy += point["energyDischargedKwh"]
             point["cumulativeEnergyDischargedKwh"] = round(cumulative_energy, 2)
 
-        target_energy = float(selected_event.get("targetEnergyKwh", 0) or 0) if selected_event else 0.0
-        progress_percent = round((energy_delivered / target_energy) * 100, 2) if target_energy > 0 else 0.0
+        target_energy = (
+            float(selected_event.get("targetEnergyKwh", 0) or 0)
+            if selected_event
+            else 0.0
+        )
+        progress_percent = (
+            round((energy_delivered / target_energy) * 100, 2)
+            if target_energy > 0
+            else 0.0
+        )
 
         available_events = [
             {
@@ -410,7 +469,11 @@ class DREventService:
             }
             for event in filtered_events
         ]
-        available_events.sort(key=lambda item: parse_datetime(item["startTime"]) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        available_events.sort(
+            key=lambda item: parse_datetime(item["startTime"])
+            or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
 
         return convert_decimals(
             {
@@ -419,22 +482,28 @@ class DREventService:
                     "region": region or "",
                     "periodHours": period_hours,
                 },
-                "selectedEvent": {
-                    "id": selected_event["id"],
-                    "stationId": selected_event["stationId"],
-                    "status": selected_event["status"],
-                    "targetEnergyKwh": selected_event["targetEnergyKwh"],
-                    "startTime": selected_event["startTime"],
-                    "endTime": selected_event["endTime"],
-                    "regionLabel": self._region_label(selected_event.get("station") or {}),
-                }
-                if selected_event
-                else None,
+                "selectedEvent": (
+                    {
+                        "id": selected_event["id"],
+                        "stationId": selected_event["stationId"],
+                        "status": selected_event["status"],
+                        "targetEnergyKwh": selected_event["targetEnergyKwh"],
+                        "startTime": selected_event["startTime"],
+                        "endTime": selected_event["endTime"],
+                        "regionLabel": self._region_label(
+                            selected_event.get("station") or {}
+                        ),
+                    }
+                    if selected_event
+                    else None
+                ),
                 "summary": {
                     "totalEnergyDeliveredKwh": round(energy_delivered, 2),
                     "progressPercent": progress_percent,
                     "activeVessels": len(vessel_rates),
-                    "eventStatus": selected_event.get("status") if selected_event else None,
+                    "eventStatus": (
+                        selected_event.get("status") if selected_event else None
+                    ),
                     "targetEnergyKwh": round(target_energy, 2),
                 },
                 "vesselRates": vessel_rates,

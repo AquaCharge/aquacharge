@@ -41,7 +41,9 @@ class ContractRepository(Protocol):
     def create_contract(self, contract_data: Dict[str, Any]) -> None:
         pass
 
-    def update_contract(self, contract_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_contract(
+        self, contract_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         pass
 
     def delete_contract(self, contract_id: str) -> None:
@@ -85,7 +87,9 @@ class DynamoContractRepository:
     def create_contract(self, contract_data: Dict[str, Any]) -> None:
         self.client.put_item(item=contract_data)
 
-    def update_contract(self, contract_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_contract(
+        self, contract_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return self.client.update_item(key={"id": contract_id}, update_data=update_data)
 
     def delete_contract(self, contract_id: str) -> None:
@@ -218,7 +222,9 @@ class ContractService:
             raise ContractServiceError(str(error), 400) from error
 
         contract_data = contract.to_dict()
-        contract_data = {key: value for key, value in contract_data.items() if value is not None}
+        contract_data = {
+            key: value for key, value in contract_data.items() if value is not None
+        }
         self.repository.create_contract(contract_data)
         return contract.to_public_dict()
 
@@ -387,7 +393,9 @@ class ContractService:
 
         # --- ownership guard ---
         if contract.vesselId not in caller_vessel_ids:
-            raise ContractServiceError("You do not own the vessel on this contract", 403)
+            raise ContractServiceError(
+                "You do not own the vessel on this contract", 403
+            )
 
         # --- status guard ---
         if contract.status != ContractStatus.PENDING.value:
@@ -416,7 +424,9 @@ class ContractService:
                 else str(contract.endTime)
             )
         except (ValueError, AttributeError) as error:
-            raise ContractServiceError("Contract has invalid time window", 400) from error
+            raise ContractServiceError(
+                "Contract has invalid time window", 400
+            ) from error
 
         duration_hours = (contract_end - contract_start).total_seconds() / 3600.0
         if duration_hours <= 0:
@@ -516,9 +526,11 @@ class ContractService:
             "endTime": booking.endTime.isoformat(),
             "chargerType": booking.chargerType,
             "status": BookingStatus.PENDING.value,
-            "createdAt": booking.createdAt.isoformat()
-            if isinstance(booking.createdAt, datetime)
-            else str(booking.createdAt),
+            "createdAt": (
+                booking.createdAt.isoformat()
+                if isinstance(booking.createdAt, datetime)
+                else str(booking.createdAt)
+            ),
         }
         self.booking_repository.create_booking(booking_dict)
 
@@ -552,14 +564,18 @@ class ContractService:
             )
         return contract.to_public_dict()
 
-    def decline_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:
+    def decline_contract(
+        self, contract_id: str, caller_vessel_ids: List[str]
+    ) -> Dict[str, Any]:
         existing_data = self.repository.get_contract(contract_id)
         if not existing_data:
             raise ContractServiceError("Contract not found", 404)
 
         contract = Contract.from_dict(existing_data)
         if contract.vesselId not in caller_vessel_ids:
-            raise ContractServiceError("You do not own the vessel on this contract", 403)
+            raise ContractServiceError(
+                "You do not own the vessel on this contract", 403
+            )
         if contract.status != ContractStatus.PENDING.value:
             raise ContractServiceError("Only pending contracts can be declined", 400)
 

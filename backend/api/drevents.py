@@ -16,7 +16,9 @@ drevent_service = DREventService()
 eligibility_service = EligibilityService()
 
 
-dynamoDB_client = DynamoClient(table_name="aquacharge-drevents-dev", region_name="us-east-1")
+dynamoDB_client = DynamoClient(
+    table_name="aquacharge-drevents-dev", region_name="us-east-1"
+)
 
 
 @drevents_bp.route("", methods=["GET"])
@@ -192,7 +194,10 @@ def dispatch_drevent(event_id):
     except LookupError as error:
         return jsonify({"error": str(error)}), 404
     except Exception as error:
-        return jsonify({"error": "Failed to dispatch DR event", "details": str(error)}), 500
+        return (
+            jsonify({"error": "Failed to dispatch DR event", "details": str(error)}),
+            500,
+        )
 
 
 @drevents_bp.route("/<event_id>/cancel", methods=["PUT"])
@@ -200,7 +205,10 @@ def dispatch_drevent(event_id):
 def update_drevent(event_id):
     """Update an existing DR event with lifecycle guards."""
     try:
-        return jsonify(drevent_service.update_event(event_id, request.get_json() or {})), 200
+        return (
+            jsonify(drevent_service.update_event(event_id, request.get_json() or {})),
+            200,
+        )
     except DREventServiceError as error:
         return jsonify({"error": error.message}), error.status_code
     except Exception as error:
@@ -226,9 +234,13 @@ def start_drevent(event_id):
         if drevent.status == EventStatus.CANCELLED.value:
             return jsonify({"error": "Cannot start a cancelled event"}), 400
 
-        contracts_client = DynamoClient(table_name="aquacharge-contracts-dev", region_name="us-east-1")
+        contracts_client = DynamoClient(
+            table_name="aquacharge-contracts-dev", region_name="us-east-1"
+        )
         valid_contracts = contracts_client.scan_items()
-        valid_contracts = [c for c in valid_contracts if c.get("drEventId") == drevent.id]
+        valid_contracts = [
+            c for c in valid_contracts if c.get("drEventId") == drevent.id
+        ]
 
         if not valid_contracts:
             return jsonify({"error": "No valid contracts found for this event"}), 404

@@ -5,7 +5,9 @@ from middleware.auth import require_auth, require_role
 from services.contracts import ContractService, ContractServiceError, convert_decimals
 from services.eligibility import EligibilityService
 
-_vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
+_vessels_client = DynamoClient(
+    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+)
 
 contracts_bp = Blueprint("contracts", __name__)
 contract_service = ContractService()
@@ -218,7 +220,10 @@ def get_my_contracts():
     except ContractServiceError as error:
         return jsonify({"error": error.message}), error.status_code
     except Exception as e:
-        return jsonify({"error": "Failed to retrieve contracts", "details": str(e)}), 500
+        return (
+            jsonify({"error": "Failed to retrieve contracts", "details": str(e)}),
+            500,
+        )
 
 
 @contracts_bp.route("/<contract_id>/accept", methods=["POST"])
@@ -264,7 +269,14 @@ def decline_contract(contract_id: str):
         vessel_ids = _get_owned_vessel_ids(user_id)
 
         contract = contract_service.decline_contract(contract_id, vessel_ids)
-        return jsonify(convert_decimals({"message": "Contract declined successfully", "contract": contract})), 200
+        return (
+            jsonify(
+                convert_decimals(
+                    {"message": "Contract declined successfully", "contract": contract}
+                )
+            ),
+            200,
+        )
 
     except ContractServiceError as error:
         return jsonify({"error": error.message}), error.status_code

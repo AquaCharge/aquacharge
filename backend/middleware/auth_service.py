@@ -102,7 +102,8 @@ class AuthService:
         """Lookup by GSI first, with scan fallback for environments without index consistency."""
         try:
             users = self.dynamo_client.query_gsi(
-                index_name="email-index", key_condition_expression=Key("email").eq(email)
+                index_name="email-index",
+                key_condition_expression=Key("email").eq(email),
             )
             if users:
                 return users
@@ -142,7 +143,8 @@ class AuthService:
 
             token = self._generate_jwt_token(user)
             self.dynamo_client.update_item(
-                key={"id": user.id}, update_data={"updatedAt": datetime.now().isoformat()}
+                key={"id": user.id},
+                update_data={"updatedAt": datetime.now().isoformat()},
             )
 
             response_user = user.to_public_dict()

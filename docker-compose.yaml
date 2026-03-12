@@ -1,6 +1,16 @@
 version: "3.8"
 
 services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=logs,cloudwatch
+      - DEFAULT_REGION=us-east-1
+    volumes:
+      - localstack_data:/var/lib/localstack
+
   backend:
     build:
       context: ./backend
@@ -11,6 +21,13 @@ services:
       - "5050:5050"
     environment:
       - FLASK_ENV=development
+      - CLOUDWATCH_ENABLED=true
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+    depends_on:
+      - localstack
 
   frontend:
     build:
@@ -25,3 +42,6 @@ services:
       - VITE_API_URL=http://backend:5050
     depends_on:
       - backend
+
+volumes:
+  localstack_data:

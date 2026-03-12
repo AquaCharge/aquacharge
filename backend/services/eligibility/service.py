@@ -73,6 +73,20 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
         return None
 
 
+def _derive_soc_from_capacity(vessel: Dict[str, Any]) -> Optional[float]:
+    capacity_kwh = _to_float(vessel.get("capacity"))
+    max_capacity_kwh = _to_float(vessel.get("maxCapacity"))
+    if (
+        capacity_kwh is None
+        or max_capacity_kwh is None
+        or max_capacity_kwh <= 0
+    ):
+        return None
+
+    soc_percent = (capacity_kwh / max_capacity_kwh) * 100.0
+    return max(0.0, min(100.0, soc_percent))
+
+
 class VesselRepository(Protocol):
     def list_vessels(self) -> List[Dict[str, Any]]:
         pass
@@ -260,6 +274,8 @@ class EligibilityService:
         current_soc = self.measurement_repository.get_latest_soc(vessel.get("id"))
         if current_soc is None:
             current_soc = _to_float(vessel.get("currentSoc"))
+        if current_soc is None:
+            current_soc = _derive_soc_from_capacity(vessel)
 
         consumption_kwh_per_km = _to_float(event_details.get("kwhPerKm"))
         if consumption_kwh_per_km is None:

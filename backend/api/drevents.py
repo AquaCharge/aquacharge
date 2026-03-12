@@ -6,6 +6,7 @@ from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
 from services.dr.dispatcher import _dispatch_loop
 from models.drevent import DREvent, EventStatus
+from models.user import UserType
 from db.dynamoClient import DynamoClient
 
 drevents_bp = Blueprint("drevents", __name__)
@@ -130,20 +131,37 @@ def dispatch_drevent(event_id):
     """Dispatch a DR event: generate contracts for eligible vessels and advance state to Dispatched."""
     try:
         caller = request.current_user or {}
-        if caller.get("type_name") != "POWER_OPERATOR":
-            return (
-                jsonify({"error": "Only power operators can dispatch DR events"}),
-                403,
-            )
+        caller_type = caller.get("type")
+        caller_type_name = caller.get("type_name")
+        is_power_operator = (
+            caller_type_name == "POWER_OPERATOR"
+            or caller_type == UserType.POWER_OPERATOR.value
+        )
+        if not is_power_operator:
+            return jsonify({"error": "Only power operators can dispatch DR events"}), 403
 
         caller_user_id = str(caller.get("user_id") or caller.get("id") or "system")
 
         event = drevent_service.get_event(event_id)
+        event_status = str(event.get("status") or "")
+        if event_status not in {EventStatus.CREATED.value, EventStatus.DISPATCHED.value}:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "Only created or already dispatched DR events can generate "
+                            "contract offers"
+                        )
+                    }
+                ),
+                400,
+            )
 
         eligibility_result = eligibility_service.evaluate_vessels_for_event(
             event, include_ineligible=False
         )
         eligible_vessels = eligibility_result.get("vessels", [])
+        considered_vessels = eligible_vessels
 
         created_contracts = contract_service.dispatch_event(
             dr_event=event,
@@ -151,14 +169,19 @@ def dispatch_drevent(event_id):
             caller_user_id=caller_user_id,
         )
 
-        updated_event = drevent_service.update_event(event_id, {"status": "Dispatched"})
+        updated_event = event
+        if event_status == EventStatus.CREATED.value:
+            updated_event = drevent_service.update_event(event_id, {"status": "Dispatched"})
 
+        contracts_skipped = max(0, len(considered_vessels) - len(created_contracts))
         return (
             jsonify(
                 {
                     "message": "DR event dispatched successfully",
                     "event": updated_event,
+                    "eligibleVessels": len(eligible_vessels),
                     "contractsCreated": len(created_contracts),
+                    "contractsSkipped": contracts_skipped,
                 }
             ),
             200,

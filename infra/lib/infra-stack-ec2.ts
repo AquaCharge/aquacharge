@@ -221,6 +221,7 @@ export class InfraStack extends cdk.Stack {
       `DYNAMODB_DREVENTS_TABLE=${this.drEventsTable.tableName}`,
       `DYNAMODB_ORGS_TABLE=${this.orgsTable.tableName}`,
       `FLASK_ENV=${environmentName === 'prod' ? 'production' : 'development'}`,
+      'CLOUDWATCH_ENABLED=true',
       'EOF',
       'chown ec2-user:ec2-user /home/ec2-user/aquacharge/.env',
       '',

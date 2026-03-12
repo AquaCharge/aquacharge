@@ -167,6 +167,19 @@ export class InfraStack extends cdk.Stack {
       ],
     }));
 
+    // Grant EC2 access to CloudWatch Logs and Metrics
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'cloudwatch:PutMetricData',
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      resources: ['*'],
+    }));
+
     // ===== EC2 Instance =====
     // User data script to install Docker and Docker Compose
     const userData = ec2.UserData.forLinux();

@@ -124,6 +124,7 @@ DYNAMODB_CHARGERS_TABLE=aquacharge-chargers-dev
 DYNAMODB_VESSELS_TABLE=aquacharge-vessels-dev
 DYNAMODB_BOOKINGS_TABLE=aquacharge-bookings-dev
 FLASK_ENV=production
+CLOUDWATCH_ENABLED=true
 ENVEOF
 fi
 

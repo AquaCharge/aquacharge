@@ -231,7 +231,7 @@ export class InfraStack extends cdk.Stack {
       'systemctl start crond',
       '',
       '# Heartbeat: hit /api/health every minute so it appears in CloudWatch request metrics',
-      'echo "* * * * * ec2-user curl -sf http://localhost:5050/api/health > /dev/null 2>&1" > /etc/cron.d/aquacharge-heartbeat',
+      'echo "* * * * * ec2-user curl --connect-timeout 5 --max-time 10 -sf http://localhost:5050/api/health > /dev/null 2>&1" > /etc/cron.d/aquacharge-heartbeat',
       'restorecon -v /etc/cron.d/aquacharge-heartbeat',
       '',
       '# Install CloudWatch agent for monitoring',

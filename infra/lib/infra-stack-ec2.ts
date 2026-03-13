@@ -232,7 +232,7 @@ export class InfraStack extends cdk.Stack {
       '',
       '# Heartbeat: hit /api/health every minute so it appears in CloudWatch request metrics',
       'echo "* * * * * ec2-user curl -sf http://localhost:5050/api/health > /dev/null 2>&1" > /etc/cron.d/aquacharge-heartbeat',
-      'restorecon -v /etc/cron.d/aquacharge-heartbeat',
+      'command -v restorecon && restorecon -v /etc/cron.d/aquacharge-heartbeat || true',
       '',
       '# Install CloudWatch agent for monitoring',
       'wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm',

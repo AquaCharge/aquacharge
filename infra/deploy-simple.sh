@@ -115,7 +115,11 @@ rsync -av --progress \
 # Start containers
 echo ""
 echo "🐳 Starting containers..."
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@$INSTANCE_IP << 'EOF'
+FLASK_ENV=$( [ "$ENVIRONMENT" = "prod" ] && echo "production" || echo "development" )
+
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@$INSTANCE_IP \
+  ENVIRONMENT="$ENVIRONMENT" JWT_SECRET_KEY="$JWT_SECRET_KEY" FLASK_ENV="$FLASK_ENV" \
+  bash << 'EOF'
 cd /home/ec2-user/aquacharge
 
 # Verify docker-compose is installed
@@ -131,7 +135,7 @@ cat > .env << ENVEOF
 AWS_REGION=us-east-1
 ENVIRONMENT=${ENVIRONMENT}
 JWT_SECRET_KEY=${JWT_SECRET_KEY}
-FLASK_ENV=production
+FLASK_ENV=${FLASK_ENV}
 CLOUDWATCH_ENABLED=true
 ENVEOF
 

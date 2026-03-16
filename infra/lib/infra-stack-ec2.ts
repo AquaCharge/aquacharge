@@ -77,19 +77,31 @@ export class InfraStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // SSH and backend API always restricted to whitelisted IPs
+    // SSH always restricted to whitelisted IPs
     allowedIps.forEach((ip, index) => {
       this.securityGroup.addIngressRule(
         ec2.Peer.ipv4(ip),
         ec2.Port.tcp(22),
         `SSH access from whitelisted IP ${index + 1}`
       );
-      this.securityGroup.addIngressRule(
-        ec2.Peer.ipv4(ip),
-        ec2.Port.tcp(5050),
-        `Backend API access from whitelisted IP ${index + 1}`
-      );
     });
+
+    // Backend API (5050): open to the internet in prod, whitelisted-only in dev
+    if (publicAccess) {
+      this.securityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(5050),
+        'Backend API access (public)'
+      );
+    } else {
+      allowedIps.forEach((ip, index) => {
+        this.securityGroup.addIngressRule(
+          ec2.Peer.ipv4(ip),
+          ec2.Port.tcp(5050),
+          `Backend API access from whitelisted IP ${index + 1}`
+        );
+      });
+    }
 
     // HTTP/HTTPS: open to the internet in prod, whitelisted-only in dev
     if (publicAccess) {

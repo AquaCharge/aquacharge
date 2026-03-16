@@ -48,6 +48,7 @@ def _after(response):
 
 
 @app.get("/api/health")
+@limiter.exempt
 def health():
     return jsonify({"status": "ok", "service": "aquacharge-backend"})
 

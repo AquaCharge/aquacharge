@@ -8,6 +8,7 @@ try:
 except ModuleNotFoundError:
     geodesic = None
 
+import config
 from db.dynamoClient import DynamoClient
 
 DEFAULT_KWH_PER_KM = 0.2
@@ -105,7 +106,7 @@ class MeasurementRepository(Protocol):
 class DynamoVesselRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-vessels-dev", region_name="us-east-1"
+            table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_vessels(self) -> List[Dict[str, Any]]:
@@ -115,7 +116,7 @@ class DynamoVesselRepository:
 class DynamoStationRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-stations-dev", region_name="us-east-1"
+            table_name=config.STATIONS_TABLE, region_name=config.AWS_REGION
         )
 
     def get_station(self, station_id: str) -> Optional[Dict[str, Any]]:
@@ -126,7 +127,7 @@ class DynamoStationRepository:
 class DynamoMeasurementRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-measurements-dev", region_name="us-east-1"
+            table_name=config.MEASUREMENTS_TABLE, region_name=config.AWS_REGION
         )
         self._latest_soc_by_vessel_id: Optional[Dict[str, Tuple[str, float]]] = None
 

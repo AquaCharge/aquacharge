@@ -8,6 +8,7 @@ import re
 from boto3.dynamodb.conditions import Attr, Key
 from flask import current_app
 
+import config
 from db.dynamoClient import DynamoClient
 from models.user import User, UserRole, UserType
 
@@ -61,7 +62,7 @@ def validate_password(password: str) -> bool:
 class AuthService:
     def __init__(self, dynamo_client: Optional[DynamoClient] = None):
         self.dynamo_client = dynamo_client or DynamoClient(
-            table_name="aquacharge-users-dev", region_name="us-east-1"
+            table_name=config.USERS_TABLE, region_name=config.AWS_REGION
         )
 
     def _get_jwt_config(self) -> Tuple[str, str, timedelta]:

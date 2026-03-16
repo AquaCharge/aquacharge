@@ -57,7 +57,7 @@ export class DynamoDbTables {
         tableScope, 'OrgsTable', `aquacharge-orgs-${environmentName}`
       );
       this.measurementsTable = dynamodb.Table.fromTableName(
-        tableScope, 'measurementsTable', `aquacharge-measurments-${environmentName}`
+        tableScope, 'measurementsTable', `aquacharge-measurements-${environmentName}`
       )
     } else {
       // Users Table

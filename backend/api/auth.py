@@ -9,16 +9,17 @@ import hashlib
 import jwt
 import secrets
 import re
+import config
 from middleware.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
 
 # Initialize DynamoDB client
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-users-dev", region_name="us-east-1"
+    table_name=config.USERS_TABLE, region_name=config.AWS_REGION
 )
 _vessels_client = DynamoClient(
-    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 
 # In-memory storage for password reset tokens (replace with database in production)

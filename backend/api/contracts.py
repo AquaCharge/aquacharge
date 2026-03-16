@@ -4,9 +4,10 @@ from db.dynamoClient import DynamoClient
 from middleware.auth import require_auth, require_role
 from services.contracts import ContractService, ContractServiceError, convert_decimals
 from services.eligibility import EligibilityService
+import config
 
 _vessels_client = DynamoClient(
-    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 
 contracts_bp = Blueprint("contracts", __name__)

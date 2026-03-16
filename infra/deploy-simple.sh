@@ -8,6 +8,18 @@ set -e
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 STACK_NAME="AquaChargeStack-${ENVIRONMENT}"
 
+if [ -z "$JWT_SECRET_KEY" ]; then
+  echo "⚠️  JWT_SECRET_KEY is not set."
+  if [ "$ENVIRONMENT" = "prod" ]; then
+    echo "❌ JWT_SECRET_KEY is required for production deployments."
+    echo "   Set it with: export JWT_SECRET_KEY=\"\$(openssl rand -hex 32)\""
+    exit 1
+  else
+    JWT_SECRET_KEY="dev-jwt-secret-key-change-in-production"
+    echo "   Using default dev JWT secret."
+  fi
+fi
+
 echo "🚀 AquaCharge Deployment"
 echo "========================"
 echo ""
@@ -113,20 +125,15 @@ if ! command -v docker-compose &> /dev/null; then
   exit 1
 fi
 
-# Ensure .env exists
-if [ ! -f .env ]; then
-  echo "Creating .env file..."
-  cat > .env << 'ENVEOF'
+# Always write the .env so it reflects the current deployment environment
+echo "Creating .env file..."
+cat > .env << ENVEOF
 AWS_REGION=us-east-1
-DYNAMODB_USERS_TABLE=aquacharge-users-dev
-DYNAMODB_STATIONS_TABLE=aquacharge-stations-dev
-DYNAMODB_CHARGERS_TABLE=aquacharge-chargers-dev
-DYNAMODB_VESSELS_TABLE=aquacharge-vessels-dev
-DYNAMODB_BOOKINGS_TABLE=aquacharge-bookings-dev
+ENVIRONMENT=${ENVIRONMENT}
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
 FLASK_ENV=production
 CLOUDWATCH_ENABLED=true
 ENVEOF
-fi
 
 # Start containers with sudo (ec2-user is in docker group but needs re-login)
 sudo docker-compose -f docker-compose.prod.yaml down 2>/dev/null || true

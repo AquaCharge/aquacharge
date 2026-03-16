@@ -1,4 +1,5 @@
 import pytest
+import config
 from db.dynamoClient import DynamoClient
 from boto3.dynamodb.conditions import Key
 import uuid
@@ -12,7 +13,7 @@ test_item_ids = []
 @pytest.fixture
 def dynamo_client():
     """Fixture to provide DynamoDB client for testing"""
-    client = DynamoClient(table_name="aquacharge-users-dev", region_name="us-east-1")
+    client = DynamoClient(table_name=config.USERS_TABLE, region_name=config.AWS_REGION)
     yield client
 
 
@@ -48,7 +49,7 @@ def test_dynamodb_table_exists(dynamo_client):
     """Test that the table exists and is accessible"""
     try:
         table_name = dynamo_client.table.table_name
-        assert table_name == "aquacharge-users-dev"
+        assert table_name == config.USERS_TABLE
         print(f"✓ Table '{table_name}' is accessible")
     except Exception as e:
         pytest.fail(f"Table does not exist or is not accessible: {e}")

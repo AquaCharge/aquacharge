@@ -1,12 +1,13 @@
 from flask import Blueprint, jsonify, request
 from models.charger import Charger
 import decimal
+import config
 from db.dynamoClient import DynamoClient
 
 chargers_bp = Blueprint("chargers", __name__)
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-chargers-dev", region_name="us-east-1"
+    table_name=config.CHARGERS_TABLE, region_name=config.AWS_REGION
 )
 
 

@@ -1,3 +1,4 @@
+import config
 from db.dynamoClient import DynamoClient
 from services.battery_model.battery import BESS
 from models.measurments import Measurement
@@ -16,10 +17,10 @@ def _dispatch_loop(
 
     # Prepare clients for vessels and measurements
     vessels_client = DynamoClient(
-        table_name="aquacharge-vessels-dev", region_name="us-east-1"
+        table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
     )
     measurements_client = DynamoClient(
-        table_name="aquacharge-measurements-dev", region_name="us-east-1"
+        table_name=config.MEASUREMENTS_TABLE, region_name=config.AWS_REGION
     )
 
     # Build BESS instances keyed by contract id by loading the vessel record for each contract

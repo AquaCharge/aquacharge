@@ -40,7 +40,7 @@ def cleanup_test_data():
         if item_ids and resource_type in table_mappings:
             try:
                 dynamo_client = DynamoClient(
-                    table_name=table_mappings[resource_type], region_name="us-east-1"
+                    table_name=table_mappings[resource_type], region_name=config.AWS_REGION
                 )
                 for item_id in item_ids:
                     try:

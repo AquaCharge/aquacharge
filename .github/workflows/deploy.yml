@@ -48,6 +48,7 @@ jobs:
         env:
           ENVIRONMENT: ${{ steps.env.outputs.ENVIRONMENT }}
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          ALLOWED_IPS: ${{ vars.ALLOWED_IPS }}
         run: |
           chmod +x deploy-simple.sh
           ./deploy-simple.sh

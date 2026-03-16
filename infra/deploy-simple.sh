@@ -7,6 +7,7 @@ set -e
 
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 STACK_NAME="AquaChargeStack-${ENVIRONMENT}"
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 
 if [ -z "$JWT_SECRET_KEY" ]; then
   echo "⚠️  JWT_SECRET_KEY is not set."
@@ -118,7 +119,7 @@ echo "🐳 Starting containers..."
 FLASK_ENV=$( [ "$ENVIRONMENT" = "prod" ] && echo "production" || echo "development" )
 
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@$INSTANCE_IP \
-  ENVIRONMENT="$ENVIRONMENT" JWT_SECRET_KEY="$JWT_SECRET_KEY" FLASK_ENV="$FLASK_ENV" \
+  ENVIRONMENT="$ENVIRONMENT" JWT_SECRET_KEY="$JWT_SECRET_KEY" FLASK_ENV="$FLASK_ENV" AWS_REGION="$AWS_REGION" \
   bash << 'EOF'
 cd /home/ec2-user/aquacharge
 

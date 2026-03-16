@@ -11,7 +11,7 @@ export interface InfraStackProps extends cdk.StackProps {
   instanceType?: string; // Default: t3.micro (dev) / t3.small (prod)
   useExistingTables?: boolean; // If true, reference existing tables instead of creating new ones
   keyPairName?: string; // EC2 key pair name for SSH access
-  publicAccess?: boolean; // If true, open HTTP/HTTPS to the public internet (required for prod)
+  publicAccess?: boolean; // If true, open HTTP/HTTPS and port 5050 to the public internet (required for prod)
 }
 
 export class InfraStack extends cdk.Stack {

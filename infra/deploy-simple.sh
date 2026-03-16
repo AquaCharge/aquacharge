@@ -133,7 +133,7 @@ fi
 # Always write the .env so it reflects the current deployment environment
 echo "Creating .env file..."
 cat > .env << ENVEOF
-AWS_REGION=us-east-1
+AWS_REGION=${AWS_REGION}
 ENVIRONMENT=${ENVIRONMENT}
 JWT_SECRET_KEY=${JWT_SECRET_KEY}
 FLASK_ENV=${FLASK_ENV}

@@ -101,7 +101,6 @@ config = {
 }
 
 # Export commonly used configuration values for direct import
-# Use development config as default for direct imports
-_default_config = DevelopmentConfig()
-JWT_SECRET = _default_config.JWT_SECRET_KEY
-JWT_ALGORITHM = _default_config.JWT_ALGORITHM
+# Read JWT_SECRET from the environment so production uses the injected secret
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or "dev-jwt-secret-key"
+JWT_ALGORITHM = Config.JWT_ALGORITHM

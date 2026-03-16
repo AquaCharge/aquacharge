@@ -67,13 +67,13 @@ class AuthService:
 
     def _get_jwt_config(self) -> Tuple[str, str, timedelta]:
         try:
-            jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+            jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
             jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
             jwt_expiry = current_app.config.get(
                 "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=24)
             )
         except RuntimeError:
-            jwt_secret = "dev-jwt-secret-key"
+            jwt_secret = config.JWT_SECRET
             jwt_algorithm = "HS256"
             jwt_expiry = timedelta(hours=24)
         return jwt_secret, jwt_algorithm, jwt_expiry

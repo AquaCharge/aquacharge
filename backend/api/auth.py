@@ -67,14 +67,14 @@ def generate_jwt_token(user: User) -> str:
     """Generate a JWT token for a user"""
     # Get config from current app or use defaults
     try:
-        jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+        jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
         jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
         jwt_expiry = current_app.config.get(
             "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=24)
         )
     except RuntimeError:
         # Fallback for testing without app context
-        jwt_secret = "dev-jwt-secret-key"
+        jwt_secret = config.JWT_SECRET
         jwt_algorithm = "HS256"
         jwt_expiry = timedelta(hours=24)
 
@@ -92,11 +92,11 @@ def generate_jwt_token(user: User) -> str:
 def decode_jwt_token(token: str) -> Dict[str, Any]:
     """Decode and verify a JWT token"""
     try:
-        jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+        jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
         jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
     except RuntimeError:
         # Fallback for testing without app context
-        jwt_secret = "dev-jwt-secret-key"
+        jwt_secret = config.JWT_SECRET
         jwt_algorithm = "HS256"
 
     try:
@@ -161,10 +161,10 @@ def refresh_token():
 
         # Decode token (even if expired)
         try:
-            jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+            jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
             jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
         except RuntimeError:
-            jwt_secret = "dev-jwt-secret-key"
+            jwt_secret = config.JWT_SECRET
             jwt_algorithm = "HS256"
 
         try:

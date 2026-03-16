@@ -17,6 +17,12 @@ _vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name=
 _measurements_client = DynamoClient(
     table_name="aquacharge-measurements-dev", region_name="us-east-1"
 )
+_drevents_client = DynamoClient(
+    table_name="aquacharge-drevents-dev", region_name="us-east-1"
+)
+_stations_client = DynamoClient(
+    table_name="aquacharge-stations-dev", region_name="us-east-1"
+)
 contract_service = ContractService()
 
 
@@ -76,6 +82,58 @@ def _parse_measurement_timestamp(item: Dict[str, Any]) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def _enrich_active_contract(payload: Dict[str, Any], raw_contract: Dict[str, Any]):
+    """Add DR event details (location, energy progress) when the DR event is active."""
+    try:
+        dr_event_id = raw_contract.get("drEventId")
+        if not dr_event_id:
+            return
+
+        dr_event = _drevents_client.get_item(key={"id": dr_event_id})
+        if not dr_event:
+            return
+
+        event_status = str(dr_event.get("status") or "")
+        if event_status.upper() != "ACTIVE":
+            return
+
+        payload["drEventStatus"] = event_status
+
+        station_id = dr_event.get("stationId")
+        if station_id:
+            station = _stations_client.get_item(key={"id": station_id})
+            if station:
+                payload["station"] = {
+                    "id": station.get("id"),
+                    "displayName": station.get("displayName", ""),
+                    "city": station.get("city", ""),
+                    "provinceOrState": station.get("provinceOrState", ""),
+                    "latitude": float(station.get("latitude") or 0),
+                    "longitude": float(station.get("longitude") or 0),
+                }
+
+        contract_id = raw_contract.get("id")
+        if contract_id:
+            measurements = _measurements_client.query_gsi(
+                index_name="contractId-index",
+                key_condition_expression=Key("contractId").eq(contract_id),
+            )
+            total_delivered_kwh = sum(
+                float(m.get("energyKwh") or 0) for m in measurements
+            )
+            committed_kwh = float(raw_contract.get("energyAmount") or 0)
+            payload["energyDeliveredKwh"] = round(total_delivered_kwh, 2)
+            payload["energyRemainingKwh"] = round(
+                max(0, committed_kwh - total_delivered_kwh), 2
+            )
+
+        payload["committedPowerKw"] = float(
+            raw_contract.get("committedPowerKw") or 0
+        )
+    except Exception:
+        pass
+
+
 @vo_dashboard_bp.route("/dashboard", methods=["GET"])
 @require_auth
 def get_vo_dashboard():
@@ -131,6 +189,7 @@ def get_vo_dashboard():
         weekly_earnings = _weekly_earnings_from_contracts(all_contracts, now)
 
         active_contract = None
+        raw_active_contract = None
         for c in all_contracts:
             if c.get("status") != "active":
                 continue
@@ -139,14 +198,29 @@ def get_vo_dashboard():
                 continue
             end_utc = end_dt if end_dt.tzinfo else end_dt.replace(tzinfo=timezone.utc)
             if end_utc > now:
+                start_dt = _parse_iso(c.get("startTime"))
+                start_utc = (
+                    start_dt if start_dt and start_dt.tzinfo
+                    else start_dt.replace(tzinfo=timezone.utc) if start_dt
+                    else None
+                )
                 active_contract = {
                     "id": c.get("id"),
+                    "startTime": c.get("startTime"),
                     "endTime": c.get("endTime"),
                     "timeRemainingSeconds": max(0, int((end_utc - now).total_seconds())),
+                    "timeWindowSeconds": (
+                        max(0, int((end_utc - start_utc).total_seconds()))
+                        if start_utc else None
+                    ),
                     "estimatedEarnings": float(c.get("totalValue") or 0),
                     "energyAmountKwh": float(c.get("energyAmount") or 0),
                 }
+                raw_active_contract = c
                 break
+
+        if active_contract and raw_active_contract:
+            _enrich_active_contract(active_contract, raw_active_contract)
 
         current_vessel_payload = None
         if current_vessel_id and current_vessel_id in vessel_ids:

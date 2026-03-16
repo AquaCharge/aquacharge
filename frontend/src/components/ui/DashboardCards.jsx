@@ -1,12 +1,11 @@
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FileCheck, LineChart, Zap, Wallet } from 'lucide-react'
+import { FileCheck, Zap, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const SOC_TICKS = [100, 50, 0]
@@ -353,21 +352,6 @@ export const WeeklySocCard = ({ socSeries, socLoading, socError }) => {
                         strokeLinejoin="round"
                         strokeLinecap="round"
                       />
-                      {socSeries.map((point, index) => {
-                        const values = socSeries.map((p) => Number(p.socPercent ?? 0))
-                        const maxValue = Math.max(...values, 1)
-                        const x =
-                          socSeries.length === 1
-                            ? 540 / 2
-                            : (index / (socSeries.length - 1)) * 540
-                        const y = 160 - (Number(point.socPercent ?? 0) / maxValue) * 160
-                        return (
-                          <g key={point.timestamp}>
-                            <circle cx={10 + x} cy={20 + y} r="3.5" fill="#2563eb" />
-                            <circle cx={10 + x} cy={20 + y} r="6.5" fill="#2563eb" fillOpacity="0.14" />
-                          </g>
-                        )
-                      })}
                     </>
                   )
                 })()}
@@ -387,6 +371,173 @@ export const WeeklySocCard = ({ socSeries, socLoading, socError }) => {
             </div>
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+const formatActiveTimeRemaining = (seconds) => {
+  if (seconds == null || seconds <= 0) return '—'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+const formatContractDateShort = (iso) => {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const statusLabel = (status) => {
+  switch (status) {
+    case 'completed':
+      return 'Completed'
+    case 'failed':
+      return 'Failed'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return status ?? '—'
+  }
+}
+
+export const ActiveContractCard = ({ activeContract, lastContract }) => {
+  const contract = activeContract || lastContract
+  if (!contract) return null
+
+  const isActive = !!activeContract
+  const isDrActive = isActive && !!contract.drEventStatus
+  const hasEnergyProgress =
+    contract.energyDeliveredKwh != null && contract.energyAmountKwh > 0
+  const progressPercent = hasEnergyProgress
+    ? Math.min(100, (contract.energyDeliveredKwh / contract.energyAmountKwh) * 100)
+    : 0
+  const timeWindowSeconds = contract.timeWindowSeconds ??
+    (contract.startTime && contract.endTime
+      ? Math.max(0, (new Date(contract.endTime).getTime() - new Date(contract.startTime).getTime()) / 1000)
+      : 0)
+  const timeRemainingPercent = isActive && timeWindowSeconds > 0
+    ? Math.min(100, (contract.timeRemainingSeconds / timeWindowSeconds) * 100)
+    : 0
+  const stationLocation = contract.station
+    ? [
+        contract.station.city,
+        contract.station.provinceOrState,
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-md font-light mb-4 flex items-center gap-2">
+          {isActive && (
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping [animation-duration:3s] rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
+            </span>
+          )}
+          {isActive ? 'Active Contract' : 'Last Contract'}
+        </CardTitle>
+        {/* Stats row — two halves */}
+        <div className="grid grid-cols-2 gap-6">
+          {isActive ? (
+            <div>
+              <div className="text-3xl mb-1">
+                {formatActiveTimeRemaining(contract.timeRemainingSeconds ?? 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">Time remaining</p>
+            </div>
+          ) : (
+            <div>
+              <div className="text-3xl mb-1">
+                {formatContractDateShort(contract.endTime)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {statusLabel(contract.status)}
+              </p>
+            </div>
+          )}
+          {hasEnergyProgress ? (
+            <div>
+              <div className="text-3xl mb-1 tabular-nums">
+                {Number(contract.energyDeliveredKwh).toFixed(1)} kWh
+              </div>
+              <p className="text-xs text-muted-foreground">Discharged {Math.round(progressPercent)}% of committed energy</p>
+            </div>
+          ) : (
+            <div>
+              <div className="text-3xl mb-1 tabular-nums">
+                {Number(contract.energyAmountKwh ?? 0).toFixed(1)}
+              </div>
+              <p className="text-xs text-muted-foreground">kWh committed</p>
+            </div>
+          )}
+        </div>
+        {/* Progress bars row — each a quarter width */}
+        {isActive && (
+          <div className="grid grid-cols-2 gap-6 mt-6">
+            <div className="w-1/2">
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500/60 to-blue-600 transition-all duration-500 ease-out"
+                  style={{ width: `${timeRemainingPercent}%` }}
+                />
+              </div>
+              <div className="flex justify-end text-xs text-muted-foreground mt-1">
+                <span>{formatActiveTimeRemaining(timeWindowSeconds ?? 0)}</span>
+              </div>
+            </div>
+            {hasEnergyProgress ? (
+              <div className="w-1/2">
+                <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500/60 to-blue-600 transition-all duration-500 ease-out"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="flex justify-end text-xs text-muted-foreground mt-1">
+                  <span>{Number(contract.energyAmountKwh).toFixed(1)} kWh</span>
+                </div>
+              </div>
+            ) : <div />}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <hr className="my-4" />
+        <div className="flex flex-row flex-wrap gap-6 w-full justify-between items-stretch">
+          {stationLocation && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">LOCATION</p>
+              <p className="text-md font-semibold tabular-nums">{contract.station.displayName}</p>
+              <p className="text-md text-muted-foreground tabular-nums">{stationLocation}</p>
+            </div>
+          )}
+          {contract.committedPowerKw != null &&
+            contract.committedPowerKw > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">DISCHARGE POWER</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {Number(contract.committedPowerKw).toFixed(1)} kWh
+                </p>
+              </div>
+            )}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">
+              {isActive ? 'ESTIMATED EARNINGS' : 'EARNINGS'}
+            </p>
+            <p className="text-lg font-semibold tabular-nums">
+              ${Number(contract.estimatedEarnings ?? 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )

@@ -480,7 +480,19 @@ Success response `200`:
     "endTime": "ISO-8601 datetime",
     "timeRemainingSeconds": 0,
     "estimatedEarnings": 0.0,
-    "energyAmountKwh": 0.0
+    "energyAmountKwh": 0.0,
+    "drEventStatus": "Active",
+    "station": {
+      "id": "string",
+      "displayName": "string",
+      "city": "string",
+      "provinceOrState": "string",
+      "latitude": 0.0,
+      "longitude": 0.0
+    },
+    "committedPowerKw": 0.0,
+    "energyDeliveredKwh": 0.0,
+    "energyRemainingKwh": 0.0
   } | null,
   "metrics": {
     "contractsCompleted": 0,
@@ -500,7 +512,7 @@ Semantics:
 
 - `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` is computed as `(capacity / maxCapacity) * 100` when `maxCapacity > 0`. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
 - `metrics` are over all of the VO’s vessels (contracts completed, total kWh from completed/active contracts, total earnings from completed contracts).
-- `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`.
+- `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`. When the linked DR event is in `Active` status, the response is enriched with `drEventStatus`, `station` (location from DREvent → Station), `committedPowerKw`, `energyDeliveredKwh` (sum of measurements), and `energyRemainingKwh`. These fields are absent when no DR event is actively running.
 - `weeklyEarnings`: current week (Monday–Sunday UTC). `dailyEarnings` is 7 values for Mon..Sun from completed contracts whose `endTime` falls in that week; `todayIndex` is 0–6 (Mon=0, Sun=6).
 
 Error responses:

@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
+  ActiveContractCard,
   MetricCard,
   StateOfChargeCard,
   WeeklyEarningsCard,
@@ -112,6 +112,28 @@ const VesselDashboard = () => {
     { timestamp: '2026-03-16T08:00:00.000Z', socPercent: 30.5 },
     { timestamp: '2026-03-16T12:00:00.000Z', socPercent: 28.3 },
   ]
+  const sampleActiveContract = {
+    id: 'contract-sample-001',
+    startTime: '2026-03-16T12:00:00.000Z',
+    endTime: '2026-03-16T18:30:00.000Z',
+    timeRemainingSeconds: 5400,
+    timeWindowSeconds: 23400,
+    estimatedEarnings: 87.50,
+    energyAmountKwh: 175.0,
+    drEventStatus: 'Active',
+    station: {
+      id: 'station-sample-001',
+      displayName: 'Vancouver Marine Terminal',
+      city: 'Vancouver',
+      provinceOrState: 'BC',
+      latitude: 49.2827,
+      longitude: -123.1207,
+    },
+    committedPowerKw: 50.0,
+    energyDeliveredKwh: 68.3,
+    energyRemainingKwh: 106.7,
+  }
+
   const loadDashboard = async () => {
     if (!authToken) {
       setError('Missing authentication token.')
@@ -281,7 +303,19 @@ const VesselDashboard = () => {
   }
 
   const currentVessel = dashboard?.currentVessel ?? null
-  const activeContract = dashboard?.activeContract ?? null
+  const activeContract = sampleActiveContract // TODO: remove — replace with: dashboard?.activeContract ?? null
+  const lastContract = !activeContract && contractsHistory.length > 0
+    ? {
+        id: contractsHistory[0].id,
+        endTime: contractsHistory[0].endTime,
+        startTime: contractsHistory[0].startTime,
+        energyAmountKwh: Number(contractsHistory[0].energyAmount ?? 0),
+        estimatedEarnings: Number(contractsHistory[0].totalValue ?? 0),
+        committedPowerKw: Number(contractsHistory[0].committedPowerKw ?? 0),
+        status: contractsHistory[0].status,
+        vesselName: contractsHistory[0].vesselName,
+      }
+    : null
   const metrics = dashboard?.metrics ?? {
     contractsCompleted: 0,
     totalKwhDischarged: 0,
@@ -335,26 +369,9 @@ const VesselDashboard = () => {
 
       {/* Quick Stats: current vessel + metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-        <StateOfChargeCard
-          percent={currentVessel?.socPercent}
-          loading={isLoading}
-        />
-        <MetricCard
-          title="Discharge rate"
-          value={
-            currentVessel?.dischargeRateKw != null
-              ? `${Number(currentVessel.dischargeRateKw).toFixed(1)} kW`
-              : '—'
-          }
-          helper="Max discharge rate"
-          loading={isLoading}
-        />
-        <MetricCard
-          title="Time remaining"
-          value={formatTimeRemaining(activeContract?.timeRemainingSeconds)}
-          helper="Active contract"
-          loading={isLoading}
-        />
+        <div className="lg:col-span-3 md:col-span-2 col-span-1">
+          <ActiveContractCard activeContract={activeContract} lastContract={lastContract} />
+        </div>
         <Card>
           <CardHeader>
             <CardTitle className="text-md font-light">Last updated</CardTitle>
@@ -382,28 +399,6 @@ const VesselDashboard = () => {
       </div>
 
       {/* Active contract card */}
-      {activeContract && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active contract</CardTitle>
-            <CardDescription>
-              Ends {activeContract.endTime ? new Date(activeContract.endTime).toLocaleString() : '—'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-muted-foreground">Energy (this contract)</p>
-                <p className="font-semibold">{Number(activeContract.energyAmountKwh ?? 0).toFixed(1)} kWh</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Earnings (this contract)</p>
-                <p className="font-semibold">${Number(activeContract.estimatedEarnings ?? 0).toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
       {/* Contracts History */}
       <Card className="mt-4">
         <CardHeader className="flex flex-row items-center justify-between gap-4">

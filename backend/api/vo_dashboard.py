@@ -1,6 +1,8 @@
 """VO (Vessel Operator) dashboard API: aggregated metrics and current vessel."""
 
 from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List
+
 from flask import Blueprint, jsonify, request
 from boto3.dynamodb.conditions import Key
 
@@ -12,6 +14,9 @@ vo_dashboard_bp = Blueprint("vo_dashboard", __name__)
 
 _users_client = DynamoClient(table_name="aquacharge-users-dev", region_name="us-east-1")
 _vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
+_measurements_client = DynamoClient(
+    table_name="aquacharge-measurements-dev", region_name="us-east-1"
+)
 contract_service = ContractService()
 
 
@@ -58,6 +63,17 @@ def _weekly_earnings_from_contracts(contracts, now):
         "dailyEarnings": daily_rounded,
         "todayIndex": today_index,
     }
+
+
+def _parse_measurement_timestamp(item: Dict[str, Any]) -> datetime | None:
+    raw = item.get("timestamp") or item.get("createdAt")
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 @vo_dashboard_bp.route("/dashboard", methods=["GET"])
@@ -163,3 +179,94 @@ def get_vo_dashboard():
 
     except Exception as e:
         return jsonify({"error": "Failed to load dashboard", "details": str(e)}), 500
+
+
+@vo_dashboard_bp.route("/soc-history", methods=["GET"])
+@require_auth
+def get_weekly_soc_history():
+    """
+    Time-series SoC history for the authenticated user's current vessel.
+
+    Looks back over the previous 7 *24-hour* days (rolling window) and returns
+    measurement-backed SoC points for the vessel currently selected on the VO
+    dashboard. This endpoint is intentionally additive and does not change the
+    existing /dashboard contract.
+    """
+    try:
+        user_id = request.current_user.get("user_id")
+        if user_id is None:
+            return jsonify({"error": "Authentication required"}), 401
+        user_id = str(user_id)
+
+        user_data = _users_client.get_item(key={"id": user_id})
+        if not user_data:
+            return jsonify({"error": "User not found"}), 404
+
+        current_vessel_id = (user_data.get("currentVesselId") or "").strip() or None
+        if not current_vessel_id:
+            return (
+                jsonify(
+                    {
+                        "points": [],
+                        "empty": True,
+                        "currentVesselId": None,
+                        "message": "No current vessel selected",
+                    }
+                ),
+                200,
+            )
+
+        now = datetime.now(timezone.utc)
+        window_start = now - timedelta(days=7)
+
+        try:
+            measurements: List[Dict[str, Any]] = _measurements_client.scan_items()
+        except Exception:
+            measurements = []
+
+        series: List[Dict[str, Any]] = []
+        for item in measurements:
+            if item.get("vesselId") != current_vessel_id:
+                continue
+            ts = _parse_measurement_timestamp(item)
+            if ts is None or ts < window_start or ts > now:
+                continue
+
+            soc_value = item.get("currentSOC")
+            try:
+                soc = float(soc_value)
+            except (TypeError, ValueError):
+                continue
+
+            if soc < 0 or soc > 200:
+                # Discard clearly invalid telemetry rather than breaking the graph.
+                continue
+
+            series.append(
+                {
+                    "timestamp": ts.isoformat(),
+                    "socPercent": round(soc, 2),
+                }
+            )
+
+        series.sort(key=lambda point: point["timestamp"])
+
+        payload = {
+            "currentVesselId": current_vessel_id,
+            "points": series,
+            "empty": len(series) == 0,
+            "windowStart": window_start.isoformat(),
+            "windowEnd": now.isoformat(),
+        }
+        return jsonify(convert_decimals(payload)), 200
+
+    except Exception as e:  # pragma: no cover - defensive logging path
+        return (
+            jsonify(
+                {
+                    "error": "Failed to load SoC history",
+                    "details": str(e),
+                }
+            ),
+            500,
+        )

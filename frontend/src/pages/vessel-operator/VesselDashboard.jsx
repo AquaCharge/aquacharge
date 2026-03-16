@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Card,
@@ -9,8 +9,15 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { MetricCard, StateOfChargeCard, WeeklyEarningsCard, AllTimeCard } from '@/components/ui/DashboardCards'
-import { Ship, Calendar, Zap } from 'lucide-react'
+import {
+  MetricCard,
+  StateOfChargeCard,
+  WeeklyEarningsCard,
+  AllTimeCard,
+  WeeklySocCard,
+  QuickActionsCard,
+} from '@/components/ui/DashboardCards'
+import { Calendar, Ship, Zap } from 'lucide-react'
 import { getApiEndpoint } from '@/config/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -77,6 +84,9 @@ const VesselDashboard = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [vesselSelectLoading, setVesselSelectLoading] = useState(false)
+  const [socSeries, setSocSeries] = useState([])
+  const [socLoading, setSocLoading] = useState(false)
+  const [socError, setSocError] = useState('')
   const contractsHistoryLoadedOnce = useRef(false)
 
   const authToken = localStorage.getItem('auth-token')
@@ -86,6 +96,22 @@ const VesselDashboard = () => {
     dailyEarnings: [128, 320.5, 362, 284.15, 421, 0, 0],
     todayIndex: 4,  // 0=Mon, 6=Sun; e.g. 4 = Friday
   }
+  const sampleSocSeries = [
+    { timestamp: '2026-03-10T08:00:00.000Z', socPercent: 92.5 },
+    { timestamp: '2026-03-10T20:00:00.000Z', socPercent: 88.3 },
+    { timestamp: '2026-03-11T08:00:00.000Z', socPercent: 80.1 },
+    { timestamp: '2026-03-11T20:00:00.000Z', socPercent: 75.4 },
+    { timestamp: '2026-03-12T08:00:00.000Z', socPercent: 68.9 },
+    { timestamp: '2026-03-12T20:00:00.000Z', socPercent: 63.2 },
+    { timestamp: '2026-03-13T08:00:00.000Z', socPercent: 58.7 },
+    { timestamp: '2026-03-13T20:00:00.000Z', socPercent: 52.4 },
+    { timestamp: '2026-03-14T08:00:00.000Z', socPercent: 47.8 },
+    { timestamp: '2026-03-14T20:00:00.000Z', socPercent: 42.1 },
+    { timestamp: '2026-03-15T08:00:00.000Z', socPercent: 38.9 },
+    { timestamp: '2026-03-15T20:00:00.000Z', socPercent: 35.2 },
+    { timestamp: '2026-03-16T08:00:00.000Z', socPercent: 30.5 },
+    { timestamp: '2026-03-16T12:00:00.000Z', socPercent: 28.3 },
+  ]
   const loadDashboard = async () => {
     if (!authToken) {
       setError('Missing authentication token.')
@@ -112,6 +138,35 @@ const VesselDashboard = () => {
       setError(e.message || 'Failed to load dashboard.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadSocHistory = async () => {
+    if (!authToken) {
+      setSocSeries([])
+      setSocLoading(false)
+      return
+    }
+    setSocLoading(true)
+    setSocError('')
+    try {
+      const response = await fetch(getApiEndpoint('/api/vo/soc-history'), {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || payload.details || 'Failed to load SoC history')
+      }
+      const data = await response.json()
+      const points = Array.isArray(data?.points) ? data.points : []
+      points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      setSocSeries(points)
+      setSocSeries(sampleSocSeries) // TODO: remove this after testing
+    } catch (e) {
+      setSocError(e.message || 'Failed to load SoC history.')
+      setSocSeries([])
+    } finally {
+      setSocLoading(false)
     }
   }
 
@@ -181,6 +236,12 @@ const VesselDashboard = () => {
     const timer = window.setInterval(loadDashboard, POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [authToken])
+
+  useEffect(() => {
+    // SoC history is tied to the current vessel selection.
+    if (!authToken) return
+    loadSocHistory()
+  }, [authToken, user?.currentVesselId])
 
   useEffect(() => {
     loadMyContracts()
@@ -294,13 +355,28 @@ const VesselDashboard = () => {
           helper="Active contract"
           loading={isLoading}
         />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-md font-light">Last updated</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dashboard?.updatedAt ? (
+              <p className="text-sm text-muted-foreground">
+                {new Date(dashboard.updatedAt).toLocaleString()}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">—</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* All time stats + weekly earnings */}
+      {/* Weekly SoC graph + weekly earnings */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <AllTimeCard metrics={metrics} loading={isLoading} />
+        <WeeklySocCard socSeries={socSeries} socLoading={socLoading} socError={socError} />
         <WeeklyEarningsCard
-          weeklyEarnings={dashboard?.weeklyEarnings}
+          // weeklyEarnings={dashboard?.weeklyEarnings} 
+          weeklyEarnings={sampleWeeklyEarnings} // TODO: remove this after testing
           loading={isLoading}
         />
       </div>
@@ -328,87 +404,6 @@ const VesselDashboard = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Quick Actions with links */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks for vessel operators</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <Link
-                to="/find-stations"
-                className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Ship className="h-5 w-5 text-black" />
-                  <div>
-                    <p className="font-medium">Find Charging Station</p>
-                    <p className="text-sm text-gray-600">Locate nearby chargers</p>
-                  </div>
-                </div>
-              </Link>
-              <Link
-                to="/my-bookings"
-                className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Calendar className="h-5 w-5 text-black" />
-                  <div>
-                    <p className="font-medium">My Bookings</p>
-                    <p className="text-sm text-gray-600">View and manage reservations</p>
-                  </div>
-                </div>
-              </Link>
-              <Link
-                to="/my-vessels"
-                className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Ship className="h-5 w-5 text-black" />
-                  <div>
-                    <p className="font-medium">Manage Vessels</p>
-                    <p className="text-sm text-gray-600">Add or edit vessel information</p>
-                  </div>
-                </div>
-              </Link>
-              <Link
-                to="/my-contracts"
-                className="block w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Zap className="h-5 w-5 text-black" />
-                  <div>
-                    <p className="font-medium">My Contracts</p>
-                    <p className="text-sm text-gray-600">Review and accept DR contracts</p>
-                  </div>
-                </div>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Last updated</CardTitle>
-            <CardDescription>
-              Dashboard refreshes every 10–15 seconds
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dashboard?.updatedAt ? (
-              <p className="text-sm text-muted-foreground">
-                {new Date(dashboard.updatedAt).toLocaleString()}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Contracts History */}
       <Card className="mt-4">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -496,6 +491,41 @@ const VesselDashboard = () => {
           )}
         </CardContent>
       </Card>
+      {/* Quick Actions with links + all-time stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <QuickActionsCard
+          title="Quick Actions"
+          description="Common tasks for vessel operators"
+          items={[
+            {
+              to: '/find-stations',
+              icon: <Ship className="h-5 w-5 text-black" />,
+              label: 'Find Charging Station',
+              helper: 'Locate nearby chargers',
+            },
+            {
+              to: '/my-bookings',
+              icon: <Calendar className="h-5 w-5 text-black" />,
+              label: 'My Bookings',
+              helper: 'View and manage reservations',
+            },
+            {
+              to: '/my-vessels',
+              icon: <Ship className="h-5 w-5 text-black" />,
+              label: 'Manage Vessels',
+              helper: 'Add or edit vessel information',
+            },
+            {
+              to: '/my-contracts',
+              icon: <Zap className="h-5 w-5 text-black" />,
+              label: 'My Contracts',
+              helper: 'Review and accept DR contracts',
+            },
+          ]}
+        />
+
+        <AllTimeCard metrics={metrics} loading={isLoading} />
+      </div>
     </div>
   )
 }

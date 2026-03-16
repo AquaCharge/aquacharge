@@ -511,6 +511,44 @@ Error responses:
 
 The VO dashboard UI also shows a **Contracts History** list, sourced from `GET /api/contracts/my-contracts`, displaying only contracts with status `completed`, `failed`, or `cancelled`.
 
+### `GET /api/vo/soc-history`
+
+Weekly state-of-charge (SoC) history for the vessel operator dashboard. Requires authentication and uses the caller’s `currentVesselId` to resolve the vessel.
+
+Request headers:
+
+- `Authorization: Bearer <jwt>`
+
+Success response `200`:
+
+```json
+{
+  "currentVesselId": "string | null",
+  "points": [
+    {
+      "timestamp": "ISO-8601 datetime",
+      "socPercent": 0.0
+    }
+  ],
+  "empty": false,
+  "windowStart": "ISO-8601 datetime",
+  "windowEnd": "ISO-8601 datetime"
+}
+```
+
+Semantics:
+
+- The endpoint inspects the authenticated user’s `currentVesselId`. If none is set, it returns an empty `points` array and `currentVesselId: null`.
+- The time window is the *previous 7×24 hours* (rolling window), computed from the current UTC time.
+- `points` contains measurement-backed SoC telemetry for the current vessel only, sorted by `timestamp` ascending.
+- Each `socPercent` value comes from the `currentSOC` field in the measurements table and is clamped to discard clearly invalid values (< 0 or > 200).
+
+Error responses:
+
+- `401`: authentication required
+- `404`: user not found
+- `500`: SoC history load failure
+
 ## Booking Service Rules
 
 The booking API is backed by a service-layer business rule engine (`BookingService`).

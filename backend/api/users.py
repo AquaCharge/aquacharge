@@ -1,11 +1,12 @@
 from flask import Blueprint, jsonify, request
 from models.user import User, UserRole, UserType
 import hashlib
+import config
 from db.dynamoClient import DynamoClient
 
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-users-dev", region_name="us-east-1"
+    table_name=config.USERS_TABLE, region_name=config.AWS_REGION
 )
 
 users_bp = Blueprint("users", __name__)

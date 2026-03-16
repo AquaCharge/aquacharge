@@ -2,11 +2,12 @@ from flask import Blueprint, jsonify, request
 from models.station import Station, StationStatus
 from db.dynamoClient import DynamoClient
 import decimal
+import config
 
 stations_bp = Blueprint("stations", __name__)
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-stations-dev", region_name="us-east-1"
+    table_name=config.STATIONS_TABLE, region_name=config.AWS_REGION
 )
 
 

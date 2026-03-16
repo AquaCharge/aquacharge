@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Protocol
 import uuid
 
+import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 from models.contract import Contract, ContractStatus
@@ -74,7 +75,7 @@ class DREventRepository(Protocol):
 class DynamoContractRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-contracts-dev", region_name="us-east-1"
+            table_name=config.CONTRACTS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_contracts(self) -> List[Dict[str, Any]]:
@@ -99,7 +100,7 @@ class DynamoContractRepository:
 class DynamoBookingRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-bookings-dev", region_name="us-east-1"
+            table_name=config.BOOKINGS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_bookings(self) -> List[Dict[str, Any]]:
@@ -112,7 +113,7 @@ class DynamoBookingRepository:
 class DynamoVesselRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-vessels-dev", region_name="us-east-1"
+            table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
         )
 
     def get_vessel(self, vessel_id: str) -> Optional[Dict[str, Any]]:
@@ -123,7 +124,7 @@ class DynamoVesselRepository:
 class DynamoDREventRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-drevents-dev", region_name="us-east-1"
+            table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
         )
 
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:

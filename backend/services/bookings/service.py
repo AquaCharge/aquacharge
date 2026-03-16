@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Protocol
 
+import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 
@@ -46,7 +47,7 @@ class BookingRepository(Protocol):
 class DynamoBookingRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-bookings-dev", region_name="us-east-1"
+            table_name=config.BOOKINGS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_bookings(self) -> List[Dict[str, Any]]:

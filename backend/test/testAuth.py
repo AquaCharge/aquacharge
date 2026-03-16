@@ -3,6 +3,7 @@ import time
 from flask import Flask
 from api.auth import auth_bp
 from api.users import users_bp
+import config
 from db.dynamoClient import DynamoClient
 from boto3.dynamodb.conditions import Key
 
@@ -29,7 +30,7 @@ def cleanup_users():
     # BUT never delete the admin user or other pre-existing users
     if created_test_emails:
         dynamo_client = DynamoClient(
-            table_name="aquacharge-users-dev", region_name="us-east-1"
+            table_name=config.USERS_TABLE, region_name=config.AWS_REGION
         )
         for email in created_test_emails:
             # Skip admin and any other system users
@@ -125,7 +126,7 @@ def test_register_success(client):
 
     # Clean up any existing test user first (from failed previous runs)
     dynamo_client = DynamoClient(
-        table_name="aquacharge-users-dev", region_name="us-east-1"
+        table_name=config.USERS_TABLE, region_name=config.AWS_REGION
     )
     try:
         # Check by email using GSI
@@ -288,7 +289,7 @@ def test_patch_me_set_current_vessel(client, auth_user_credentials):
     user_id = login_rv.get_json()["user"]["id"]
 
     vessels_client = DynamoClient(
-        table_name="aquacharge-vessels-dev", region_name="us-east-1"
+        table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
     )
     vessel_id = "test-vessel-patch-me-" + str(int(time.time() * 1000))
     vessels_client.put_item(
@@ -332,7 +333,7 @@ def test_patch_me_clear_current_vessel(client, auth_user_credentials):
     user_id = login_rv.get_json()["user"]["id"]
 
     vessels_client = DynamoClient(
-        table_name="aquacharge-vessels-dev", region_name="us-east-1"
+        table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
     )
     vessel_id = "test-vessel-clear-" + str(int(time.time() * 1000))
     vessels_client.put_item(

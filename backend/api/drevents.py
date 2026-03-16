@@ -8,6 +8,7 @@ from services.dr.dispatcher import _dispatch_loop
 from models.drevent import DREvent, EventStatus
 from models.user import UserType
 from db.dynamoClient import DynamoClient
+import config
 
 drevents_bp = Blueprint("drevents", __name__)
 
@@ -17,7 +18,7 @@ eligibility_service = EligibilityService()
 
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-drevents-dev", region_name="us-east-1"
+    table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
 )
 
 
@@ -235,7 +236,7 @@ def start_drevent(event_id):
             return jsonify({"error": "Cannot start a cancelled event"}), 400
 
         contracts_client = DynamoClient(
-            table_name="aquacharge-contracts-dev", region_name="us-east-1"
+            table_name=config.CONTRACTS_TABLE, region_name=config.AWS_REGION
         )
         valid_contracts = contracts_client.scan_items()
         valid_contracts = [

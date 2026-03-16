@@ -10,6 +10,7 @@ from api.vessels import vessels_bp
 from api.contracts import contracts_bp
 from api.auth import auth_bp
 from config import JWT_SECRET, JWT_ALGORITHM
+import config
 from db.dynamoClient import DynamoClient
 import decimal
 
@@ -27,19 +28,19 @@ created_test_items = {
 def cleanup_test_data():
     """Clean up all test items created during tests"""
     table_mappings = {
-        "bookings": "aquacharge-bookings-dev",
-        "chargers": "aquacharge-chargers-dev",
-        "stations": "aquacharge-stations-dev",
-        "users": "aquacharge-users-dev",
-        "vessels": "aquacharge-vessels-dev",
-        "contracts": "aquacharge-contracts-dev",
+        "bookings": config.BOOKINGS_TABLE,
+        "chargers": config.CHARGERS_TABLE,
+        "stations": config.STATIONS_TABLE,
+        "users": config.USERS_TABLE,
+        "vessels": config.VESSELS_TABLE,
+        "contracts": config.CONTRACTS_TABLE,
     }
 
     for resource_type, item_ids in created_test_items.items():
         if item_ids and resource_type in table_mappings:
             try:
                 dynamo_client = DynamoClient(
-                    table_name=table_mappings[resource_type], region_name="us-east-1"
+                    table_name=table_mappings[resource_type], region_name=config.AWS_REGION
                 )
                 for item_id in item_ids:
                     try:

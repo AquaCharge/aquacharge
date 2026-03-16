@@ -4,9 +4,10 @@ from datetime import datetime
 from db.dynamoClient import DynamoClient
 from boto3.dynamodb.conditions import Key
 import decimal
+import config
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 
 vessels_bp = Blueprint("vessels", __name__)

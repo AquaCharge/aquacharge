@@ -243,7 +243,7 @@ export default function Login() {
         </Card>
       </div>
 
-      {/* Demo Credentials - wider width */}
+      {import.meta.env.DEV && (
       <div className="w-full max-w-3xl mt-6 p-6 bg-white/60 backdrop-blur rounded-xl border border-gray-200 shadow-sm">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Demo Credentials</h3>
 
@@ -267,6 +267,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

@@ -8,9 +8,10 @@ import { DynamoDbTables } from './dynamodb-tables';
 export interface InfraStackProps extends cdk.StackProps {
   environmentName?: string;
   allowedIpAddresses?: string[]; // Whitelist of IPs that can access the application
-  instanceType?: string; // Default: t3.micro
+  instanceType?: string; // Default: t3.micro (dev) / t3.small (prod)
   useExistingTables?: boolean; // If true, reference existing tables instead of creating new ones
   keyPairName?: string; // EC2 key pair name for SSH access
+  publicAccess?: boolean; // If true, open HTTP/HTTPS and port 5050 to the public internet (required for prod)
 }
 
 export class InfraStack extends cdk.Stack {
@@ -30,11 +31,15 @@ export class InfraStack extends cdk.Stack {
     super(scope, id, props);
 
     const environmentName = props?.environmentName || 'dev';
+    const isProd = environmentName === 'prod';
     // Always include the hardcoded IP, and add any additional IPs from props
     const allowedIps = ['131.202.255.236/32', ...(props?.allowedIpAddresses || [])];
-    const instanceTypeString = props?.instanceType || 't3.micro';
+    // prod uses t3.small by default (1 vCPU / 2 GB) to handle Docker + Flask + Nginx
+    const instanceTypeString = props?.instanceType || (isProd ? 't3.small' : 't3.micro');
     const useExistingTables = props?.useExistingTables ?? false; // Default to false to allow CDK to manage tables
     const keyPairName = props?.keyPairName || 'aquacharge-key';
+    // publicAccess defaults to true for prod — opens HTTP/HTTPS to the internet
+    const publicAccess = props?.publicAccess ?? isProd;
 
     // ===== DynamoDB Tables =====
     const tables = new DynamoDbTables(this, { environmentName, useExistingTables });
@@ -72,52 +77,47 @@ export class InfraStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // Add SSH access for whitelisted IPs
-    if (allowedIps.length > 0) {
+    // SSH always restricted to whitelisted IPs
+    allowedIps.forEach((ip, index) => {
+      this.securityGroup.addIngressRule(
+        ec2.Peer.ipv4(ip),
+        ec2.Port.tcp(22),
+        `SSH access from whitelisted IP ${index + 1}`
+      );
+    });
+
+    // Backend API (5050): open to the internet in prod, whitelisted-only in dev
+    if (publicAccess) {
+      this.securityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(5050),
+        'Backend API access (public)'
+      );
+    } else {
       allowedIps.forEach((ip, index) => {
-        this.securityGroup.addIngressRule(
-          ec2.Peer.ipv4(ip),
-          ec2.Port.tcp(22),
-          `SSH access from whitelisted IP ${index + 1}`
-        );
-        this.securityGroup.addIngressRule(
-          ec2.Peer.ipv4(ip),
-          ec2.Port.tcp(80),
-          `HTTP access from whitelisted IP ${index + 1}`
-        );
-        this.securityGroup.addIngressRule(
-          ec2.Peer.ipv4(ip),
-          ec2.Port.tcp(443),
-          `HTTPS access from whitelisted IP ${index + 1}`
-        );
         this.securityGroup.addIngressRule(
           ec2.Peer.ipv4(ip),
           ec2.Port.tcp(5050),
           `Backend API access from whitelisted IP ${index + 1}`
         );
       });
-    } else {
-      // If no IPs specified, allow from anywhere (not recommended for production)
-      this.securityGroup.addIngressRule(
-        ec2.Peer.anyIpv4(),
-        ec2.Port.tcp(22),
-        'SSH access (WARNING: open to all)'
-      );
+    }
+
+    // HTTP: open to the internet in prod, whitelisted-only in dev (443 not opened until TLS is configured)
+    if (publicAccess) {
       this.securityGroup.addIngressRule(
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(80),
-        'HTTP access (WARNING: open to all)'
+        'HTTP access (public)'
       );
-      this.securityGroup.addIngressRule(
-        ec2.Peer.anyIpv4(),
-        ec2.Port.tcp(443),
-        'HTTPS access (WARNING: open to all)'
-      );
-      this.securityGroup.addIngressRule(
-        ec2.Peer.anyIpv4(),
-        ec2.Port.tcp(5050),
-        'Backend API access (WARNING: open to all)'
-      );
+    } else {
+      allowedIps.forEach((ip, index) => {
+        this.securityGroup.addIngressRule(
+          ec2.Peer.ipv4(ip),
+          ec2.Port.tcp(80),
+          `HTTP access from whitelisted IP ${index + 1}`
+        );
+      });
     }
 
     // ===== IAM Role for EC2 =====
@@ -208,18 +208,11 @@ export class InfraStack extends cdk.Stack {
       'mkdir -p /home/ec2-user/aquacharge',
       'chown ec2-user:ec2-user /home/ec2-user/aquacharge',
       '',
-      '# Set environment variables for DynamoDB',
+      '# Set environment variables — JWT_SECRET_KEY must be injected by deploy script',
+      '# This placeholder .env is overwritten by deploy-simple.sh after code is copied.',
       'cat > /home/ec2-user/aquacharge/.env << EOF',
       `AWS_REGION=${this.region}`,
-      `DYNAMODB_USERS_TABLE=${this.usersTable.tableName}`,
-      `DYNAMODB_STATIONS_TABLE=${this.stationsTable.tableName}`,
-      `DYNAMODB_CHARGERS_TABLE=${this.chargersTable.tableName}`,
-      `DYNAMODB_VESSELS_TABLE=${this.vesselsTable.tableName}`,
-      `DYNAMODB_BOOKINGS_TABLE=${this.bookingsTable.tableName}`,
-      `DYNAMODB_CONTRACTS_TABLE=${this.contractsTable.tableName}`,
-      `DYNAMODB_PORTS_TABLE=${this.portsTable.tableName}`,
-      `DYNAMODB_DREVENTS_TABLE=${this.drEventsTable.tableName}`,
-      `DYNAMODB_ORGS_TABLE=${this.orgsTable.tableName}`,
+      `ENVIRONMENT=${environmentName}`,
       `FLASK_ENV=${environmentName === 'prod' ? 'production' : 'development'}`,
       'CLOUDWATCH_ENABLED=true',
       'EOF',
@@ -281,6 +274,12 @@ export class InfraStack extends cdk.Stack {
       requireImdsv2: true, // Security best practice
     });
 
+    // ===== Elastic IP =====
+    const eip = new ec2.CfnEIP(this, 'AquaChargeEIP', {
+      instanceId: this.ec2Instance.instanceId,
+      tags: [{ key: 'Name', value: `aquacharge-eip-${environmentName}` }],
+    });
+
     // ===== Outputs =====
     new cdk.CfnOutput(this, 'InstanceId', {
       value: this.ec2Instance.instanceId,
@@ -289,8 +288,8 @@ export class InfraStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'InstancePublicIp', {
-      value: this.ec2Instance.instancePublicIp,
-      description: 'EC2 Instance Public IP',
+      value: eip.ref,
+      description: 'EC2 Elastic IP (stable)',
       exportName: `aquacharge-instance-ip-${environmentName}`,
     });
 
@@ -301,12 +300,12 @@ export class InfraStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'SSHCommand', {
-      value: `ssh -i <your-key.pem> ec2-user@${this.ec2Instance.instancePublicIp}`,
+      value: `ssh -i <your-key.pem> ec2-user@${eip.ref}`,
       description: 'SSH command to connect to the instance',
     });
 
     new cdk.CfnOutput(this, 'ApplicationUrl', {
-      value: `http://${this.ec2Instance.instancePublicIp}`,
+      value: `http://${eip.ref}`,
       description: 'Application URL',
     });
 

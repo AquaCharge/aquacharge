@@ -16,7 +16,7 @@ if [ -z "$JWT_SECRET_KEY" ]; then
     echo "   Set it with: export JWT_SECRET_KEY=\"\$(openssl rand -hex 32)\""
     exit 1
   else
-    JWT_SECRET_KEY="dev-jwt-secret-key-change-in-production"
+    JWT_SECRET_KEY="dev-jwt-secret-key"
     echo "   Using default dev JWT secret."
   fi
 fi
@@ -113,14 +113,30 @@ rsync -av --progress \
   backend frontend docker-compose.prod.yaml \
   ec2-user@$INSTANCE_IP:/home/ec2-user/aquacharge/
 
+# Write .env locally and scp it — avoids passing secrets through SSH command args
+echo ""
+echo "📝 Writing .env..."
+FLASK_ENV=$( [ "$ENVIRONMENT" = "prod" ] && echo "production" || echo "development" )
+TMPENV=$(mktemp)
+cat > "$TMPENV" << ENVEOF
+AWS_REGION=${AWS_REGION}
+ENVIRONMENT=${ENVIRONMENT}
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
+FLASK_ENV=${FLASK_ENV}
+CLOUDWATCH_ENABLED=true
+ENVEOF
+# Only include CORS_ORIGINS if explicitly set — omitting it lets config.py use its default
+if [ -n "${CORS_ORIGINS}" ]; then
+  echo "CORS_ORIGINS=${CORS_ORIGINS}" >> "$TMPENV"
+fi
+scp -i "$SSH_KEY" -o StrictHostKeyChecking=no "$TMPENV" \
+  ec2-user@$INSTANCE_IP:/home/ec2-user/aquacharge/.env
+rm "$TMPENV"
+
 # Start containers
 echo ""
 echo "🐳 Starting containers..."
-FLASK_ENV=$( [ "$ENVIRONMENT" = "prod" ] && echo "production" || echo "development" )
-
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@$INSTANCE_IP \
-  ENVIRONMENT="$ENVIRONMENT" JWT_SECRET_KEY="$JWT_SECRET_KEY" FLASK_ENV="$FLASK_ENV" AWS_REGION="$AWS_REGION" CORS_ORIGINS="${CORS_ORIGINS:-}" \
-  bash << 'EOF'
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no ec2-user@$INSTANCE_IP << 'EOF'
 cd /home/ec2-user/aquacharge
 
 # Verify docker-compose is installed
@@ -129,17 +145,6 @@ if ! command -v docker-compose &> /dev/null; then
   sudo tail -30 /var/log/cloud-init-output.log
   exit 1
 fi
-
-# Always write the .env so it reflects the current deployment environment
-echo "Creating .env file..."
-cat > .env << ENVEOF
-AWS_REGION=${AWS_REGION}
-ENVIRONMENT=${ENVIRONMENT}
-JWT_SECRET_KEY=${JWT_SECRET_KEY}
-FLASK_ENV=${FLASK_ENV}
-CORS_ORIGINS=${CORS_ORIGINS}
-CLOUDWATCH_ENABLED=true
-ENVEOF
 
 # Start containers with sudo (ec2-user is in docker group but needs re-login)
 sudo docker-compose -f docker-compose.prod.yaml down 2>/dev/null || true

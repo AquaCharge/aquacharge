@@ -103,7 +103,7 @@ export class InfraStack extends cdk.Stack {
       });
     }
 
-    // HTTP/HTTPS: open to the internet in prod, whitelisted-only in dev
+    // HTTP: open to the internet in prod, whitelisted-only in dev (443 not opened until TLS is configured)
     if (publicAccess) {
       this.securityGroup.addIngressRule(
         ec2.Peer.anyIpv4(),

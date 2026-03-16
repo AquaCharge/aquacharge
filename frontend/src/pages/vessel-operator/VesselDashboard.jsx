@@ -73,6 +73,7 @@ const VesselDashboard = () => {
   const [vessels, setVessels] = useState([])
   const [myContracts, setMyContracts] = useState([])
   const [contractsHistoryLoading, setContractsHistoryLoading] = useState(true)
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('all')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [vesselSelectLoading, setVesselSelectLoading] = useState(false)
@@ -299,8 +300,7 @@ const VesselDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <AllTimeCard metrics={metrics} loading={isLoading} />
         <WeeklyEarningsCard
-          // weeklyEarnings={dashboard?.weeklyEarnings}
-          weeklyEarnings={sampleWeeklyEarnings}
+          weeklyEarnings={dashboard?.weeklyEarnings}
           loading={isLoading}
         />
       </div>
@@ -410,63 +410,92 @@ const VesselDashboard = () => {
       </div>
 
       {/* Contracts History */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Contracts History</h2>
-        {contractsHistoryLoading ? (
-          <div className="rounded-lg border bg-card p-4">
-            <Skeleton className="h-8 w-full mb-2" />
-            <Skeleton className="h-10 w-full mb-1" />
-            <Skeleton className="h-10 w-full mb-1" />
-            <Skeleton className="h-10 w-full" />
+      <Card className="mt-4">
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle className="text-lg font-semibold text-gray-900">
+            Contracts History
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Status
+            </span>
+            <select
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground shadow-sm"
+              value={historyStatusFilter}
+              onChange={(event) => setHistoryStatusFilter(event.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
-        ) : contractsHistory.length === 0 ? (
-          <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-            No contract history yet
-          </div>
-        ) : (
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left font-medium text-gray-700 px-4 py-3">Vessel</th>
-                  <th className="text-left font-medium text-gray-700 px-4 py-3">Date</th>
-                  <th className="text-left font-medium text-gray-700 px-4 py-3">Status</th>
-                  <th className="text-left font-medium text-gray-700 px-4 py-3">Duration</th>
-                  <th className="text-left font-medium text-gray-700 px-4 py-3">Energy</th>
-                  <th className="text-right font-medium text-gray-700 px-4 py-3">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contractsHistory.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-left">{c.vesselName || '—'}</td>
-                    <td className="px-4 py-3 text-left">{formatContractDate(c.endTime)}</td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        className={`${historyStatusBadgeClass(c.status)} font-normal capitalize`}
-                      >
-                        {c.status.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-left">
-                      {formatDuration(c.startTime, c.endTime)}
-                    </td>
-                    <td className="px-4 py-3 text-left">
-                      {c.energyAmount != null ? `${Number(c.energyAmount).toFixed(1)} kWh` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium">
-                      {formatAmount(c.totalValue)}
-                    </td>
+        </CardHeader>
+        <CardContent>
+          {contractsHistoryLoading ? (
+            <div className="p-1">
+              <Skeleton className="h-8 w-full mb-2" />
+              <Skeleton className="h-10 w-full mb-1" />
+              <Skeleton className="h-10 w-full mb-1" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : contractsHistory.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No contract history yet
+            </div>
+          ) : (
+            <div className="-mx-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left font-medium text-gray-700 px-4 py-3">Vessel</th>
+                    <th className="text-left font-medium text-gray-700 px-4 py-3">Date</th>
+                    <th className="text-left font-medium text-gray-700 px-4 py-3">Status</th>
+                    <th className="text-left font-medium text-gray-700 px-4 py-3">Duration</th>
+                    <th className="text-left font-medium text-gray-700 px-4 py-3">Energy</th>
+                    <th className="text-right font-medium text-gray-700 px-4 py-3">Amount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {contractsHistory
+                    .filter((c) =>
+                      historyStatusFilter === 'all' ? true : c.status === historyStatusFilter
+                    )
+                    .map((c) => (
+                      <tr
+                        key={c.id}
+                        className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="px-4 py-3 text-left">{c.vesselName || '—'}</td>
+                        <td className="px-4 py-3 text-left">{formatContractDate(c.endTime)}</td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            className={`${historyStatusBadgeClass(
+                              c.status
+                            )} font-normal capitalize`}
+                          >
+                            {c.status.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-left">
+                          {formatDuration(c.startTime, c.endTime)}
+                        </td>
+                        <td className="px-4 py-3 text-left">
+                          {c.energyAmount != null
+                            ? `${Number(c.energyAmount).toFixed(1)} kWh`
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          {formatAmount(c.totalValue)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

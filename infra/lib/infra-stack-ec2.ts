@@ -39,7 +39,7 @@ export class InfraStack extends cdk.Stack {
     const useExistingTables = props?.useExistingTables ?? false; // Default to false to allow CDK to manage tables
     const keyPairName = props?.keyPairName || 'aquacharge-key';
     // publicAccess defaults to true for prod — opens HTTP/HTTPS to the internet
-    const publicAccess = props?.publicAccess ?? isProd;
+    const publicAccess = false;
 
     // ===== DynamoDB Tables =====
     const tables = new DynamoDbTables(this, { environmentName, useExistingTables });

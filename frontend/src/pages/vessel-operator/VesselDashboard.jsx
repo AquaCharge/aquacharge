@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import {
   Card,
   CardContent,
@@ -10,14 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import {
   ActiveContractCard,
-  MetricCard,
-  StateOfChargeCard,
   WeeklyEarningsCard,
-  AllTimeCard,
+  AllTimeContractsCompletedCard,
+  AllTimeKwhDischargedCard,
+  AllTimeEarningsCard,
   WeeklySocCard,
-  QuickActionsCard,
+  VesselDetails,
 } from '@/components/ui/DashboardCards'
-import { Calendar, Ship, Zap } from 'lucide-react'
 import { getApiEndpoint } from '@/config/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -303,6 +301,10 @@ const VesselDashboard = () => {
   }
 
   const currentVessel = dashboard?.currentVessel ?? null
+  const currentVesselFromList = (user?.currentVesselId && vessels.length > 0)
+    ? vessels.find((v) => v.id === user.currentVesselId) ?? null
+    : null
+  const currentVesselDetails = currentVesselFromList ?? currentVessel
   const activeContract = sampleActiveContract // TODO: remove — replace with: dashboard?.activeContract ?? null
   const lastContract = !activeContract && contractsHistory.length > 0
     ? {
@@ -328,7 +330,7 @@ const VesselDashboard = () => {
         <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900">Vessel Operator Dashboard</h1>
           <p className="text-gray-600 mt-2">
-            Welcome to your AquaCharge vessel management center
+            Last updated: <span className="text-sm text-muted-foreground">{dashboard?.updatedAt ? new Date(dashboard.updatedAt).toLocaleString() : '—'}</span>
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -368,24 +370,21 @@ const VesselDashboard = () => {
       )}
 
       {/* Quick Stats: current vessel + metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-        <div className="lg:col-span-3 md:col-span-2 col-span-1">
-          <ActiveContractCard activeContract={activeContract} lastContract={lastContract} />
+      <div className="flex w-full max-w-full gap-2 items-stretch">
+        <div className="flex-3 basis-3/4 flex flex-col h-full">
+          <ActiveContractCard
+            className="h-full"
+            activeContract={activeContract}
+            lastContract={lastContract}
+          />
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-md font-light">Last updated</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {dashboard?.updatedAt ? (
-              <p className="text-sm text-muted-foreground">
-                {new Date(dashboard.updatedAt).toLocaleString()}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex-1 basis-1/4 flex flex-col h-full">
+          <VesselDetails
+            className="h-full"
+            vessel={currentVesselDetails}
+            loading={isLoading && !dashboard}
+          />
+        </div>
       </div>
 
       {/* Weekly SoC graph + weekly earnings */}
@@ -400,7 +399,7 @@ const VesselDashboard = () => {
 
       {/* Active contract card */}
       {/* Contracts History */}
-      <Card className="mt-4">
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle className="text-lg font-semibold text-gray-900">
             Contracts History
@@ -487,39 +486,10 @@ const VesselDashboard = () => {
         </CardContent>
       </Card>
       {/* Quick Actions with links + all-time stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <QuickActionsCard
-          title="Quick Actions"
-          description="Common tasks for vessel operators"
-          items={[
-            {
-              to: '/find-stations',
-              icon: <Ship className="h-5 w-5 text-black" />,
-              label: 'Find Charging Station',
-              helper: 'Locate nearby chargers',
-            },
-            {
-              to: '/my-bookings',
-              icon: <Calendar className="h-5 w-5 text-black" />,
-              label: 'My Bookings',
-              helper: 'View and manage reservations',
-            },
-            {
-              to: '/my-vessels',
-              icon: <Ship className="h-5 w-5 text-black" />,
-              label: 'Manage Vessels',
-              helper: 'Add or edit vessel information',
-            },
-            {
-              to: '/my-contracts',
-              icon: <Zap className="h-5 w-5 text-black" />,
-              label: 'My Contracts',
-              helper: 'Review and accept DR contracts',
-            },
-          ]}
-        />
-
-        <AllTimeCard metrics={metrics} loading={isLoading} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 w-full">
+        <AllTimeContractsCompletedCard metrics={metrics} loading={isLoading} />
+        <AllTimeKwhDischargedCard metrics={metrics} loading={isLoading} />
+        <AllTimeEarningsCard metrics={metrics} loading={isLoading} />
       </div>
     </div>
   )

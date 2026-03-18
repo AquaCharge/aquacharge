@@ -118,6 +118,41 @@ export const AllTimeCard = ({ metrics, loading }) => {
   )
 }
 
+export const AllTimeContractsCompletedCard = ({ metrics, loading }) => (
+  <MetricCard
+    title="Contracts completed"
+    value={metrics?.contractsCompleted ?? 0}
+    helper="All time"
+    loading={loading}
+  />
+)
+
+export const AllTimeKwhDischargedCard = ({ metrics, loading }) => (
+  <MetricCard
+    title="Total kWh discharged"
+    value={
+      typeof metrics?.totalKwhDischarged === 'number'
+        ? `${metrics.totalKwhDischarged.toFixed(1)} kWh`
+        : '—'
+    }
+    helper="All time"
+    loading={loading}
+  />
+)
+
+export const AllTimeEarningsCard = ({ metrics, loading }) => (
+  <MetricCard
+    title="Total earnings"
+    value={
+      typeof metrics?.totalEarnings === 'number'
+        ? `$${metrics.totalEarnings.toFixed(2)}`
+        : '—'
+    }
+    helper="All time"
+    loading={loading}
+  />
+)
+
 export const WeeklyEarningsCard = ({ weeklyEarnings, loading }) => {
   const rawDaily = weeklyEarnings?.dailyEarnings ?? []
   const total = weeklyEarnings?.total ?? 0
@@ -406,7 +441,7 @@ const statusLabel = (status) => {
   }
 }
 
-export const ActiveContractCard = ({ activeContract, lastContract }) => {
+export const ActiveContractCard = ({ activeContract, lastContract, className }) => {
   const contract = activeContract || lastContract
   if (!contract) return null
 
@@ -434,7 +469,7 @@ export const ActiveContractCard = ({ activeContract, lastContract }) => {
     : null
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="text-md font-light mb-4 flex items-center gap-2">
           {isActive && (
@@ -543,7 +578,7 @@ export const ActiveContractCard = ({ activeContract, lastContract }) => {
   )
 }
 
-export const QuickActionsCard = ({ title, description, items }) => {
+export const QuickActionsCard = ({ title, items }) => {
   return (
     <Card className="">
       <CardHeader>
@@ -555,7 +590,7 @@ export const QuickActionsCard = ({ title, description, items }) => {
             <Link
               key={item.to}
               to={item.to}
-              className="group block w-full p-4 text-left border rounded-lg hover:bg-blue-200 transition-colors bg-blue-50 border-blue-200"
+              className="group block w-full p-2 text-left border rounded-lg hover:bg-blue-200 transition-colors bg-blue-50 border-blue-200"
             >
               <div className="flex items-center space-x-3 justify-between">
                 <div className="flex items-center space-x-3">
@@ -569,6 +604,77 @@ export const QuickActionsCard = ({ title, description, items }) => {
             </Link>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const formatNumber = (value, digits = 1) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toFixed(digits)
+}
+
+export const VesselDetails = ({ vessel, loading, className }) => {
+  const displayName = vessel?.displayName || '—'
+  const vesselType = vessel?.vesselType || '—'
+  const chargerType = vessel?.chargerType || '—'
+  const active = typeof vessel?.active === 'boolean' ? vessel.active : null
+  const capacity = vessel?.capacity ?? null
+  const maxCapacity = vessel?.maxCapacity ?? null
+  const maxDischargeRate = vessel?.maxDischargeRate ?? null
+
+  return (
+    <Card className={className}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardTitle className="text-md font-light">{displayName}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <>
+            <Skeleton className="h-6 w-40 mb-2" />
+            <Skeleton className="h-4 w-24 mb-4" />
+            <Skeleton className="h-3 w-full rounded-full mb-5" />
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </>
+        ) : !vessel ? (
+          <div className="h-[160px] rounded-md border border-dashed border-muted flex items-center justify-center px-4 text-xs text-muted-foreground text-center">
+            Select a vessel to see its details.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="p-3 flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">Vessel type</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{vesselType}</p>
+              </div>
+              <hr/>
+              <div className="p-3 flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">Charger type</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{chargerType}</p>
+              </div>
+              <hr/>
+              <div className="p-3 flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">Capacity</p>
+                <p className="text-sm font-semibold text-gray-900 tabular-nums">
+                  {Number.isFinite(Number(maxCapacity)) ? `${formatNumber(maxCapacity, 1)}` : ''} kWh
+                </p>
+              </div>
+              <hr/>
+              <div className="p-3 flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">Max discharge</p>
+                <p className="text-sm font-semibold text-gray-900 tabular-nums">
+                  {Number.isFinite(Number(maxDischargeRate)) ? formatNumber(maxDischargeRate, 1) : '—'} kW
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

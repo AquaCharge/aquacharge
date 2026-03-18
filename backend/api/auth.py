@@ -9,16 +9,17 @@ import hashlib
 import jwt
 import secrets
 import re
+import config
 from middleware.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
 
 # Initialize DynamoDB client
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-users-dev", region_name="us-east-1"
+    table_name=config.USERS_TABLE, region_name=config.AWS_REGION
 )
 _vessels_client = DynamoClient(
-    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 
 # In-memory storage for password reset tokens (replace with database in production)
@@ -66,14 +67,14 @@ def generate_jwt_token(user: User) -> str:
     """Generate a JWT token for a user"""
     # Get config from current app or use defaults
     try:
-        jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+        jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
         jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
         jwt_expiry = current_app.config.get(
             "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=24)
         )
     except RuntimeError:
         # Fallback for testing without app context
-        jwt_secret = "dev-jwt-secret-key"
+        jwt_secret = config.JWT_SECRET
         jwt_algorithm = "HS256"
         jwt_expiry = timedelta(hours=24)
 
@@ -91,11 +92,11 @@ def generate_jwt_token(user: User) -> str:
 def decode_jwt_token(token: str) -> Dict[str, Any]:
     """Decode and verify a JWT token"""
     try:
-        jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+        jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
         jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
     except RuntimeError:
         # Fallback for testing without app context
-        jwt_secret = "dev-jwt-secret-key"
+        jwt_secret = config.JWT_SECRET
         jwt_algorithm = "HS256"
 
     try:
@@ -160,10 +161,10 @@ def refresh_token():
 
         # Decode token (even if expired)
         try:
-            jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+            jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
             jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
         except RuntimeError:
-            jwt_secret = "dev-jwt-secret-key"
+            jwt_secret = config.JWT_SECRET
             jwt_algorithm = "HS256"
 
         try:
@@ -482,11 +483,17 @@ def patch_current_user():
 
         # Allow null, missing, or empty string to clear current vessel (store "" in DB)
         if current_vessel_id is None or current_vessel_id == "":
-            update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+            update_data = {
+                "currentVesselId": "",
+                "updatedAt": datetime.utcnow().isoformat(),
+            }
         else:
             current_vessel_id = str(current_vessel_id).strip()
             if not current_vessel_id:
-                update_data = {"currentVesselId": "", "updatedAt": datetime.utcnow().isoformat()}
+                update_data = {
+                    "currentVesselId": "",
+                    "updatedAt": datetime.utcnow().isoformat(),
+                }
             else:
                 # Validate that the user owns this vessel
                 vessels = _vessels_client.query_gsi(
@@ -495,10 +502,20 @@ def patch_current_user():
                 )
                 vessel_ids = [v["id"] for v in vessels] if vessels else []
                 if current_vessel_id not in vessel_ids:
-                    return jsonify({"error": "Vessel not found or you do not own this vessel"}), 403
-                update_data = {"currentVesselId": current_vessel_id, "updatedAt": datetime.utcnow().isoformat()}
+                    return (
+                        jsonify(
+                            {"error": "Vessel not found or you do not own this vessel"}
+                        ),
+                        403,
+                    )
+                update_data = {
+                    "currentVesselId": current_vessel_id,
+                    "updatedAt": datetime.utcnow().isoformat(),
+                }
 
-        updated = dynamoDB_client.update_item(key={"id": user_id}, update_data=update_data)
+        updated = dynamoDB_client.update_item(
+            key={"id": user_id}, update_data=update_data
+        )
         user_data = prepare_user_data_from_dynamo(updated)
         user = User(**user_data)
         if not user.active:

@@ -62,7 +62,17 @@ def create_service(events=None, measurements=None, stations=None):
     return DREventService(
         event_repository=InMemoryEventRepository(events),
         measurement_repository=InMemoryMeasurementRepository(measurements),
-        station_repository=InMemoryStationRepository(stations or [{"id": "station-1", "city": "Moncton", "provinceOrState": "NB", "country": "Canada"}]),
+        station_repository=InMemoryStationRepository(
+            stations
+            or [
+                {
+                    "id": "station-1",
+                    "city": "Moncton",
+                    "provinceOrState": "NB",
+                    "country": "Canada",
+                }
+            ]
+        ),
     )
 
 
@@ -150,9 +160,13 @@ def test_monitoring_snapshot_aggregates_measurements():
             "currentSOC": 54,
         },
     ]
-    service = create_service(events=[make_event(status="Active")], measurements=measurements)
+    service = create_service(
+        events=[make_event(status="Active")], measurements=measurements
+    )
 
-    snapshot = service.get_monitoring_snapshot(event_id="event-1", region="Moncton", period_hours=24)
+    snapshot = service.get_monitoring_snapshot(
+        event_id="event-1", region="Moncton", period_hours=24
+    )
 
     assert snapshot["summary"]["totalEnergyDeliveredKwh"] == 90.0
     assert snapshot["summary"]["activeVessels"] == 2
@@ -164,7 +178,9 @@ def test_monitoring_snapshot_aggregates_measurements():
     assert len(snapshot["vesselCurve"][0]["points"]) == 2
     assert snapshot["vesselCurve"][0]["totalEnergyDischargedKwh"] == 45.0
     assert snapshot["vesselCurve"][0]["points"][0]["energyDischargedKwh"] == 30.0
-    assert snapshot["vesselCurve"][0]["points"][1]["cumulativeEnergyDischargedKwh"] == 45.0
+    assert (
+        snapshot["vesselCurve"][0]["points"][1]["cumulativeEnergyDischargedKwh"] == 45.0
+    )
     assert snapshot["vesselRates"][0]["dischargeRateKw"] == 18.0
     assert len(snapshot["loadCurve"]) == 3
     assert snapshot["loadCurve"][0]["energyDischargedKwh"] == 30.0
@@ -219,7 +235,9 @@ def test_monitoring_snapshot_accepts_legacy_uppercase_event_status():
             "currentSOC": 72,
         }
     ]
-    service = create_service(events=[make_event(status="ACTIVE")], measurements=measurements)
+    service = create_service(
+        events=[make_event(status="ACTIVE")], measurements=measurements
+    )
 
     snapshot = service.get_monitoring_snapshot(event_id="event-1", period_hours=24)
 

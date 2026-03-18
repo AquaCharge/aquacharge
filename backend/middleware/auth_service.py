@@ -8,6 +8,7 @@ import re
 from boto3.dynamodb.conditions import Attr, Key
 from flask import current_app
 
+import config
 from db.dynamoClient import DynamoClient
 from models.user import User, UserRole, UserType
 
@@ -61,18 +62,18 @@ def validate_password(password: str) -> bool:
 class AuthService:
     def __init__(self, dynamo_client: Optional[DynamoClient] = None):
         self.dynamo_client = dynamo_client or DynamoClient(
-            table_name="aquacharge-users-dev", region_name="us-east-1"
+            table_name=config.USERS_TABLE, region_name=config.AWS_REGION
         )
 
     def _get_jwt_config(self) -> Tuple[str, str, timedelta]:
         try:
-            jwt_secret = current_app.config.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+            jwt_secret = current_app.config.get("JWT_SECRET_KEY") or config.JWT_SECRET
             jwt_algorithm = current_app.config.get("JWT_ALGORITHM", "HS256")
             jwt_expiry = current_app.config.get(
                 "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=24)
             )
         except RuntimeError:
-            jwt_secret = "dev-jwt-secret-key"
+            jwt_secret = config.JWT_SECRET
             jwt_algorithm = "HS256"
             jwt_expiry = timedelta(hours=24)
         return jwt_secret, jwt_algorithm, jwt_expiry
@@ -102,7 +103,8 @@ class AuthService:
         """Lookup by GSI first, with scan fallback for environments without index consistency."""
         try:
             users = self.dynamo_client.query_gsi(
-                index_name="email-index", key_condition_expression=Key("email").eq(email)
+                index_name="email-index",
+                key_condition_expression=Key("email").eq(email),
             )
             if users:
                 return users
@@ -142,7 +144,8 @@ class AuthService:
 
             token = self._generate_jwt_token(user)
             self.dynamo_client.update_item(
-                key={"id": user.id}, update_data={"updatedAt": datetime.now().isoformat()}
+                key={"id": user.id},
+                update_data={"updatedAt": datetime.now().isoformat()},
             )
 
             response_user = user.to_public_dict()

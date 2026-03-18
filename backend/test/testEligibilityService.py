@@ -54,11 +54,17 @@ def test_evaluate_vessels_for_event_returns_only_eligible_by_default():
             "chargerType": "Type 2 AC",
         },
     ]
-    stations = {"station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}}
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
     soc_by_vessel_id = {"v-1": 80.0, "v-2": 80.0}
 
     service = _build_service(vessels, stations, soc_by_vessel_id)
-    dr_event = {"id": "event-1", "stationId": "station-1", "details": {"minimumSoc": 30}}
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "details": {"minimumSoc": 30},
+    }
 
     result = service.evaluate_vessels_for_event(dr_event)
 
@@ -81,11 +87,17 @@ def test_evaluate_vessels_for_event_can_include_ineligible_results():
             "chargerType": "Type 2 AC",
         }
     ]
-    stations = {"station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}}
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
     soc_by_vessel_id = {"v-1": 10.0}
 
     service = _build_service(vessels, stations, soc_by_vessel_id)
-    dr_event = {"id": "event-1", "stationId": "station-1", "details": {"minimumSoc": 30}}
+    dr_event = {
+        "id": "event-1",
+        "stationId": "station-1",
+        "details": {"minimumSoc": 30},
+    }
 
     result = service.evaluate_vessels_for_event(dr_event, include_ineligible=True)
 
@@ -107,7 +119,9 @@ def test_evaluate_vessels_for_event_validates_charger_compatibility():
             "chargerType": "CCS",
         }
     ]
-    stations = {"station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}}
+    stations = {
+        "station-1": {"id": "station-1", "latitude": 44.651, "longitude": -63.58}
+    }
     soc_by_vessel_id = {"v-1": 80.0}
 
     service = _build_service(vessels, stations, soc_by_vessel_id)
@@ -131,7 +145,9 @@ def test_evaluate_vessels_for_event_requires_station():
     )
 
     try:
-        service.evaluate_vessels_for_event({"id": "event-1", "stationId": "missing-station"})
+        service.evaluate_vessels_for_event(
+            {"id": "event-1", "stationId": "missing-station"}
+        )
         assert False, "Expected LookupError"
     except LookupError as error:
         assert str(error) == "Station not found"

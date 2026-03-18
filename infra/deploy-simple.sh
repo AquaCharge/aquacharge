@@ -7,6 +7,19 @@ set -e
 
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 STACK_NAME="AquaChargeStack-${ENVIRONMENT}"
+AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
+
+if [ -z "$JWT_SECRET_KEY" ]; then
+  echo "⚠️  JWT_SECRET_KEY is not set."
+  if [ "$ENVIRONMENT" = "prod" ]; then
+    echo "❌ JWT_SECRET_KEY is required for production deployments."
+    echo "   Set it with: export JWT_SECRET_KEY=\"\$(openssl rand -hex 32)\""
+    exit 1
+  else
+    JWT_SECRET_KEY="dev-jwt-secret-key"
+    echo "   Using default dev JWT secret."
+  fi
+fi
 
 echo "🚀 AquaCharge Deployment"
 echo "========================"
@@ -100,6 +113,26 @@ rsync -av --progress \
   backend frontend docker-compose.prod.yaml \
   ec2-user@$INSTANCE_IP:/home/ec2-user/aquacharge/
 
+# Write .env locally and scp it — avoids passing secrets through SSH command args
+echo ""
+echo "📝 Writing .env..."
+FLASK_ENV=$( [ "$ENVIRONMENT" = "prod" ] && echo "production" || echo "development" )
+TMPENV=$(mktemp)
+cat > "$TMPENV" << ENVEOF
+AWS_REGION=${AWS_REGION}
+ENVIRONMENT=${ENVIRONMENT}
+JWT_SECRET_KEY=${JWT_SECRET_KEY}
+FLASK_ENV=${FLASK_ENV}
+CLOUDWATCH_ENABLED=true
+ENVEOF
+# Only include CORS_ORIGINS if explicitly set — omitting it lets config.py use its default
+if [ -n "${CORS_ORIGINS}" ]; then
+  echo "CORS_ORIGINS=${CORS_ORIGINS}" >> "$TMPENV"
+fi
+scp -i "$SSH_KEY" -o StrictHostKeyChecking=no "$TMPENV" \
+  ec2-user@$INSTANCE_IP:/home/ec2-user/aquacharge/.env
+rm "$TMPENV"
+
 # Start containers
 echo ""
 echo "🐳 Starting containers..."
@@ -111,20 +144,6 @@ if ! command -v docker-compose &> /dev/null; then
   echo "⚠️  Docker Compose not installed yet. Checking installation status..."
   sudo tail -30 /var/log/cloud-init-output.log
   exit 1
-fi
-
-# Ensure .env exists
-if [ ! -f .env ]; then
-  echo "Creating .env file..."
-  cat > .env << 'ENVEOF'
-AWS_REGION=us-east-1
-DYNAMODB_USERS_TABLE=aquacharge-users-dev
-DYNAMODB_STATIONS_TABLE=aquacharge-stations-dev
-DYNAMODB_CHARGERS_TABLE=aquacharge-chargers-dev
-DYNAMODB_VESSELS_TABLE=aquacharge-vessels-dev
-DYNAMODB_BOOKINGS_TABLE=aquacharge-bookings-dev
-FLASK_ENV=production
-ENVEOF
 fi
 
 # Start containers with sudo (ec2-user is in docker group but needs re-login)

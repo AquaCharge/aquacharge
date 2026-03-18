@@ -4,9 +4,10 @@ from datetime import datetime
 from db.dynamoClient import DynamoClient
 from boto3.dynamodb.conditions import Key
 import decimal
+import config
 
 dynamoDB_client = DynamoClient(
-    table_name="aquacharge-vessels-dev", region_name="us-east-1"
+    table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 
 vessels_bp = Blueprint("vessels", __name__)
@@ -44,7 +45,14 @@ def create_vessel():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ["userId", "displayName", "vesselType", "chargerType", "capacity", "maxCapacity"]
+    required_fields = [
+        "userId",
+        "displayName",
+        "vesselType",
+        "chargerType",
+        "capacity",
+        "maxCapacity",
+    ]
     for field in required_fields:
         if field not in data:
             return jsonify({"error": f"{field} is required"}), 400
@@ -72,8 +80,12 @@ def create_vessel():
     vessel_dict["capacity"] = capacity_val
     vessel_dict["maxCapacity"] = max_capacity_val
     numeric_keys = (
-        "maxChargeRate", "minChargeRate", "maxDischargeRate",
-        "longitude", "latitude", "rangeMeters",
+        "maxChargeRate",
+        "minChargeRate",
+        "maxDischargeRate",
+        "longitude",
+        "latitude",
+        "rangeMeters",
     )
     for key in numeric_keys:
         if key in vessel_dict and vessel_dict[key] is not None:
@@ -130,7 +142,11 @@ def update_vessel(vessel_id: str):
             else:
                 value = data[field]
             update_data[field] = value
-            setattr(current_vessel, field, float(value) if field_type == decimal.Decimal else value)
+            setattr(
+                current_vessel,
+                field,
+                float(value) if field_type == decimal.Decimal else value,
+            )
 
     # Enforce capacity <= maxCapacity (use current vessel state after updates)
     cap = getattr(current_vessel, "capacity", 0) or 0

@@ -4,6 +4,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import BotoCoreError, ClientError
 
+import config
 from db.dynamoClient import DynamoClient
 
 PORT_FIELD_VARIANTS = {
@@ -88,9 +89,8 @@ def _build_cross_dateline_expression(
 class PortsRepository:
     def __init__(self, dynamo_client: Optional[DynamoClient] = None):
         if dynamo_client is None:
-            # Default to ports table - adjust table_name and region as needed
             dynamo_client = DynamoClient(
-                table_name="aquacharge-ports-dev", region_name="us-east-1"
+                table_name=config.PORTS_TABLE, region_name=config.AWS_REGION
             )
         self.client = dynamo_client
         self.table = dynamo_client.table

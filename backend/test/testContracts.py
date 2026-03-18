@@ -2,6 +2,7 @@
 Tests for SCRUM-169: contract dispatch and VO accept/decline flow.
 Uses in-memory stub repositories — no DynamoDB calls.
 """
+
 import pytest
 import jwt
 from flask import Flask
@@ -16,6 +17,7 @@ from config import JWT_SECRET, JWT_ALGORITHM
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_contract(status="pending", vessel_id="vessel-abc"):
     return {
@@ -43,6 +45,7 @@ def _make_contract(status="pending", vessel_id="vessel-abc"):
 # ---------------------------------------------------------------------------
 # Flask test client with mocked JWT
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def app():
@@ -79,12 +82,19 @@ def _jwt_headers(user_id="user-vo-001", role=2, user_type=1):
 
 
 def _mock_jwt_payload(user_id="user-vo-001"):
-    return {"id": user_id, "role": 2, "type": 1, "role_name": "USER", "type_name": "VESSEL_OPERATOR"}
+    return {
+        "id": user_id,
+        "role": 2,
+        "type": 1,
+        "role_name": "USER",
+        "type_name": "VESSEL_OPERATOR",
+    }
 
 
 # ---------------------------------------------------------------------------
 # Service-layer unit tests (no HTTP, no mocking middleware)
 # ---------------------------------------------------------------------------
+
 
 class InMemoryContractRepo:
     """Minimal in-memory repository for service unit tests."""
@@ -145,7 +155,9 @@ class _StubDREventRepo:
 
 class TestAcceptContract:
     def test_accept_pending_contract_transitions_to_active(self):
-        repo = InMemoryContractRepo([_make_contract(status="pending", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="pending", vessel_id="vessel-abc")]
+        )
         service = ContractService(
             repository=repo,
             booking_repository=_StubBookingRepo(),
@@ -163,7 +175,9 @@ class TestAcceptContract:
         assert result["committedPowerKw"] == 25
 
     def test_accept_rejects_when_vessel_not_owned(self):
-        repo = InMemoryContractRepo([_make_contract(status="pending", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="pending", vessel_id="vessel-abc")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:
@@ -176,7 +190,9 @@ class TestAcceptContract:
         assert exc_info.value.status_code == 403
 
     def test_accept_rejects_non_pending_contract(self):
-        repo = InMemoryContractRepo([_make_contract(status="active", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="active", vessel_id="vessel-abc")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:
@@ -189,7 +205,9 @@ class TestAcceptContract:
         assert exc_info.value.status_code == 400
 
     def test_accept_rejects_completed_contract(self):
-        repo = InMemoryContractRepo([_make_contract(status="completed", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="completed", vessel_id="vessel-abc")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:
@@ -227,15 +245,21 @@ class TestAcceptContract:
 
 class TestDeclineContract:
     def test_decline_pending_contract_transitions_to_cancelled(self):
-        repo = InMemoryContractRepo([_make_contract(status="pending", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="pending", vessel_id="vessel-abc")]
+        )
         service = ContractService(repository=repo)
 
-        result = service.decline_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+        result = service.decline_contract(
+            "contract-001", caller_vessel_ids=["vessel-abc"]
+        )
 
         assert result["status"] == ContractStatus.CANCELLED.value
 
     def test_decline_rejects_when_vessel_not_owned(self):
-        repo = InMemoryContractRepo([_make_contract(status="pending", vessel_id="vessel-abc")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status="pending", vessel_id="vessel-abc")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:
@@ -245,11 +269,15 @@ class TestDeclineContract:
 
     def test_decline_rejects_non_pending_contract(self):
         for bad_status in ("active", "completed", "cancelled"):
-            repo = InMemoryContractRepo([_make_contract(status=bad_status, vessel_id="vessel-abc")])
+            repo = InMemoryContractRepo(
+                [_make_contract(status=bad_status, vessel_id="vessel-abc")]
+            )
             service = ContractService(repository=repo)
 
             with pytest.raises(ContractServiceError) as exc_info:
-                service.decline_contract("contract-001", caller_vessel_ids=["vessel-abc"])
+                service.decline_contract(
+                    "contract-001", caller_vessel_ids=["vessel-abc"]
+                )
 
             assert exc_info.value.status_code == 400
 
@@ -267,7 +295,10 @@ class TestListContractsByVessel:
     def test_filters_by_vessel_id(self):
         contracts = [
             _make_contract(status="pending", vessel_id="vessel-abc"),
-            {**_make_contract(status="active", vessel_id="vessel-xyz"), "id": "contract-002"},
+            {
+                **_make_contract(status="active", vessel_id="vessel-xyz"),
+                "id": "contract-002",
+            },
         ]
         repo = InMemoryContractRepo(contracts)
         service = ContractService(repository=repo)
@@ -280,7 +311,10 @@ class TestListContractsByVessel:
     def test_filters_by_status(self):
         contracts = [
             _make_contract(status="pending", vessel_id="vessel-abc"),
-            {**_make_contract(status="active", vessel_id="vessel-abc"), "id": "contract-002"},
+            {
+                **_make_contract(status="active", vessel_id="vessel-abc"),
+                "id": "contract-002",
+            },
         ]
         repo = InMemoryContractRepo(contracts)
         service = ContractService(repository=repo)
@@ -302,6 +336,7 @@ class TestListContractsByVessel:
 # ---------------------------------------------------------------------------
 # HTTP endpoint tests (mock middleware + service)
 # ---------------------------------------------------------------------------
+
 
 class TestAcceptEndpoint:
     def test_accept_returns_401_without_token(self, client):
@@ -448,12 +483,17 @@ class TestAcceptEndpoint:
 # State transition guard tests (pure service logic)
 # ---------------------------------------------------------------------------
 
+
 class TestStateTransitionGuards:
     """Verify that invalid transitions are always rejected regardless of caller."""
 
-    @pytest.mark.parametrize("from_status", ["active", "completed", "cancelled", "failed"])
+    @pytest.mark.parametrize(
+        "from_status", ["active", "completed", "cancelled", "failed"]
+    )
     def test_cannot_accept_from_non_pending(self, from_status):
-        repo = InMemoryContractRepo([_make_contract(status=from_status, vessel_id="v1")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status=from_status, vessel_id="v1")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:
@@ -461,9 +501,13 @@ class TestStateTransitionGuards:
 
         assert exc_info.value.status_code == 400
 
-    @pytest.mark.parametrize("from_status", ["active", "completed", "cancelled", "failed"])
+    @pytest.mark.parametrize(
+        "from_status", ["active", "completed", "cancelled", "failed"]
+    )
     def test_cannot_decline_from_non_pending(self, from_status):
-        repo = InMemoryContractRepo([_make_contract(status=from_status, vessel_id="v1")])
+        repo = InMemoryContractRepo(
+            [_make_contract(status=from_status, vessel_id="v1")]
+        )
         service = ContractService(repository=repo)
 
         with pytest.raises(ContractServiceError) as exc_info:

@@ -9,8 +9,6 @@ services:
       - "5050:5050"
     env_file:
       - .env
-    environment:
-      - FLASK_ENV=production
     restart: unless-stopped
 
   frontend:

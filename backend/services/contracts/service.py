@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Protocol
 import uuid
 
+import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 from models.contract import Contract, ContractStatus
@@ -41,7 +42,9 @@ class ContractRepository(Protocol):
     def create_contract(self, contract_data: Dict[str, Any]) -> None:
         pass
 
-    def update_contract(self, contract_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_contract(
+        self, contract_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         pass
 
     def delete_contract(self, contract_id: str) -> None:
@@ -72,7 +75,7 @@ class DREventRepository(Protocol):
 class DynamoContractRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-contracts-dev", region_name="us-east-1"
+            table_name=config.CONTRACTS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_contracts(self) -> List[Dict[str, Any]]:
@@ -85,7 +88,9 @@ class DynamoContractRepository:
     def create_contract(self, contract_data: Dict[str, Any]) -> None:
         self.client.put_item(item=contract_data)
 
-    def update_contract(self, contract_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_contract(
+        self, contract_id: str, update_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return self.client.update_item(key={"id": contract_id}, update_data=update_data)
 
     def delete_contract(self, contract_id: str) -> None:
@@ -95,7 +100,7 @@ class DynamoContractRepository:
 class DynamoBookingRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-bookings-dev", region_name="us-east-1"
+            table_name=config.BOOKINGS_TABLE, region_name=config.AWS_REGION
         )
 
     def list_bookings(self) -> List[Dict[str, Any]]:
@@ -108,7 +113,7 @@ class DynamoBookingRepository:
 class DynamoVesselRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-vessels-dev", region_name="us-east-1"
+            table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
         )
 
     def get_vessel(self, vessel_id: str) -> Optional[Dict[str, Any]]:
@@ -119,7 +124,7 @@ class DynamoVesselRepository:
 class DynamoDREventRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
-            table_name="aquacharge-drevents-dev", region_name="us-east-1"
+            table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
         )
 
     def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
@@ -218,7 +223,9 @@ class ContractService:
             raise ContractServiceError(str(error), 400) from error
 
         contract_data = contract.to_dict()
-        contract_data = {key: value for key, value in contract_data.items() if value is not None}
+        contract_data = {
+            key: value for key, value in contract_data.items() if value is not None
+        }
         self.repository.create_contract(contract_data)
         return contract.to_public_dict()
 
@@ -387,7 +394,9 @@ class ContractService:
 
         # --- ownership guard ---
         if contract.vesselId not in caller_vessel_ids:
-            raise ContractServiceError("You do not own the vessel on this contract", 403)
+            raise ContractServiceError(
+                "You do not own the vessel on this contract", 403
+            )
 
         # --- status guard ---
         if contract.status != ContractStatus.PENDING.value:
@@ -416,7 +425,9 @@ class ContractService:
                 else str(contract.endTime)
             )
         except (ValueError, AttributeError) as error:
-            raise ContractServiceError("Contract has invalid time window", 400) from error
+            raise ContractServiceError(
+                "Contract has invalid time window", 400
+            ) from error
 
         duration_hours = (contract_end - contract_start).total_seconds() / 3600.0
         if duration_hours <= 0:
@@ -516,9 +527,11 @@ class ContractService:
             "endTime": booking.endTime.isoformat(),
             "chargerType": booking.chargerType,
             "status": BookingStatus.PENDING.value,
-            "createdAt": booking.createdAt.isoformat()
-            if isinstance(booking.createdAt, datetime)
-            else str(booking.createdAt),
+            "createdAt": (
+                booking.createdAt.isoformat()
+                if isinstance(booking.createdAt, datetime)
+                else str(booking.createdAt)
+            ),
         }
         self.booking_repository.create_booking(booking_dict)
 
@@ -552,14 +565,18 @@ class ContractService:
             )
         return contract.to_public_dict()
 
-    def decline_contract(self, contract_id: str, caller_vessel_ids: List[str]) -> Dict[str, Any]:
+    def decline_contract(
+        self, contract_id: str, caller_vessel_ids: List[str]
+    ) -> Dict[str, Any]:
         existing_data = self.repository.get_contract(contract_id)
         if not existing_data:
             raise ContractServiceError("Contract not found", 404)
 
         contract = Contract.from_dict(existing_data)
         if contract.vesselId not in caller_vessel_ids:
-            raise ContractServiceError("You do not own the vessel on this contract", 403)
+            raise ContractServiceError(
+                "You do not own the vessel on this contract", 403
+            )
         if contract.status != ContractStatus.PENDING.value:
             raise ContractServiceError("Only pending contracts can be declined", 400)
 

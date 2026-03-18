@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 jobs:
   deploy:
@@ -12,6 +13,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_OUTPUT
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -35,6 +45,11 @@ jobs:
 
       - name: Run deployment script
         working-directory: infra
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.ENVIRONMENT }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          ALLOWED_IPS: ${{ vars.ALLOWED_IPS }}
+          CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
         run: |
           chmod +x deploy-simple.sh
           ./deploy-simple.sh
@@ -43,7 +58,7 @@ jobs:
         id: get-instance
         run: |
           INSTANCE_IP=$(aws cloudformation describe-stacks \
-            --stack-name AquaChargeStack-dev \
+            --stack-name AquaChargeStack-${{ steps.env.outputs.ENVIRONMENT }} \
             --query 'Stacks[0].Outputs[?OutputKey==`InstancePublicIp`].OutputValue' \
             --output text)
           echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_OUTPUT
@@ -52,7 +67,7 @@ jobs:
         if: success()
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ DEPLOYMENT SUCCESSFUL!"
+          echo "✅ DEPLOYMENT SUCCESSFUL (${{ steps.env.outputs.ENVIRONMENT }})"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           echo "Frontend: http://${{ steps.get-instance.outputs.INSTANCE_IP }}"

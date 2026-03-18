@@ -1,3 +1,4 @@
+import config
 from db.dynamoClient import DynamoClient
 from services.battery_model.battery import BESS
 from models.measurments import Measurement
@@ -10,11 +11,17 @@ INTERVAL_SECONDS = 1 * 60  # 1 minutes
 INTERVAL_HOURS = INTERVAL_SECONDS / 3600.0
 
 
-def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: DynamoClient):
+def _dispatch_loop(
+    event_id: str, valid_contracts: list[dict], dynamo_client: DynamoClient
+):
 
     # Prepare clients for vessels and measurements
-    vessels_client = DynamoClient(table_name="aquacharge-vessels-dev", region_name="us-east-1")
-    measurements_client = DynamoClient(table_name="aquacharge-measurements-dev", region_name="us-east-1")
+    vessels_client = DynamoClient(
+        table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
+    )
+    measurements_client = DynamoClient(
+        table_name=config.MEASUREMENTS_TABLE, region_name=config.AWS_REGION
+    )
 
     # Build BESS instances keyed by contract id by loading the vessel record for each contract
     bess_map: dict[str, BESS] = {}
@@ -26,7 +33,9 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
             continue
         vessel = vessels_client.get_item(key={"id": vessel_id})
         if not vessel:
-            print(f"[DR {event_id}] Vessel record not found for contract {contract_id}, skipping.")
+            print(
+                f"[DR {event_id}] Vessel record not found for contract {contract_id}, skipping."
+            )
             continue
         bess_map[contract_id] = BESS(vessel)
         contract_map[contract_id] = c
@@ -34,7 +43,10 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
     # Update event status → ACTIVE
     dynamo_client.update_item(
         key={"id": event_id},
-        update_data={"status": "ACTIVE", "updatedAt": datetime.now(timezone.utc).isoformat()},
+        update_data={
+            "status": "ACTIVE",
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        },
     )
 
     iteration = 0
@@ -54,7 +66,7 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
 
             # Calculate discharge for this interval
             transfer = bess.determine_energy_transfer(INTERVAL_HOURS, "discharge")
-            energy_delivered = abs(transfer)           # kWh delivered to grid (positive)
+            energy_delivered = abs(transfer)  # kWh delivered to grid (positive)
             discharge_setpoint = energy_delivered / INTERVAL_HOURS  # kW
 
             # Apply transfer to in-memory battery state
@@ -81,15 +93,22 @@ def _dispatch_loop(event_id: str, valid_contracts: list[dict], dynamo_client: Dy
 
             vessels_client.update_item(
                 key={"id": bess.vessel_id},
-                update_data={"capacity": capacity_decimal, "updatedAt": now.isoformat()},
+                update_data={
+                    "capacity": capacity_decimal,
+                    "updatedAt": now.isoformat(),
+                },
             )
 
             if bess.at_floor:
-                print(f"[DR {event_id}] Vessel {bess.vessel_id} hit SOC floor — excluded from further discharge.")
+                print(
+                    f"[DR {event_id}] Vessel {bess.vessel_id} hit SOC floor — excluded from further discharge."
+                )
 
         # All vessels exhausted — end the loop early
         if active_vessels == 0:
-            print(f"[DR {event_id}] All vessels at SOC floor. Ending dispatch loop early.")
+            print(
+                f"[DR {event_id}] All vessels at SOC floor. Ending dispatch loop early."
+            )
             break
 
         time.sleep(INTERVAL_SECONDS)

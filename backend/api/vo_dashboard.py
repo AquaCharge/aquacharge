@@ -25,7 +25,7 @@ _drevents_client = DynamoClient(
 _stations_client = DynamoClient(
     table_name="aquacharge-stations-dev", region_name="us-east-1"
 )
-contract_service = ContractService()
+contract_service = ContractService())
 
 
 def _parse_iso(dt_string):

@@ -16,7 +16,8 @@ vo_dashboard_bp = Blueprint("vo_dashboard", __name__)
 _users_client = DynamoClient(table_name=config.USERS_TABLE, region_name=config.AWS_REGION)
 _vessels_client = DynamoClient(
     table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
-  _measurements_client = DynamoClient(
+)
+_measurements_client = DynamoClient(
     table_name="aquacharge-measurements-dev", region_name="us-east-1"
 )
 _drevents_client = DynamoClient(
@@ -25,7 +26,7 @@ _drevents_client = DynamoClient(
 _stations_client = DynamoClient(
     table_name="aquacharge-stations-dev", region_name="us-east-1"
 )
-contract_service = ContractService())
+contract_service = ContractService()
 
 
 def _parse_iso(dt_string):

@@ -8,7 +8,7 @@ import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 from models.contract import Contract, ContractStatus
-
+import validation
 
 def convert_decimals(obj):
     """Convert Decimal objects to float for JSON serialization."""
@@ -331,6 +331,13 @@ class ContractService:
         -------
         List of created contract public dicts.
         """
+
+        for vessel in eligible_vessels:
+            if not validation.pre_event_contract_validation(dr_event, vessel):
+                eligible_vessels.remove(vessel)
+
+        max_participants = int(dr_event.get("maxParticipants") or 0)
+        target_energy_kwh = float(dr_event.get("targetEnergyKwh") or 0)
         price_per_kwh = float(dr_event.get("pricePerKwh") or 0)
         start_time = dr_event.get("startTime", "")
         end_time = dr_event.get("endTime", "")

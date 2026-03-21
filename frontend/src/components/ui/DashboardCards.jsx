@@ -37,7 +37,7 @@ export const MetricCard = ({
 }) => (
   <Card className={className}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-      <CardTitle className={cn("text-md font-light", titleClassName)}>{title}</CardTitle>
+      <CardTitle className={cn("text-lg font-light", titleClassName)}>{title}</CardTitle>
       {Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : null}
     </CardHeader>
     <CardContent>
@@ -54,7 +54,7 @@ export const MetricCard = ({
 export const StateOfChargeCard = ({ percent, loading }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-      <CardTitle className="text-md font-light">State of charge</CardTitle>
+      <CardTitle className="text-lg font-light">State of charge</CardTitle>
     </CardHeader>
     <CardContent>
       {loading ? (
@@ -87,7 +87,7 @@ export const AllTimeCard = ({ metrics, loading }) => {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-        <CardTitle className="text-md font-light">All Time</CardTitle>
+        <CardTitle className="text-lg font-light">All Time</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -197,7 +197,7 @@ export const WeeklyEarningsCard = ({ weeklyEarnings, loading }) => {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-        <CardTitle className="text-md font-light">Earnings</CardTitle>
+        <CardTitle className="text-lg font-light">Earnings</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -304,7 +304,7 @@ export const WeeklySocCard = ({ socSeries, socLoading, socError }) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-md font-light mb-4">
+        <CardTitle className="text-lg font-light mb-4">
           State of Charge
         </CardTitle>
         <div className="text-3xl mb-1">
@@ -483,7 +483,7 @@ export const ActiveContractCard = ({ activeContract, lastContract, className }) 
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-md font-light mb-4 flex items-center gap-2">
+        <CardTitle className="text-lg font-light mb-4 flex items-center gap-2">
           {isActive && (
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               <span className="absolute inline-flex h-full w-full animate-ping [animation-duration:3s] rounded-full bg-blue-400 opacity-75" />
@@ -594,7 +594,7 @@ export const QuickActionsCard = ({ title, items }) => {
   return (
     <Card className="">
       <CardHeader>
-        <CardTitle className="text-md font-light">{title}</CardTitle>
+        <CardTitle className="text-lg font-light">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-1">
@@ -639,7 +639,7 @@ export const VesselDetails = ({ vessel, loading, className }) => {
   return (
     <Card className={className}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="text-md font-light">{displayName}</CardTitle>
+        <CardTitle className="text-lg font-light">{displayName}</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (

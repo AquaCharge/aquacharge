@@ -65,6 +65,32 @@ def get_drevent_monitoring():
         )
 
 
+@drevents_bp.route("/analytics", methods=["GET"])
+@require_auth
+def get_drevent_analytics():
+    """Get historical analytics metrics for DR events."""
+    try:
+        snapshot = drevent_service.get_analytics_snapshot(
+            event_id=request.args.get("eventId"),
+            region=request.args.get("region"),
+            period_hours=request.args.get("periodHours", default=168, type=int),
+            grain=request.args.get("grain", default="day", type=str),
+        )
+        return jsonify(snapshot), 200
+    except DREventServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except Exception as error:
+        return (
+            jsonify(
+                {
+                    "error": "Failed to retrieve analytics snapshot",
+                    "details": str(error),
+                }
+            ),
+            500,
+        )
+
+
 @drevents_bp.route("/<event_id>", methods=["GET"])
 @require_auth
 def get_drevent_by_id(event_id):

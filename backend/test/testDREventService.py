@@ -42,6 +42,14 @@ class InMemoryStationRepository:
         return dict(station) if station else None
 
 
+class InMemoryContractRepository:
+    def __init__(self, contracts=None):
+        self.contracts = list(contracts or [])
+
+    def list_contracts(self):
+        return list(self.contracts)
+
+
 def make_event(status="Created", event_id="event-1", station_id="station-1"):
     now = datetime.now(timezone.utc)
     return {
@@ -58,10 +66,11 @@ def make_event(status="Created", event_id="event-1", station_id="station-1"):
     }
 
 
-def create_service(events=None, measurements=None, stations=None):
+def create_service(events=None, measurements=None, contracts=None, stations=None):
     return DREventService(
         event_repository=InMemoryEventRepository(events),
         measurement_repository=InMemoryMeasurementRepository(measurements),
+        contract_repository=InMemoryContractRepository(contracts),
         station_repository=InMemoryStationRepository(
             stations
             or [
@@ -280,3 +289,137 @@ def test_update_event_ignores_contract_id_in_payload():
     assert "contractId" not in updated
     stored = service.event_repository.get_event("event-1")
     assert "contractId" not in stored
+
+
+def test_analytics_snapshot_aggregates_historical_kpis():
+    now = datetime.now(timezone.utc)
+    measurements = [
+        {
+            "id": "m1",
+            "drEventId": "event-1",
+            "contractId": "contract-1",
+            "vesselId": "vessel-1",
+            "timestamp": (now - timedelta(hours=10)).isoformat(),
+            "energyKwh": 20,
+            "powerKw": 9,
+            "currentSOC": 64,
+        },
+        {
+            "id": "m2",
+            "drEventId": "event-1",
+            "contractId": "contract-2",
+            "vesselId": "vessel-2",
+            "timestamp": (now - timedelta(hours=6)).isoformat(),
+            "energyKwh": 30,
+            "powerKw": 11,
+            "currentSOC": 58,
+        },
+        {
+            "id": "m3",
+            "drEventId": "event-1",
+            "contractId": "contract-1",
+            "vesselId": "vessel-1",
+            "timestamp": (now - timedelta(hours=2)).isoformat(),
+            "energyKwh": 10,
+            "powerKw": 7,
+            "currentSOC": 51,
+        },
+    ]
+    contracts = [
+        {
+            "id": "contract-1",
+            "drEventId": "event-1",
+            "status": "completed",
+            "totalValue": 50.0,
+            "pricePerKwh": 0.25,
+            "endTime": (now - timedelta(hours=1)).isoformat(),
+        },
+        {"id": "contract-2", "drEventId": "event-1", "status": "failed"},
+        {
+            "id": "contract-3",
+            "drEventId": "event-1",
+            "status": "active",
+            "totalValue": 30.0,
+            "pricePerKwh": 0.25,
+        },
+    ]
+    service = create_service(
+        events=[make_event(status="Active")], measurements=measurements, contracts=contracts
+    )
+
+    snapshot = service.get_analytics_snapshot(event_id="event-1", period_hours=24, grain="hour")
+
+    assert snapshot["summary"]["totalEnergyDischargedKwh"] == 60.0
+    assert snapshot["summary"]["averagePowerKw"] == 9.0
+    assert snapshot["summary"]["completionRatePercent"] == 50.0
+    assert snapshot["summary"]["participationRatePercent"] == 50.0
+    assert len(snapshot["timeSeries"]) == 3
+    assert snapshot["vesselLeaderboard"][0]["vesselId"] == "vessel-1"
+    assert snapshot["vesselLeaderboard"][0]["totalEnergyDischargedKwh"] == 30.0
+    assert any(item["status"] == "Active" for item in snapshot["statusDistribution"])
+    assert len(snapshot["heatmap"]) == 7
+
+    financials = snapshot["financials"]
+    assert financials["totalPayoutUsd"] == 50.0
+    assert financials["committedExposureUsd"] == 30.0
+    # costPerKwhUsd = 50.0 / 60.0 = 0.8333
+    assert financials["costPerKwhUsd"] == round(50.0 / 60.0, 4)
+    # avgPricePerKwhUsd weighted by targetEnergyKwh (only one event: 0.25)
+    assert financials["avgPricePerKwhUsd"] == 0.25
+    assert len(financials["timeSeries"]) == 1
+    assert financials["timeSeries"][0]["payoutUsd"] == 50.0
+    assert len(financials["eventBreakdown"]) == 1
+    assert financials["eventBreakdown"][0]["targetValueUsd"] == 50.0  # 200 * 0.25
+    assert financials["eventBreakdown"][0]["actualPayoutUsd"] == 50.0
+    assert financials["eventBreakdown"][0]["deliveryRatePct"] == 100.0
+
+
+def test_analytics_snapshot_empty_state_without_measurements():
+    service = create_service(
+        events=[make_event(status="Dispatched")], measurements=[], contracts=[]
+    )
+
+    snapshot = service.get_analytics_snapshot(event_id="event-1", period_hours=24)
+
+    assert snapshot["empty"] is True
+    assert snapshot["summary"]["totalEnergyDischargedKwh"] == 0.0
+    assert snapshot["summary"]["averagePowerKw"] == 0.0
+    assert snapshot["vesselLeaderboard"] == []
+
+
+def test_analytics_snapshot_financials_zero_when_no_completed_contracts():
+    now = datetime.now(timezone.utc)
+    measurements = [
+        {
+            "id": "m1",
+            "drEventId": "event-1",
+            "contractId": "contract-1",
+            "vesselId": "vessel-1",
+            "timestamp": (now - timedelta(hours=2)).isoformat(),
+            "energyKwh": 40,
+            "powerKw": 10,
+            "currentSOC": 60,
+        }
+    ]
+    contracts = [
+        {
+            "id": "contract-1",
+            "drEventId": "event-1",
+            "status": "active",
+            "totalValue": 20.0,
+            "pricePerKwh": 0.25,
+        }
+    ]
+    service = create_service(
+        events=[make_event(status="Active")], measurements=measurements, contracts=contracts
+    )
+
+    snapshot = service.get_analytics_snapshot(event_id="event-1", period_hours=24)
+
+    financials = snapshot["financials"]
+    assert financials["totalPayoutUsd"] == 0.0
+    assert financials["committedExposureUsd"] == 20.0
+    assert financials["costPerKwhUsd"] is None
+    assert financials["timeSeries"] == []
+    assert financials["eventBreakdown"][0]["actualPayoutUsd"] == 0.0
+    assert financials["eventBreakdown"][0]["deliveryRatePct"] == 0.0

@@ -1,5 +1,6 @@
 
 from decimal import Decimal
+from typing import Iterable, Optional
 
 from models.vessel import Vessel
 from db.dynamoClient import DynamoClient
@@ -16,12 +17,8 @@ _contracts_client = DynamoClient(table_name="aquacharge-contracts-dev", region_n
 _measurements_client = DynamoClient(table_name="aquacharge-measurements-dev", region_name="us-east-1")
 
 
-def pre_event_contract_validation(vessel: Vessel) -> bool:
-
-    past_contracts = _contracts_client.query_gsi(
-        index_name="vesselId-index",
-        key_condition_expression=Key("vesselId").eq(vessel.id),
-    )
+def _evaluate_pre_event_rules(vessel: Vessel, past_contracts: Iterable[dict]) -> bool:
+    past_contracts = list(past_contracts)
 
     if not past_contracts:
         return True
@@ -44,6 +41,26 @@ def pre_event_contract_validation(vessel: Vessel) -> bool:
             )
 
     return True
+
+
+def pre_event_contract_validation(
+    vessel: Vessel,
+    past_contracts: Optional[Iterable[dict]] = None,
+) -> bool:
+
+    if past_contracts is None:
+        past_contracts = _contracts_client.query_gsi(
+            index_name="vesselId-index",
+            key_condition_expression=Key("vesselId").eq(vessel.id),
+        )
+    else:
+        past_contracts = [
+            contract_data
+            for contract_data in past_contracts
+            if str(contract_data.get("vesselId") or "") == str(vessel.id)
+        ]
+
+    return _evaluate_pre_event_rules(vessel, past_contracts)
 
 
 def post_event_contract_validation(contract: contract.Contract):

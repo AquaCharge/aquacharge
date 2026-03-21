@@ -470,7 +470,21 @@ class ContractService:
 
         try:
             vessel = Vessel.from_dict(vessel_data)
-            validation.pre_event_contract_validation(vessel)
+            past_contracts = None
+            if not isinstance(self.repository, DynamoContractRepository):
+                past_contracts = self.repository.list_contracts()
+            if past_contracts is None:
+                validation.pre_event_contract_validation(vessel)
+            else:
+                try:
+                    validation.pre_event_contract_validation(
+                        vessel,
+                        past_contracts=past_contracts,
+                    )
+                except TypeError as error:
+                    if "past_contracts" not in str(error):
+                        raise
+                    validation.pre_event_contract_validation(vessel)
         except ValueError as error:
             raise ContractServiceError(str(error), 409) from error
 

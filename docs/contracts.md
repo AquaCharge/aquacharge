@@ -480,12 +480,29 @@ Success response `200`:
     "endTime": "ISO-8601 datetime",
     "timeRemainingSeconds": 0,
     "estimatedEarnings": 0.0,
-    "energyAmountKwh": 0.0
+    "energyAmountKwh": 0.0,
+    "drEventStatus": "Active",
+    "station": {
+      "id": "string",
+      "displayName": "string",
+      "city": "string",
+      "provinceOrState": "string",
+      "latitude": 0.0,
+      "longitude": 0.0
+    },
+    "committedPowerKw": 0.0,
+    "energyDeliveredKwh": 0.0,
+    "energyRemainingKwh": 0.0
   } | null,
   "metrics": {
     "contractsCompleted": 0,
     "totalKwhDischarged": 0.0,
     "totalEarnings": 0.0
+  },
+  "weeklyEarnings": {
+    "total": 0.0,
+    "dailyEarnings": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "todayIndex": 0
   },
   "updatedAt": "ISO-8601 datetime"
 }
@@ -495,13 +512,54 @@ Semantics:
 
 - `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` is computed as `(capacity / maxCapacity) * 100` when `maxCapacity > 0`. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
 - `metrics` are over all of the VO’s vessels (contracts completed, total kWh from completed/active contracts, total earnings from completed contracts).
-- `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`.
+- `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`. When the linked DR event is in `Active` status, the response is enriched with `drEventStatus`, `station` (location from DREvent → Station), `committedPowerKw`, `energyDeliveredKwh` (sum of measurements), and `energyRemainingKwh`. These fields are absent when no DR event is actively running.
+- `weeklyEarnings`: current week (Monday–Sunday UTC). `dailyEarnings` is 7 values for Mon..Sun from completed contracts whose `endTime` falls in that week; `todayIndex` is 0–6 (Mon=0, Sun=6).
 
 Error responses:
 
 - `401`: authentication required
 - `404`: user not found
 - `500`: dashboard load failure
+
+The VO dashboard UI also shows a **Contracts History** list, sourced from `GET /api/contracts/my-contracts`, displaying only contracts with status `completed`, `failed`, or `cancelled`.
+
+### `GET /api/vo/soc-history`
+
+Weekly state-of-charge (SoC) history for the vessel operator dashboard. Requires authentication and uses the caller’s `currentVesselId` to resolve the vessel.
+
+Request headers:
+
+- `Authorization: Bearer <jwt>`
+
+Success response `200`:
+
+```json
+{
+  "currentVesselId": "string | null",
+  "points": [
+    {
+      "timestamp": "ISO-8601 datetime",
+      "socPercent": 0.0
+    }
+  ],
+  "empty": false,
+  "windowStart": "ISO-8601 datetime",
+  "windowEnd": "ISO-8601 datetime"
+}
+```
+
+Semantics:
+
+- The endpoint inspects the authenticated user’s `currentVesselId`. If none is set, it returns an empty `points` array and `currentVesselId: null`.
+- The time window is the *previous 7×24 hours* (rolling window), computed from the current UTC time.
+- `points` contains measurement-backed SoC telemetry for the current vessel only, sorted by `timestamp` ascending.
+- Each `socPercent` value comes from the `currentSOC` field in the measurements table and is clamped to discard clearly invalid values (< 0 or > 200).
+
+Error responses:
+
+- `401`: authentication required
+- `404`: user not found
+- `500`: SoC history load failure
 
 ## Booking Service Rules
 

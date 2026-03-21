@@ -242,6 +242,35 @@ class TestAcceptContract:
         assert exc_info.value.status_code == 400
         assert exc_info.value.message == "committedPowerKw is required"
 
+    def test_accept_rejects_when_pre_validation_fails(self, monkeypatch):
+        repo = InMemoryContractRepo(
+            [_make_contract(status="pending", vessel_id="vessel-abc")]
+        )
+        service = ContractService(
+            repository=repo,
+            booking_repository=_StubBookingRepo(),
+            vessel_repository=_StubVesselRepo(),
+            drevent_repository=_StubDREventRepo(),
+        )
+
+        def _raise_pre_validation_error(vessel):
+            raise ValueError("Vessel vessel-abc has 3 failed contracts (max 3). Ineligible for DR participation.")
+
+        monkeypatch.setattr(
+            "services.contracts.service.validation.pre_event_contract_validation",
+            _raise_pre_validation_error,
+        )
+
+        with pytest.raises(ContractServiceError) as exc_info:
+            service.accept_contract(
+                "contract-001",
+                caller_vessel_ids=["vessel-abc"],
+                acceptance_data={"committedPowerKw": 25},
+            )
+
+        assert exc_info.value.status_code == 409
+        assert "failed contracts" in exc_info.value.message
+
 
 class TestDeclineContract:
     def test_decline_pending_contract_transitions_to_cancelled(self):

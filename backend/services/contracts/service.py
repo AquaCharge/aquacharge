@@ -8,7 +8,8 @@ import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 from models.contract import Contract, ContractStatus
-import validation
+from models.vessel import Vessel
+from . import validation
 
 def convert_decimals(obj):
     """Convert Decimal objects to float for JSON serialization."""
@@ -332,10 +333,6 @@ class ContractService:
         List of created contract public dicts.
         """
 
-        for vessel in eligible_vessels:
-            if not validation.pre_event_contract_validation(dr_event, vessel):
-                eligible_vessels.remove(vessel)
-
         max_participants = int(dr_event.get("maxParticipants") or 0)
         target_energy_kwh = float(dr_event.get("targetEnergyKwh") or 0)
         price_per_kwh = float(dr_event.get("pricePerKwh") or 0)
@@ -473,6 +470,12 @@ class ContractService:
         vessel_data = self.vessel_repository.get_vessel(contract.vesselId)
         if not vessel_data:
             raise ContractServiceError("Associated vessel not found", 404)
+
+        try:
+            vessel = Vessel.from_dict(vessel_data)
+            validation.pre_event_contract_validation(vessel)
+        except ValueError as error:
+            raise ContractServiceError(str(error), 409) from error
 
         max_discharge_rate = vessel_data.get("maxDischargeRate")
         try:

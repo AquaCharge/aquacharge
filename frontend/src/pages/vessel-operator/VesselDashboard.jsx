@@ -89,48 +89,6 @@ const VesselDashboard = () => {
 
   const authToken = localStorage.getItem('auth-token')
   const userId = user?.id
-  const sampleWeeklyEarnings = {
-    total: 1238.65,
-    dailyEarnings: [128, 320.5, 362, 284.15, 421, 0, 0],
-    todayIndex: 4,  // 0=Mon, 6=Sun; e.g. 4 = Friday
-  }
-  const sampleSocSeries = [
-    { timestamp: '2026-03-10T08:00:00.000Z', socPercent: 92.5 },
-    { timestamp: '2026-03-10T20:00:00.000Z', socPercent: 88.3 },
-    { timestamp: '2026-03-11T08:00:00.000Z', socPercent: 80.1 },
-    { timestamp: '2026-03-11T20:00:00.000Z', socPercent: 75.4 },
-    { timestamp: '2026-03-12T08:00:00.000Z', socPercent: 68.9 },
-    { timestamp: '2026-03-12T20:00:00.000Z', socPercent: 63.2 },
-    { timestamp: '2026-03-13T08:00:00.000Z', socPercent: 58.7 },
-    { timestamp: '2026-03-13T20:00:00.000Z', socPercent: 52.4 },
-    { timestamp: '2026-03-14T08:00:00.000Z', socPercent: 47.8 },
-    { timestamp: '2026-03-14T20:00:00.000Z', socPercent: 42.1 },
-    { timestamp: '2026-03-15T08:00:00.000Z', socPercent: 38.9 },
-    { timestamp: '2026-03-15T20:00:00.000Z', socPercent: 35.2 },
-    { timestamp: '2026-03-16T08:00:00.000Z', socPercent: 30.5 },
-    { timestamp: '2026-03-16T12:00:00.000Z', socPercent: 28.3 },
-  ]
-  const sampleActiveContract = {
-    id: 'contract-sample-001',
-    startTime: '2026-03-16T12:00:00.000Z',
-    endTime: '2026-03-16T18:30:00.000Z',
-    timeRemainingSeconds: 5400,
-    timeWindowSeconds: 23400,
-    estimatedEarnings: 87.50,
-    energyAmountKwh: 175.0,
-    drEventStatus: 'Active',
-    station: {
-      id: 'station-sample-001',
-      displayName: 'Vancouver Marine Terminal',
-      city: 'Vancouver',
-      provinceOrState: 'BC',
-      latitude: 49.2827,
-      longitude: -123.1207,
-    },
-    committedPowerKw: 50.0,
-    energyDeliveredKwh: 68.3,
-    energyRemainingKwh: 106.7,
-  }
 
   const loadDashboard = async () => {
     if (!authToken) {
@@ -149,7 +107,6 @@ const VesselDashboard = () => {
       }
       const data = await response.json()
       setDashboard(data)
-      console.log(data)
       // If backend auto-set first vessel but auth context doesn't have it yet, refresh user
       if (data?.currentVessel && !user?.currentVesselId && refreshUser) {
         refreshUser()
@@ -181,7 +138,6 @@ const VesselDashboard = () => {
       const points = Array.isArray(data?.points) ? data.points : []
       points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       setSocSeries(points)
-      setSocSeries(sampleSocSeries) // TODO: remove this after testing
     } catch (e) {
       setSocError(e.message || 'Failed to load SoC history.')
       setSocSeries([])
@@ -305,7 +261,7 @@ const VesselDashboard = () => {
     ? vessels.find((v) => v.id === user.currentVesselId) ?? null
     : null
   const currentVesselDetails = currentVesselFromList ?? currentVessel
-  const activeContract = sampleActiveContract // TODO: remove — replace with: dashboard?.activeContract ?? null
+  const activeContract = dashboard?.activeContract ?? null
   const lastContract = !activeContract && contractsHistory.length > 0
     ? {
         id: contractsHistory[0].id,
@@ -391,8 +347,7 @@ const VesselDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <WeeklySocCard socSeries={socSeries} socLoading={socLoading} socError={socError} />
         <WeeklyEarningsCard
-          // weeklyEarnings={dashboard?.weeklyEarnings} 
-          weeklyEarnings={sampleWeeklyEarnings} // TODO: remove this after testing
+          weeklyEarnings={dashboard?.weeklyEarnings}
           loading={isLoading}
         />
       </div>

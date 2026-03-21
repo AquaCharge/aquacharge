@@ -30,8 +30,8 @@ class TestPreEventContractValidation:
     def test_pre_event_validation_with_completed_contracts(self, mock_client):
         """Test validation passes with completed contracts and good fulfillment."""
         mock_client.query_gsi.return_value = [
-            {"id": "c1", "status": "COMPLETED"},
-            {"id": "c2", "status": "COMPLETED"},
+            {"id": "c1", "status": "completed"},
+            {"id": "c2", "status": "completed"},
         ]
 
         vessel = Mock(spec=Vessel)
@@ -44,10 +44,10 @@ class TestPreEventContractValidation:
     def test_pre_event_validation_too_many_failed(self, mock_client):
         """Test validation fails when vessel has too many failed contracts."""
         mock_client.query_gsi.return_value = [
-            {"id": "c1", "status": "FAILED"},
-            {"id": "c2", "status": "FAILED"},
-            {"id": "c3", "status": "FAILED"},
-            {"id": "c4", "status": "COMPLETED"},
+            {"id": "c1", "status": "failed"},
+            {"id": "c2", "status": "failed"},
+            {"id": "c3", "status": "failed"},
+            {"id": "c4", "status": "completed"},
         ]
 
         vessel = Mock(spec=Vessel)
@@ -64,11 +64,11 @@ class TestPreEventContractValidation:
         """Test validation fails when fulfillment rate is too low."""
         # 2 failed, 3 completed = 66.7% fulfillment (below 75% limit, should fail)
         mock_client.query_gsi.return_value = [
-            {"id": "c1", "status": "FAILED"},
-            {"id": "c2", "status": "FAILED"},
-            {"id": "c3", "status": "COMPLETED"},
-            {"id": "c4", "status": "COMPLETED"},
-            {"id": "c5", "status": "COMPLETED"},
+            {"id": "c1", "status": "failed"},
+            {"id": "c2", "status": "failed"},
+            {"id": "c3", "status": "completed"},
+            {"id": "c4", "status": "completed"},
+            {"id": "c5", "status": "completed"},
         ]
 
         vessel = Mock(spec=Vessel)
@@ -85,9 +85,9 @@ class TestPreEventContractValidation:
         """Test validation passes at the fulfillment threshold."""
         # 2 failed, 8 completed = 75% fulfillment (exactly at limit)
         mock_client.query_gsi.return_value = [
-            {"id": "c1", "status": "FAILED"},
-            {"id": "c2", "status": "FAILED"},
-        ] + [{"id": f"c{i}", "status": "COMPLETED"} for i in range(3, 11)]
+            {"id": "c1", "status": "failed"},
+            {"id": "c2", "status": "failed"},
+        ] + [{"id": f"c{i}", "status": "completed"} for i in range(3, 11)]
 
         vessel = Mock(spec=Vessel)
         vessel.id = "vessel-123"
@@ -117,10 +117,10 @@ class TestPostEventContractValidation:
 
         result = post_event_contract_validation(contract_obj)
 
-        assert result == "COMPLETED"
+        assert result == "completed"
         mock_contracts_client.update_item.assert_called_once()
         call_args = mock_contracts_client.update_item.call_args
-        assert call_args[1]['update_data']['status'] == "COMPLETED"
+        assert call_args[1]['update_data']['status'] == "completed"
 
     @patch('services.contracts.validation._measurements_client')
     @patch('services.contracts.validation._contracts_client')
@@ -140,10 +140,10 @@ class TestPostEventContractValidation:
 
         result = post_event_contract_validation(contract_obj)
 
-        assert result == "FAILED"
+        assert result == "failed"
         mock_contracts_client.update_item.assert_called_once()
         call_args = mock_contracts_client.update_item.call_args
-        assert call_args[1]['update_data']['status'] == "FAILED"
+        assert call_args[1]['update_data']['status'] == "failed"
 
     @patch('services.contracts.validation._measurements_client')
     def test_post_event_validation_no_measurements(self, mock_measurements_client):
@@ -176,4 +176,34 @@ class TestPostEventContractValidation:
         result = post_event_contract_validation(contract_obj)
 
         # 89.99 < 90, so should be FAILED
-        assert result == "FAILED"
+        assert result == "failed"
+
+    @patch('services.contracts.validation._measurements_client')
+    @patch('services.contracts.validation._contracts_client')
+    def test_post_event_validation_accepts_raw_contract_dict(
+        self, mock_contracts_client, mock_measurements_client
+    ):
+        """Test validation accepts raw contract dictionaries from the dispatch loop."""
+        mock_measurements_client.query_gsi.return_value = [
+            {"energyKwh": 95, "drEventId": "event-123"},
+        ]
+
+        result = post_event_contract_validation(
+            {
+                "id": "contract-123",
+                "vesselId": "vessel-123",
+                "drEventId": "event-123",
+                "vesselName": "Sea Breeze",
+                "energyAmount": 100,
+                "pricePerKwh": 0.2,
+                "startTime": "2026-03-10T08:00:00+00:00",
+                "endTime": "2026-03-10T12:00:00+00:00",
+                "status": "active",
+                "terms": "Standard terms",
+                "createdAt": "2026-03-09T00:00:00+00:00",
+                "createdBy": "pso-001",
+            }
+        )
+
+        assert result == "completed"
+        mock_contracts_client.update_item.assert_called_once()

@@ -731,11 +731,15 @@ existing `Contract` object model fields/status values.
 - Successful accept transitions a DR event from `Dispatched` to `Accepted`.
 - Successful accept no longer auto-creates a booking. It returns booking context for the
   next UI step so the VO can choose a charger and timeslot explicitly.
+- When a booking is later created for that accepted contract, the contract transitions to
+  `active` and the parent DR event may transition from `Accepted` to `Committed`.
 
 ### Filtering/sorting rules
 
 - `GET /api/contracts` supports `status` and `vesselId` filters.
 - Results are sorted by `createdAt` descending (newest first).
+- `GET /api/contracts/my-contracts` keeps accepted-but-unbooked contracts visible to the
+  owning vessel operator even if live eligibility has since changed.
 
 ## DR Event Dispatch Contract
 
@@ -792,6 +796,25 @@ Error responses:
 - `403`: caller is not a power operator
 - `404`: DR event not found
 - `500`: dispatch failure
+
+### `POST /api/drevents/{eventId}/start`
+
+Starts a `Committed` DR event using only contracts that have already completed the booking
+handoff.
+
+Rules:
+
+- Only events currently in `Committed` may be started.
+- Only contracts with status `active` and a non-empty `bookingId` participate in discharge.
+- Starting is rejected when no booked active contracts exist for the event.
+- Post-event validation writes contract settlement statuses using the contract schema’s
+  lowercase values (`completed` or `failed`).
+
+Error responses:
+
+- `400`: invalid lifecycle state for start or no booked active contracts
+- `404`: DR event not found
+- `500`: dispatch loop failure
 
 ### `POST /api/contracts/{contractId}/accept`
 

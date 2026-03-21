@@ -1,6 +1,6 @@
-
+import config
 from decimal import Decimal
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 
 from models.vessel import Vessel
 from db.dynamoClient import DynamoClient
@@ -13,8 +13,14 @@ MIN_FULFILLMENT_RATE = 0.75
 KW_TOLERANCE = 0.10
 
 
-_contracts_client = DynamoClient(table_name="aquacharge-contracts-dev", region_name="us-east-1")
-_measurements_client = DynamoClient(table_name="aquacharge-measurements-dev", region_name="us-east-1")
+_contracts_client = DynamoClient(
+    table_name=config.CONTRACTS_TABLE,
+    region_name=config.AWS_REGION,
+)
+_measurements_client = DynamoClient(
+    table_name=config.MEASUREMENTS_TABLE,
+    region_name=config.AWS_REGION,
+)
 
 
 def _evaluate_pre_event_rules(vessel: Vessel, past_contracts: Iterable[dict]) -> bool:
@@ -23,8 +29,21 @@ def _evaluate_pre_event_rules(vessel: Vessel, past_contracts: Iterable[dict]) ->
     if not past_contracts:
         return True
 
-    failed = [c for c in past_contracts if c.get("status") == "FAILED"]
-    completed = [c for c in past_contracts if c.get("status") in ("COMPLETED", "FAILED")]
+    failed = [
+        contract_data
+        for contract_data in past_contracts
+        if str(contract_data.get("status") or "").lower()
+        == contract.ContractStatus.FAILED.value
+    ]
+    completed = [
+        contract_data
+        for contract_data in past_contracts
+        if str(contract_data.get("status") or "").lower()
+        in {
+            contract.ContractStatus.COMPLETED.value,
+            contract.ContractStatus.FAILED.value,
+        }
+    ]
 
     if len(failed) >= MAX_FAILED_CONTRACTS:
         raise ValueError(
@@ -63,23 +82,34 @@ def pre_event_contract_validation(
     return _evaluate_pre_event_rules(vessel, past_contracts)
 
 
-def post_event_contract_validation(contract: contract.Contract):
+def _coerce_contract(
+    contract_data: Union[contract.Contract, dict]
+) -> contract.Contract:
+    if isinstance(contract_data, contract.Contract):
+        return contract_data
+    if isinstance(contract_data, dict):
+        return contract.Contract.from_dict(dict(contract_data))
+    raise TypeError("contract must be a Contract instance or a contract dictionary")
+
+
+def post_event_contract_validation(
+    contract_data: Union[contract.Contract, dict]
+):
+    validated_contract = _coerce_contract(contract_data)
     vessel_measurements = _measurements_client.query_gsi(
         index_name="vesselId-index",
-        key_condition_expression=Key("vesselId").eq(contract.vesselId),
+        key_condition_expression=Key("vesselId").eq(validated_contract.vesselId),
     )
 
     def _matches_contract_event(measurement):
-        measurement_event_id = measurement.get("drEventId")
-        if measurement_event_id is None:
-            measurement_event_id = measurement.get("dreventId")
-
-        if measurement_event_id is not None:
-            return str(measurement_event_id) == str(contract.drEventId)
+        for event_key in ("drEventId", "dreventId"):
+            measurement_event_id = measurement.get(event_key)
+            if measurement_event_id is not None:
+                return str(measurement_event_id) == str(validated_contract.drEventId)
 
         measurement_contract_id = measurement.get("contractId")
         if measurement_contract_id is not None:
-            return str(measurement_contract_id) == str(contract.id)
+            return str(measurement_contract_id) == str(validated_contract.id)
 
         return True
 
@@ -91,21 +121,25 @@ def post_event_contract_validation(contract: contract.Contract):
 
     if not user_measurements:
         raise ValueError(
-            f"No measurements found for vessel={contract.vesselId} "
-            f"event={contract.drEventId}. Cannot settle contract."
+            f"No measurements found for vessel={validated_contract.vesselId} "
+            f"event={validated_contract.drEventId}. Cannot settle contract."
         )
 
-    promised_kwh = Decimal(str(contract.energyAmount))
+    promised_kwh = Decimal(str(validated_contract.energyAmount))
     delivered_kwh = sum(
         (Decimal(str(m.get("energyKwh", 0))) for m in user_measurements),
         Decimal("0"),
     )
 
     floor = promised_kwh * Decimal(str(1 - KW_TOLERANCE))
-    status = "COMPLETED" if delivered_kwh >= floor else "FAILED"
+    status = (
+        contract.ContractStatus.COMPLETED.value
+        if delivered_kwh >= floor
+        else contract.ContractStatus.FAILED.value
+    )
 
     _contracts_client.update_item(
-        key={"id": contract.id},
+        key={"id": validated_contract.id},
         update_data={"status": status}
     )
 

@@ -500,6 +500,42 @@ class TestAcceptEndpoint:
         assert len(payload) == 1
         assert payload[0]["status"] == "active"
 
+    def test_my_contracts_keeps_accepted_pending_contracts_visible(
+        self, client, monkeypatch
+    ):
+        import api.contracts as contracts_api
+
+        monkeypatch.setattr(
+            contracts_api,
+            "_get_owned_vessel_ids",
+            lambda user_id: ["vessel-abc"],
+        )
+        monkeypatch.setattr(
+            contracts_api.contract_service,
+            "list_contracts",
+            lambda status_filter=None, vessel_id=None: [
+                {
+                    **_make_contract(status="pending", vessel_id="vessel-abc"),
+                    "acceptedAt": "2026-03-10T07:00:00+00:00",
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            contracts_api,
+            "_get_current_eligibility",
+            lambda contract: {"eligible": False, "reasons": ["Vessel moved out of range"]},
+        )
+
+        rv = client.get(
+            "/api/contracts/my-contracts",
+            headers=_jwt_headers(user_id="user-vo-001", user_type=1),
+        )
+
+        assert rv.status_code == 200
+        payload = rv.get_json()
+        assert len(payload) == 1
+        assert payload[0]["acceptedAt"] == "2026-03-10T07:00:00+00:00"
+
     def test_accept_rejects_when_pending_contract_is_no_longer_eligible(
         self, client, monkeypatch
     ):
@@ -585,6 +621,119 @@ class TestAcceptEndpoint:
         assert payload["contract"]["id"] == "contract-001"
         assert payload["bookingContext"]["stationId"] == "station-xyz"
         assert payload["bookingContext"]["availableSlots"][0]["chargerId"] == "charger-1"
+
+    def test_start_rejects_non_committed_event(self, client, monkeypatch):
+        import api.drevents as drevents_api
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Accepted"},
+        )
+
+        rv = client.post(
+            "/api/drevents/dr-001/start",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert rv.status_code == 400
+        assert "committed" in rv.get_json()["error"].lower()
+
+    def test_start_uses_only_booked_active_contracts(self, client, monkeypatch):
+        import api.drevents as drevents_api
+
+        captured = {}
+
+        class _FakeDynamoClient:
+            def __init__(self, table_name, region_name):
+                self.table_name = table_name
+                self.region_name = region_name
+
+            def scan_items(self):
+                return [
+                    {
+                        **_make_contract(status="active", vessel_id="vessel-abc"),
+                        "id": "contract-active-booked",
+                        "bookingId": "booking-123",
+                    },
+                    {
+                        **_make_contract(status="active", vessel_id="vessel-abc"),
+                        "id": "contract-active-unbooked",
+                        "bookingId": None,
+                    },
+                    {
+                        **_make_contract(status="pending", vessel_id="vessel-abc"),
+                        "id": "contract-pending-booked",
+                        "bookingId": "booking-999",
+                    },
+                ]
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Committed"},
+        )
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "update_event",
+            lambda event_id, update_data: {"id": event_id, **update_data},
+        )
+        monkeypatch.setattr(drevents_api, "DynamoClient", _FakeDynamoClient)
+        monkeypatch.setattr(
+            drevents_api,
+            "_dispatch_loop",
+            lambda event_id, valid_contracts, dynamo_client: captured.update(
+                {
+                    "event_id": event_id,
+                    "contracts": valid_contracts,
+                    "client": dynamo_client,
+                }
+            ),
+        )
+
+        rv = client.post(
+            "/api/drevents/dr-001/start",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert rv.status_code == 200
+        assert captured["event_id"] == "dr-001"
+        assert [contract["id"] for contract in captured["contracts"]] == [
+            "contract-active-booked"
+        ]
+
+    def test_start_rejects_when_no_booked_active_contracts_exist(self, client, monkeypatch):
+        import api.drevents as drevents_api
+
+        class _FakeDynamoClient:
+            def __init__(self, table_name, region_name):
+                self.table_name = table_name
+                self.region_name = region_name
+
+            def scan_items(self):
+                return [
+                    {**_make_contract(status="pending", vessel_id="vessel-abc")},
+                    {
+                        **_make_contract(status="active", vessel_id="vessel-abc"),
+                        "id": "contract-active-unbooked",
+                        "bookingId": None,
+                    },
+                ]
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Committed"},
+        )
+        monkeypatch.setattr(drevents_api, "DynamoClient", _FakeDynamoClient)
+
+        rv = client.post(
+            "/api/drevents/dr-001/start",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert rv.status_code == 400
+        assert "booked active contracts" in rv.get_json()["error"].lower()
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { getApiEndpoint } from '@/config/api'
+import ContractBookingFlow from '@/components/vessel-operator/ContractBookingFlow'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -80,6 +81,9 @@ const formatPendingEnergy = (contract) => {
   return `${contract.energyAmount} kWh`
 }
 
+const isAwaitingBooking = (contract) =>
+  contract?.status === 'pending' && !!contract?.acceptedAt && !contract?.bookingId
+
 // ---------------------------------------------------------------------------
 // Contract detail modal
 // ---------------------------------------------------------------------------
@@ -91,11 +95,13 @@ const ContractDetailModal = ({
   onClose,
   onAccept,
   onDecline,
+  onResumeBooking,
   isActioning,
 }) => {
   if (!contract) return null
 
-  const isPending = contract.status === 'pending'
+  const isPending = contract.status === 'pending' && !isAwaitingBooking(contract)
+  const awaitingBooking = isAwaitingBooking(contract)
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -115,7 +121,9 @@ const ContractDetailModal = ({
             <span className="text-gray-500">Status</span>
             <Badge className={`${statusBadgeClass(contract.status)} flex items-center gap-1`}>
               <StatusIcon status={contract.status} />
-              <span className="capitalize">{contract.status}</span>
+              <span className="capitalize">
+                {awaitingBooking ? 'booking required' : contract.status}
+              </span>
             </Badge>
           </div>
 
@@ -144,7 +152,7 @@ const ContractDetailModal = ({
           <div className="flex items-center justify-between">
             <span className="text-gray-500">Total Value</span>
             <span className="font-bold text-emerald-700">
-              {contract.status === 'pending'
+              {contract.status === 'pending' && !awaitingBooking
                 ? 'Calculated on acceptance'
                 : formatCurrency(contract.totalValue)}
             </span>
@@ -198,12 +206,24 @@ const ContractDetailModal = ({
               </div>
             </div>
           )}
+
+          {awaitingBooking && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+              This contract has been accepted. Complete the charger booking step from the booking
+              panel on the page to activate the participation window.
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex gap-2">
           <Button variant="outline" onClick={onClose} disabled={isActioning}>
             Close
           </Button>
+          {awaitingBooking && (
+            <Button onClick={() => onResumeBooking?.(contract)} disabled={isActioning}>
+              Resume Booking
+            </Button>
+          )}
           {isPending && (
             <>
               <Button
@@ -244,6 +264,8 @@ const MyContracts = () => {
   const [selectedContract, setSelectedContract] = useState(null)
   const [isActioning, setIsActioning] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
+  const [bookingFlow, setBookingFlow] = useState(null)
+  const [bookingContexts, setBookingContexts] = useState({})
   const [acceptanceForm, setAcceptanceForm] = useState({
     committedPowerKw: '',
     operatorNotes: '',
@@ -319,12 +341,20 @@ const MyContracts = () => {
       setContracts((prev) =>
         prev.map((c) => (c.id === contractId ? data.contract : c))
       )
-      setSelectedContract(data.contract)
+      setSelectedContract(null)
+      setBookingContexts((current) => ({
+        ...current,
+        [data.contract.id]: data.bookingContext,
+      }))
+      setBookingFlow({
+        contract: data.contract,
+        bookingContext: data.bookingContext,
+      })
       setAcceptanceForm({
         committedPowerKw: String(data.contract.committedPowerKw || ''),
         operatorNotes: data.contract.operatorNotes || '',
       })
-      setActionMessage('Contract accepted successfully.')
+      setActionMessage('Contract accepted. Select a charger to complete the booking.')
     } catch (err) {
       setError(err.message || 'Failed to accept contract.')
     } finally {
@@ -350,6 +380,7 @@ const MyContracts = () => {
         prev.map((c) => (c.id === contractId ? data.contract : c))
       )
       setSelectedContract(null)
+      setBookingFlow(null)
       setAcceptanceForm({
         committedPowerKw: '',
         operatorNotes: '',
@@ -357,6 +388,45 @@ const MyContracts = () => {
       setActionMessage('Contract declined.')
     } catch (err) {
       setError(err.message || 'Failed to decline contract.')
+    } finally {
+      setIsActioning(false)
+    }
+  }
+
+  const handleResumeBooking = async (contract) => {
+    if (!authToken) {
+      setError('Missing authentication token.')
+      return
+    }
+
+    setIsActioning(true)
+    setError('')
+    try {
+      const response = await fetch(
+        getApiEndpoint(`/api/contracts/${contract.id}/booking-context`),
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      )
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load booking context')
+      }
+
+      setBookingContexts((current) => ({
+        ...current,
+        [contract.id]: data.bookingContext,
+      }))
+      setSelectedContract(null)
+      setBookingFlow({
+        contract: data.contract || contract,
+        bookingContext: data.bookingContext,
+      })
+    } catch (resumeError) {
+      setError(resumeError.message || 'Unable to resume booking.')
     } finally {
       setIsActioning(false)
     }
@@ -379,9 +449,9 @@ const MyContracts = () => {
       })
       return
     }
-    setAcceptanceForm({
-      committedPowerKw: selectedContract.committedPowerKw
-        ? String(selectedContract.committedPowerKw)
+      setAcceptanceForm({
+        committedPowerKw: selectedContract.committedPowerKw
+          ? String(selectedContract.committedPowerKw)
         : '',
       operatorNotes: selectedContract.operatorNotes || '',
     })
@@ -433,6 +503,19 @@ const MyContracts = () => {
         <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
           {actionMessage}
         </div>
+      )}
+
+      {bookingFlow && (
+        <ContractBookingFlow
+          authToken={authToken}
+          contract={bookingFlow.contract}
+          bookingContext={bookingFlow.bookingContext}
+          onDismiss={() => setBookingFlow(null)}
+          onBookingComplete={async (booking) => {
+            setActionMessage(`Booking ${booking.id} confirmed successfully.`)
+            await loadContracts()
+          }}
+        />
       )}
 
       {/* Pending inbox callout */}
@@ -497,7 +580,9 @@ const MyContracts = () => {
                         className={`${statusBadgeClass(contract.status)} flex items-center gap-1 text-xs`}
                       >
                         <StatusIcon status={contract.status} />
-                        <span className="capitalize">{contract.status}</span>
+                        <span className="capitalize">
+                          {isAwaitingBooking(contract) ? 'booking required' : contract.status}
+                        </span>
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-500 truncate">ID: {contract.id}</p>
@@ -515,7 +600,9 @@ const MyContracts = () => {
                           : formatCurrency(contract.totalValue)}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {contract.status === 'pending'
+                        {isAwaitingBooking(contract)
+                          ? 'Accepted. Complete charger booking to activate participation.'
+                          : contract.status === 'pending'
                           ? `Commit your own discharge rate @ $${contract.pricePerKwh}/kWh`
                           : `${contract.energyAmount} kWh @ $${contract.pricePerKwh}/kWh`}
                       </p>
@@ -528,7 +615,7 @@ const MyContracts = () => {
                           onClick={() => setSelectedContract(contract)}
                         >
                           <Zap className="h-3.5 w-3.5 mr-1" />
-                          Review Offer
+                          {isAwaitingBooking(contract) ? 'Review Booking' : 'Review Offer'}
                         </Button>
                       </div>
                     )}
@@ -551,6 +638,7 @@ const MyContracts = () => {
           onClose={() => setSelectedContract(null)}
           onAccept={handleAccept}
           onDecline={handleDecline}
+          onResumeBooking={handleResumeBooking}
           isActioning={isActioning}
         />
       )}

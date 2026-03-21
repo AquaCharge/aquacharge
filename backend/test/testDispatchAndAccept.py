@@ -287,10 +287,10 @@ class TestScheduleConflictOnAccept:
             caller_vessel_ids=["vessel-abc"],
             acceptance_data={"committedPowerKw": 45, "operatorNotes": "Ready to discharge"},
         )
-        assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["status"] == ContractStatus.PENDING.value
         assert result["committedPowerKw"] == 45
         assert result["energyAmount"] == pytest.approx(180.0)
-        assert result["totalValue"] == pytest.approx(32.4)
+        assert float(result["totalValue"]) == pytest.approx(32.4)
 
     def test_accept_succeeds_when_existing_booking_does_not_overlap(self):
         service = _make_service(
@@ -304,7 +304,7 @@ class TestScheduleConflictOnAccept:
             caller_vessel_ids=["vessel-abc"],
             acceptance_data={"committedPowerKw": 45},
         )
-        assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["status"] == ContractStatus.PENDING.value
 
     def test_accept_rejected_when_vessel_has_overlapping_booking(self):
         service = _make_service(
@@ -321,6 +321,30 @@ class TestScheduleConflictOnAccept:
             )
         assert exc_info.value.status_code == 409
         assert "conflict" in exc_info.value.message.lower()
+
+    def test_accept_handles_existing_booking_with_naive_datetimes(self):
+        naive_booking = {
+            "id": "booking-naive",
+            "vesselId": "vessel-other",
+            "stationId": "station-other",
+            "startTime": "2026-03-10T13:00:00",
+            "endTime": "2026-03-10T14:00:00",
+            "status": BookingStatus.PENDING.value,
+        }
+        service = _make_service(
+            contracts=[_pending_contract()],
+            bookings=[naive_booking],
+            vessel=VESSEL,
+            dr_event=DR_EVENT,
+        )
+
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
+
+        assert result["status"] == ContractStatus.PENDING.value
 
     def test_accept_rejected_when_cancelled_booking_overlaps(self):
         """Cancelled bookings should not block acceptance."""
@@ -340,7 +364,7 @@ class TestScheduleConflictOnAccept:
             caller_vessel_ids=["vessel-abc"],
             acceptance_data={"committedPowerKw": 45},
         )
-        assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["status"] == ContractStatus.PENDING.value
 
     def test_conflict_check_only_applies_to_same_vessel(self):
         """An overlapping booking for a different vessel should not block acceptance."""
@@ -356,17 +380,17 @@ class TestScheduleConflictOnAccept:
             caller_vessel_ids=["vessel-abc"],
             acceptance_data={"committedPowerKw": 45},
         )
-        assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["status"] == ContractStatus.PENDING.value
 
 
 # ===========================================================================
-# DOCK RESERVATION TESTS
+# BOOKING HANDOFF TESTS
 # ===========================================================================
 
 
-class TestDockReservationOnAccept:
+class TestBookingHandoffOnAccept:
 
-    def test_accept_creates_booking_at_event_station(self):
+    def test_accept_does_not_create_booking_at_event_station(self):
         booking_repo = InMemoryBookingRepo()
         service = ContractService(
             repository=InMemoryContractRepo([_pending_contract()]),
@@ -380,51 +404,13 @@ class TestDockReservationOnAccept:
             acceptance_data={"committedPowerKw": 45},
         )
         bookings = booking_repo.list_bookings()
-        assert len(bookings) == 1
-        booking = bookings[0]
-        assert booking["stationId"] == DR_EVENT["stationId"]
-        assert booking["vesselId"] == "vessel-abc"
+        assert bookings == []
 
-    def test_booking_window_matches_contract_window(self):
-        booking_repo = InMemoryBookingRepo()
-        service = ContractService(
-            repository=InMemoryContractRepo([_pending_contract()]),
-            booking_repository=booking_repo,
-            vessel_repository=InMemoryVesselRepo([VESSEL]),
-            drevent_repository=InMemoryDREventRepo([DR_EVENT]),
-        )
-        service.accept_contract(
-            "contract-001",
-            caller_vessel_ids=["vessel-abc"],
-            acceptance_data={"committedPowerKw": 45},
-        )
-        booking = booking_repo.list_bookings()[0]
-        # Times should be within the same day as the contract
-        assert "2026-03-10" in booking["startTime"]
-        assert "2026-03-10" in booking["endTime"]
-
-    def test_booking_uses_vessel_charger_type(self):
-        booking_repo = InMemoryBookingRepo()
-        vessel = {**VESSEL, "chargerType": "DC"}
-        service = ContractService(
-            repository=InMemoryContractRepo([_pending_contract()]),
-            booking_repository=booking_repo,
-            vessel_repository=InMemoryVesselRepo([vessel]),
-            drevent_repository=InMemoryDREventRepo([DR_EVENT]),
-        )
-        service.accept_contract(
-            "contract-001",
-            caller_vessel_ids=["vessel-abc"],
-            acceptance_data={"committedPowerKw": 45},
-        )
-        assert booking_repo.list_bookings()[0]["chargerType"] == "DC"
-
-    def test_booking_id_stored_on_contract(self):
-        booking_repo = InMemoryBookingRepo()
+    def test_accept_keeps_booking_id_empty_until_booking_confirmation(self):
         contract_repo = InMemoryContractRepo([_pending_contract()])
         service = ContractService(
             repository=contract_repo,
-            booking_repository=booking_repo,
+            booking_repository=InMemoryBookingRepo(),
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
@@ -433,30 +419,23 @@ class TestDockReservationOnAccept:
             caller_vessel_ids=["vessel-abc"],
             acceptance_data={"committedPowerKw": 45},
         )
-        saved_booking_id = booking_repo.list_bookings()[0]["id"]
-        assert (
-            contract_repo.get_contract("contract-001")["bookingId"] == saved_booking_id
-        )
+        assert contract_repo.get_contract("contract-001")["bookingId"] is None
 
-    def test_dock_conflict_blocks_acceptance(self):
-        """If the dock is already taken, acceptance must fail with 409."""
+    def test_station_dock_conflicts_do_not_block_acceptance(self):
         service = _make_service(
             contracts=[_pending_contract()],
             bookings=[_overlapping_dock_booking()],
             vessel=VESSEL,
             dr_event=DR_EVENT,
         )
-        with pytest.raises(ContractServiceError) as exc_info:
-            service.accept_contract(
-                "contract-001",
-                caller_vessel_ids=["vessel-abc"],
-                acceptance_data={"committedPowerKw": 45},
-            )
-        assert exc_info.value.status_code == 409
-        assert "dock" in exc_info.value.message.lower()
+        result = service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
+        assert result["status"] == ContractStatus.PENDING.value
 
-    def test_dock_conflict_does_not_create_booking(self):
-        """When a dock conflict occurs, no new booking should be persisted."""
+    def test_station_dock_conflict_does_not_create_booking(self):
         booking_repo = InMemoryBookingRepo([_overlapping_dock_booking()])
         service = ContractService(
             repository=InMemoryContractRepo([_pending_contract()]),
@@ -464,19 +443,14 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        try:
-            service.accept_contract(
-                "contract-001",
-                caller_vessel_ids=["vessel-abc"],
-                acceptance_data={"committedPowerKw": 45},
-            )
-        except ContractServiceError:
-            pass
-        # Still only the original dock booking, nothing new added
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert len(booking_repo.list_bookings()) == 1
 
-    def test_contract_status_not_changed_on_dock_conflict(self):
-        """Contract must remain pending if acceptance is blocked by a dock conflict."""
+    def test_contract_status_remains_pending_after_accept(self):
         contract_repo = InMemoryContractRepo([_pending_contract()])
         service = ContractService(
             repository=contract_repo,
@@ -484,14 +458,11 @@ class TestDockReservationOnAccept:
             vessel_repository=InMemoryVesselRepo([VESSEL]),
             drevent_repository=InMemoryDREventRepo([DR_EVENT]),
         )
-        try:
-            service.accept_contract(
-                "contract-001",
-                caller_vessel_ids=["vessel-abc"],
-                acceptance_data={"committedPowerKw": 45},
-            )
-        except ContractServiceError:
-            pass
+        service.accept_contract(
+            "contract-001",
+            caller_vessel_ids=["vessel-abc"],
+            acceptance_data={"committedPowerKw": 45},
+        )
         assert contract_repo.get_contract("contract-001")["status"] == "pending"
 
     def test_missing_dr_event_raises_404(self):
@@ -507,21 +478,6 @@ class TestDockReservationOnAccept:
                 acceptance_data={"committedPowerKw": 45},
             )
         assert exc_info.value.status_code == 404
-
-    def test_booking_status_is_pending(self):
-        booking_repo = InMemoryBookingRepo()
-        service = ContractService(
-            repository=InMemoryContractRepo([_pending_contract()]),
-            booking_repository=booking_repo,
-            vessel_repository=InMemoryVesselRepo([VESSEL]),
-            drevent_repository=InMemoryDREventRepo([DR_EVENT]),
-        )
-        service.accept_contract(
-            "contract-001",
-            caller_vessel_ids=["vessel-abc"],
-            acceptance_data={"committedPowerKw": 45},
-        )
-        assert booking_repo.list_bookings()[0]["status"] == BookingStatus.PENDING.value
 
     def test_accept_rejects_commitment_above_max_discharge_rate(self):
         low_rate_vessel = {**VESSEL, "maxDischargeRate": 30}

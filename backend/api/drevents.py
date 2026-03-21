@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 
-from middleware.auth import require_auth, require_role
+from middleware.auth import require_auth, require_user_type
+from services.bookings import BookingService, BookingServiceError
 from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
@@ -15,6 +16,7 @@ drevents_bp = Blueprint("drevents", __name__)
 contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
+booking_service = BookingService()
 
 
 dynamoDB_client = DynamoClient(
@@ -112,12 +114,38 @@ def get_drevent_eligibility(event_id):
 
 @drevents_bp.route("", methods=["POST"])
 @require_auth
-@require_role("ADMIN")
+@require_user_type(UserType.POWER_OPERATOR, "Only power operators can create DR events")
 def create_drevent():
     """Create a new DR event."""
     try:
-        return jsonify(drevent_service.create_event(request.get_json() or {})), 201
+        payload = request.get_json() or {}
+        station_id = str(payload.get("stationId") or "")
+        if not station_id:
+            return jsonify({"error": "stationId is required"}), 400
+
+        station = drevent_service.station_repository.get_station(station_id)
+        if not station:
+            return jsonify({"error": "Station not found"}), 404
+
+        availability = booking_service.get_station_availability(
+            station_id=station_id,
+            start_time_raw=str(payload.get("startTime") or ""),
+            end_time_raw=str(payload.get("endTime") or ""),
+        )
+        if not any(charger.get("available") for charger in availability["chargers"]):
+            return (
+                jsonify(
+                    {
+                        "error": "Station has no available chargers for the requested window"
+                    }
+                ),
+                400,
+            )
+
+        return jsonify(drevent_service.create_event(payload)), 201
     except DREventServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except BookingServiceError as error:
         return jsonify({"error": error.message}), error.status_code
     except Exception as error:
         return (
@@ -128,19 +156,11 @@ def create_drevent():
 
 @drevents_bp.route("/<event_id>/dispatch", methods=["POST"])
 @require_auth
+@require_user_type(UserType.POWER_OPERATOR, "Only power operators can dispatch DR events")
 def dispatch_drevent(event_id):
     """Dispatch a DR event: generate contracts for eligible vessels and advance state to Dispatched."""
     try:
         caller = request.current_user or {}
-        caller_type = caller.get("type")
-        caller_type_name = caller.get("type_name")
-        is_power_operator = (
-            caller_type_name == "POWER_OPERATOR"
-            or caller_type == UserType.POWER_OPERATOR.value
-        )
-        if not is_power_operator:
-            return jsonify({"error": "Only power operators can dispatch DR events"}), 403
-
         caller_user_id = str(caller.get("user_id") or caller.get("id") or "system")
 
         event = drevent_service.get_event(event_id)
@@ -221,7 +241,7 @@ def update_drevent(event_id):
 
 @drevents_bp.route("/<event_id>/start", methods=["POST"])
 @require_auth
-@require_role("ADMIN")
+@require_user_type(UserType.POWER_OPERATOR, "Only power operators can start DR events")
 def start_drevent(event_id):
     """Start dispatching a DR event"""
     try:

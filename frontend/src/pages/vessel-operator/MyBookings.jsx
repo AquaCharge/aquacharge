@@ -45,6 +45,7 @@ const getStatusColors = (status) => {
 }
 
 const MyBookings = () => {
+  const authToken = localStorage.getItem('auth-token')
   const [bookings, setBookings] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -58,7 +59,9 @@ const MyBookings = () => {
       setError(null)
       try {
         const [bookingsRes, stationsRes] = await Promise.all([
-          fetch(getApiEndpoint('/api/bookings')),
+          fetch(getApiEndpoint('/api/bookings'), {
+            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+          }),
           fetch(getApiEndpoint('/api/stations'))
         ])
 
@@ -122,7 +125,7 @@ const MyBookings = () => {
         clearTimeout(highlightTimeout.current)
       }
     }
-  }, [])
+  }, [authToken])
 
   const stats = useMemo(() => {
     if (!bookings.length) {

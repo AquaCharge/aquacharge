@@ -1,10 +1,13 @@
 from flask import Blueprint, jsonify, request
 from models.station import Station, StationStatus
 from db.dynamoClient import DynamoClient
+from middleware.auth import require_auth
+from services.bookings import BookingService, BookingServiceError
 import decimal
 import config
 
 stations_bp = Blueprint("stations", __name__)
+booking_service = BookingService()
 
 dynamoDB_client = DynamoClient(
     table_name=config.STATIONS_TABLE, region_name=config.AWS_REGION
@@ -42,6 +45,29 @@ def get_station(station_id: str):
         return jsonify({"error": "Station not found"}), 404
 
     return jsonify(station), 200
+
+
+@stations_bp.route("/<station_id>/available-slots", methods=["GET"])
+@require_auth
+def get_station_available_slots(station_id: str):
+    station = dynamoDB_client.get_item(key={"id": station_id})
+    if not station:
+        return jsonify({"error": "Station not found"}), 404
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    if not start or not end:
+        return jsonify({"error": "start and end parameters are required"}), 400
+
+    try:
+        availability = booking_service.get_station_availability(
+            station_id=station_id,
+            start_time_raw=start,
+            end_time_raw=end,
+        )
+        return jsonify(availability), 200
+    except BookingServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
 
 
 @stations_bp.route("", methods=["POST"])

@@ -567,14 +567,17 @@ The booking API is backed by a service-layer business rule engine (`BookingServi
 
 ### Validation rules
 
-- Required fields for create: `userId`, `vesselId`, `stationId`, `startTime`, `endTime`, `chargerType`.
+- Required fields for create: `userId`, `vesselId`, `stationId`, `chargerId`, `startTime`, `endTime`.
 - Datetimes must be ISO-8601.
 - `endTime` must be strictly after `startTime`.
+- `chargerType` is derived from the selected charger record.
+- `contractId` is optional on create. When present, the booking flow links the resulting
+  booking back to the contract's `bookingId` field.
 
 ### Conflict rules
 
 - A booking conflicts if:
-  - same `stationId`, and
+  - same `chargerId`, and
   - existing booking status is `Pending` or `Confirmed`, and
   - booking windows overlap (`not (newEnd <= existingStart or newStart >= existingEnd)`).
 
@@ -585,6 +588,9 @@ Conflict response:
 ### Status transition rules
 
 - Cancel is blocked for `Completed` bookings.
+- VO users may only read or modify their own bookings.
+- Update and cancel are blocked when `startTime` is within 4 hours of current UTC time.
+- Cancellation is also blocked within the 4-hour window when the booking is linked to a contract.
 - Status values are validated against `BookingStatus`.
 
 ### Upcoming bookings filter
@@ -618,11 +624,13 @@ existing `Contract` object model fields/status values.
 - Cancel endpoint allows only contracts currently in `pending`.
 - Complete endpoint allows only contracts currently in `pending` or `active`.
 - Accept endpoint requires `committedPowerKw` and accepts optional `operatorNotes`.
-- Successful accept stores `committedPowerKw`, `operatorNotes`, `acceptedAt`, and `bookingId`.
+- Successful accept stores `committedPowerKw`, `operatorNotes`, and `acceptedAt`.
 - Successful accept derives `energyAmount` from `committedPowerKw * eventDurationHours`.
 - Successful accept recalculates `totalValue` from the committed energy contribution.
-- Successful accept transitions the contract from `pending` to `active`.
+- Successful accept keeps the contract in `pending` until a booking is confirmed.
 - Successful accept transitions a DR event from `Dispatched` to `Accepted`.
+- Successful accept no longer auto-creates a booking. It returns booking context for the
+  next UI step so the VO can choose a charger and timeslot explicitly.
 
 ### Filtering/sorting rules
 
@@ -630,6 +638,25 @@ existing `Contract` object model fields/status values.
 - Results are sorted by `createdAt` descending (newest first).
 
 ## DR Event Dispatch Contract
+
+### `POST /api/drevents`
+
+Creates a new DR event using the existing `DREvent` model fields.
+
+Rules:
+
+- Only power operators can create DR events.
+- Request fields use repo model names such as `stationId`.
+- Events are stored with status `Created`.
+- Event creation is rejected when the target station has no active chargers or no charger
+  availability in the requested window.
+
+Error responses:
+
+- `400`: validation failure or no available chargers for the requested window
+- `403`: caller is not a power operator
+- `404`: station not found
+- `500`: create failure
 
 ### `POST /api/drevents/{eventId}/dispatch`
 
@@ -691,10 +718,23 @@ Success response `200`:
     "energyAmount": 0.0,
     "pricePerKwh": 0.0,
     "totalValue": 0.0,
-    "status": "active",
+    "status": "pending",
     "committedPowerKw": 0.0,
     "operatorNotes": "string",
     "acceptedAt": "ISO-8601 datetime | null"
+  },
+  "bookingContext": {
+    "stationId": "string",
+    "startTime": "ISO-8601 datetime",
+    "endTime": "ISO-8601 datetime",
+    "availableSlots": [
+      {
+        "chargerId": "string",
+        "chargerType": "string",
+        "maxRate": 0.0,
+        "available": true
+      }
+    ]
   }
 }
 ```
@@ -704,4 +744,43 @@ Error responses:
 - `400`: missing/invalid `committedPowerKw`
 - `403`: caller does not own the vessel on the contract
 - `404`: contract, vessel, or DR event not found
-- `409`: booking or dock conflict blocks acceptance
+- `409`: vessel history, eligibility, or booking preconditions block acceptance
+
+## Charger Slot Availability Contract
+
+### `GET /api/stations/{stationId}/available-slots?start=...&end=...`
+
+Returns charger availability for a station within a requested time window.
+
+Rules:
+
+- Requires authentication.
+- `start` and `end` must be ISO-8601 datetimes.
+- The response is charger-oriented and only marks a charger available when it has no
+  overlapping `Pending` or `Confirmed` booking.
+
+Success response `200`:
+
+```json
+{
+  "stationId": "string",
+  "startTime": "ISO-8601 datetime",
+  "endTime": "ISO-8601 datetime",
+  "chargers": [
+    {
+      "chargerId": "string",
+      "chargerType": "string",
+      "maxRate": 0.0,
+      "status": "ACTIVE",
+      "available": true
+    }
+  ]
+}
+```
+
+Error responses:
+
+- `400`: missing/invalid datetime parameters
+- `401`: authentication required
+- `404`: station not found
+- `500`: availability lookup failure

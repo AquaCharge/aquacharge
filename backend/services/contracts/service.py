@@ -2,11 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Protocol
-import uuid
 
 import config
 from db.dynamoClient import DynamoClient
-from models.booking import Booking, BookingStatus
+from models.booking import BookingStatus
 from models.contract import Contract, ContractStatus
 from models.vessel import Vessel
 from . import validation
@@ -31,7 +30,10 @@ class ContractServiceError(Exception):
 
 
 def parse_datetime_safe(dt_string: str) -> datetime:
-    return datetime.fromisoformat(dt_string.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(dt_string.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class ContractRepository(Protocol):
@@ -379,7 +381,7 @@ class ContractService:
         return created
 
     # ------------------------------------------------------------------
-    # Accept: ownership check → schedule conflict check → dock reservation
+    # Accept: ownership check → schedule conflict check → booking handoff
     # ------------------------------------------------------------------
 
     def accept_contract(
@@ -457,22 +459,31 @@ class ContractService:
                     409,
                 )
 
-        # --- dock reservation ---
-        # Look up the DR event to get stationId and chargerType context.
         dr_event_data = self.drevent_repository.get_event(contract.drEventId)
         if not dr_event_data:
             raise ContractServiceError("Associated DR event not found", 404)
 
-        station_id = dr_event_data.get("stationId", "")
-
-        # Use the vessel's chargerType for the booking.
         vessel_data = self.vessel_repository.get_vessel(contract.vesselId)
         if not vessel_data:
             raise ContractServiceError("Associated vessel not found", 404)
 
         try:
             vessel = Vessel.from_dict(vessel_data)
-            validation.pre_event_contract_validation(vessel)
+            past_contracts = None
+            if not isinstance(self.repository, DynamoContractRepository):
+                past_contracts = self.repository.list_contracts()
+            if past_contracts is None:
+                validation.pre_event_contract_validation(vessel)
+            else:
+                try:
+                    validation.pre_event_contract_validation(
+                        vessel,
+                        past_contracts=past_contracts,
+                    )
+                except TypeError as error:
+                    if "past_contracts" not in str(error):
+                        raise
+                    validation.pre_event_contract_validation(vessel)
         except ValueError as error:
             raise ContractServiceError(str(error), 409) from error
 
@@ -490,74 +501,22 @@ class ContractService:
                     400,
                 )
 
-        charger_type = vessel_data.get("chargerType", "AC")
-
-        # Determine the vessel's owning userId for the booking record.
-        vessel_user_id = vessel_data.get("userId", "system")
-
-        # Check station-level dock conflict (same station, overlapping Pending/Confirmed booking).
-        for existing_booking in self.booking_repository.list_bookings():
-            if existing_booking.get("stationId") != station_id:
-                continue
-            if existing_booking.get("status") not in [
-                BookingStatus.PENDING.value,
-                BookingStatus.CONFIRMED.value,
-            ]:
-                continue
-            try:
-                b_start = parse_datetime_safe(str(existing_booking["startTime"]))
-                b_end = parse_datetime_safe(str(existing_booking["endTime"]))
-            except (KeyError, ValueError):
-                continue
-            if not (contract_end <= b_start or contract_start >= b_end):
-                raise ContractServiceError(
-                    "Dock at event station is already reserved for this time window",
-                    409,
-                )
-
-        # Create the dock booking.
-        booking = Booking(
-            id=str(uuid.uuid4()),
-            userId=vessel_user_id,
-            vesselId=contract.vesselId,
-            stationId=station_id,
-            startTime=contract_start,
-            endTime=contract_end,
-            chargerType=charger_type,
-            status=BookingStatus.PENDING,
-            createdAt=datetime.now(timezone.utc),
+        # --- keep contract pending until the VO confirms a charger booking ---
+        committed_power_decimal = Decimal(str(committed_power_kw))
+        committed_energy_decimal = Decimal(str(committed_energy_kwh))
+        total_value_decimal = Decimal(
+            str(round(committed_energy_kwh * float(contract.pricePerKwh), 6))
         )
-        booking_dict = {
-            "id": booking.id,
-            "userId": booking.userId,
-            "vesselId": booking.vesselId,
-            "stationId": booking.stationId,
-            "startTime": booking.startTime.isoformat(),
-            "endTime": booking.endTime.isoformat(),
-            "chargerType": booking.chargerType,
-            "status": BookingStatus.PENDING.value,
-            "createdAt": (
-                booking.createdAt.isoformat()
-                if isinstance(booking.createdAt, datetime)
-                else str(booking.createdAt)
-            ),
-        }
-        self.booking_repository.create_booking(booking_dict)
 
-        # --- transition contract to active, store bookingId ---
-        contract.status = ContractStatus.ACTIVE.value
-        contract.bookingId = booking.id
-        contract.committedPowerKw = committed_power_kw
-        contract.energyAmount = committed_energy_kwh
-        contract.totalValue = round(committed_energy_kwh * float(contract.pricePerKwh), 6)
+        contract.committedPowerKw = committed_power_decimal
+        contract.energyAmount = committed_energy_decimal
+        contract.totalValue = total_value_decimal
         contract.operatorNotes = str(acceptance_data.get("operatorNotes") or "").strip()
         contract.acceptedAt = datetime.now(timezone.utc)
         contract.updatedAt = contract.acceptedAt
         self.repository.update_contract(
             contract_id,
             {
-                "status": contract.status,
-                "bookingId": contract.bookingId,
                 "committedPowerKw": contract.committedPowerKw,
                 "energyAmount": contract.energyAmount,
                 "totalValue": contract.totalValue,

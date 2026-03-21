@@ -1,6 +1,7 @@
 from functools import wraps
 from flask import request, jsonify
 import jwt
+from models.user import UserType
 
 # Import shared configuration
 from config import JWT_SECRET, JWT_ALGORITHM
@@ -76,6 +77,31 @@ def require_role(required_role):
                 return jsonify({"error": "Insufficient permissions"}), 403
 
             return f(*args, **kwargs)
+
+        return decorated_function
+
+    return decorator
+
+
+def require_user_type(required_type: UserType, message: str | None = None):
+    """Decorator to require a specific AquaCharge user type."""
+
+    expected_message = message or f"Only {required_type.name.lower()} users can access this endpoint"
+
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not hasattr(request, "current_user"):
+                return jsonify({"error": "Authentication required"}), 401
+
+            current_user = request.current_user or {}
+            current_type = current_user.get("type")
+            current_type_name = current_user.get("type_name")
+
+            if current_type == required_type.value or current_type_name == required_type.name:
+                return f(*args, **kwargs)
+
+            return jsonify({"error": expected_message}), 403
 
         return decorated_function
 

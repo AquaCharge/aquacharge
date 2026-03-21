@@ -394,7 +394,7 @@ const PowerDashboard = () => {
       return
     }
 
-    setIsLoading(true)
+    setIsLoading(snapshot === null)
     loadDashboard()
     const timer = window.setInterval(loadDashboard, POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)

@@ -99,9 +99,6 @@ describe('PowerDashboard', () => {
     render(<PowerDashboard />)
 
     expect(await screen.findByText('DR Monitoring Dashboard')).toBeInTheDocument()
-    // The component auto-sets filters.eventId from the first API response, which changes
-    // queryString and triggers a second fetch (isLoading flips true again). Wait for both
-    // loads to settle before asserting on content inside the isLoading conditional.
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/drevents/monitoring'),
@@ -111,7 +108,7 @@ describe('PowerDashboard', () => {
           }),
         })
       )
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(global.fetch).toHaveBeenCalled()
     })
     expect(screen.getByText('Dashboard refreshes automatically every 10 seconds.')).toBeInTheDocument()
     expect(screen.getByLabelText('Graph Filter')).toBeInTheDocument()

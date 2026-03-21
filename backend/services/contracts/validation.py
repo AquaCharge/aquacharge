@@ -52,10 +52,24 @@ def post_event_contract_validation(contract: contract.Contract):
         key_condition_expression=Key("vesselId").eq(contract.vesselId),
     )
 
+    def _matches_contract_event(measurement):
+        measurement_event_id = measurement.get("drEventId")
+        if measurement_event_id is None:
+            measurement_event_id = measurement.get("dreventId")
+
+        if measurement_event_id is not None:
+            return str(measurement_event_id) == str(contract.drEventId)
+
+        measurement_contract_id = measurement.get("contractId")
+        if measurement_contract_id is not None:
+            return str(measurement_contract_id) == str(contract.id)
+
+        return True
+
     user_measurements = [
         measurement
         for measurement in vessel_measurements
-        if measurement.get("dreventId") == contract.drEventId
+        if _matches_contract_event(measurement)
     ]
 
     if not user_measurements:

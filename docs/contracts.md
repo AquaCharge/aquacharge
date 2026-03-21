@@ -453,6 +453,106 @@ Monitoring rules:
 - `loadCurve` is measurement-backed V2G contribution only; baseline grid load is not currently available in the schema and returns `null`
 - Empty datasets return a successful snapshot with `empty = true`
 
+### `GET /api/drevents/analytics`
+
+Historical analytics snapshot for power operator trend dashboards.
+
+Query parameters:
+
+- `eventId` (optional): filter to a specific DR event
+- `region` (optional): substring match against station `city`, `provinceOrState`, or `country`
+- `periodHours` (optional, default `168`): historical lookback window in hours, clamped to `1..720`
+- `grain` (optional, default `day`): rollup granularity (`hour` or `day`)
+
+Success response `200`:
+
+```json
+{
+  "filters": {
+    "eventId": "string | null",
+    "region": "string",
+    "periodHours": 168,
+    "grain": "day"
+  },
+  "summary": {
+    "totalEnergyDischargedKwh": 0.0,
+    "averagePowerKw": 0.0,
+    "peakPowerKw": 0.0,
+    "completionRatePercent": 0.0,
+    "participationRatePercent": 0.0,
+    "eventsConsidered": 0,
+    "contractsConsidered": 0,
+    "baselineAvailable": false
+  },
+  "selectedEvent": {
+    "id": "string",
+    "stationId": "string",
+    "status": "Active",
+    "targetEnergyKwh": 0.0,
+    "startTime": "ISO-8601 datetime",
+    "endTime": "ISO-8601 datetime",
+    "regionLabel": "string"
+  } | null,
+  "timeSeries": [
+    {
+      "timestamp": "ISO-8601 datetime",
+      "energyDischargedKwh": 0.0,
+      "averagePowerKw": 0.0
+    }
+  ],
+  "statusDistribution": [
+    {
+      "status": "Created",
+      "count": 0,
+      "percent": 0.0
+    }
+  ],
+  "vesselLeaderboard": [
+    {
+      "vesselId": "string",
+      "contractId": "string | null",
+      "totalEnergyDischargedKwh": 0.0,
+      "latestPowerKw": 0.0,
+      "latestTimestamp": "ISO-8601 datetime | null"
+    }
+  ],
+  "heatmap": [
+    {
+      "dayLabel": "Mon",
+      "bands": [
+        { "label": "00-04", "averagePowerKw": 0.0 },
+        { "label": "04-08", "averagePowerKw": 0.0 },
+        { "label": "08-12", "averagePowerKw": 0.0 },
+        { "label": "12-18", "averagePowerKw": 0.0 },
+        { "label": "18-24", "averagePowerKw": 0.0 }
+      ]
+    }
+  ],
+  "availableEvents": [
+    {
+      "id": "string",
+      "stationId": "string",
+      "status": "Active",
+      "startTime": "ISO-8601 datetime",
+      "endTime": "ISO-8601 datetime",
+      "targetEnergyKwh": 0.0,
+      "regionLabel": "string"
+    }
+  ],
+  "empty": false,
+  "updatedAt": "ISO-8601 datetime"
+}
+```
+
+Analytics rules:
+
+- Uses measurement telemetry (`energyKwh`, `powerKw`, `timestamp`) as source of truth for historical trends.
+- `timeSeries` is rolled up by `grain` (`hour` or `day`) for charting.
+- `completionRatePercent = completedContracts / finalizedContracts * 100`, where finalized contracts are `completed|failed|cancelled`.
+- `participationRatePercent = uniqueMeasuredVessels / sum(maxParticipants for filtered events) * 100`.
+- `heatmap` represents average power by weekday and hour-band (00-04, 04-08, 08-12, 12-18, 18-24).
+- Baseline impact metrics (grid load without V2G / avoided load) are not yet available and remain additive future work.
+
 ## VO Dashboard
 
 ### `GET /api/vo/dashboard`

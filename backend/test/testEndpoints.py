@@ -10,47 +10,7 @@ from api.vessels import vessels_bp
 from api.contracts import contracts_bp
 from api.auth import auth_bp
 from config import JWT_SECRET, JWT_ALGORITHM
-import config
-from db.dynamoClient import DynamoClient
 import decimal
-
-# Track created test items for cleanup
-created_test_items = {
-    "bookings": [],
-    "chargers": [],
-    "stations": [],
-    "users": [],
-    "vessels": [],
-    "contracts": [],
-}
-
-
-def cleanup_test_data():
-    """Clean up all test items created during tests"""
-    table_mappings = {
-        "bookings": config.BOOKINGS_TABLE,
-        "chargers": config.CHARGERS_TABLE,
-        "stations": config.STATIONS_TABLE,
-        "users": config.USERS_TABLE,
-        "vessels": config.VESSELS_TABLE,
-        "contracts": config.CONTRACTS_TABLE,
-    }
-
-    for resource_type, item_ids in created_test_items.items():
-        if item_ids and resource_type in table_mappings:
-            try:
-                dynamo_client = DynamoClient(
-                    table_name=table_mappings[resource_type], region_name=config.AWS_REGION
-                )
-                for item_id in item_ids:
-                    try:
-                        dynamo_client.delete_item(key={"id": item_id})
-                        print(f"Cleaned up {resource_type}: {item_id}")
-                    except Exception as e:
-                        print(f"Failed to cleanup {resource_type} {item_id}: {e}")
-            except Exception as e:
-                print(f"Failed to initialize cleanup for {resource_type}: {e}")
-        item_ids.clear()
 
 
 def create_jwt_token(user_id, role=2, user_type=1, email="test@example.com"):
@@ -78,15 +38,6 @@ def client():
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
-
-
-@pytest.fixture(autouse=True)
-def cleanup_test_items():
-    """Automatically clean up all test items after each test"""
-    yield  # Run the test first
-
-    # Cleanup: Delete all test items created during the test
-    cleanup_test_data()
 
 
 @pytest.fixture
@@ -140,11 +91,8 @@ def test_delete_booking(client):
         },
     )
     booking_id = rv.get_json()["id"]
-    created_test_items["bookings"].append(booking_id)
     rv = client.delete(f"/api/bookings/{booking_id}")
     assert rv.status_code == 200
-    # Remove from cleanup list since we already deleted it
-    created_test_items["bookings"].remove(booking_id)
 
 
 def test_get_upcoming_bookings(client):
@@ -220,9 +168,6 @@ def test_get_station(client):
     rv = client.get(f"/api/stations/{station_id}")
     assert rv.status_code == 200
 
-    # Cleanup
-    created_test_items["stations"].append(station_id)
-
 
 def test_get_station_not_found(client):
     rv = client.get("/api/stations/doesnotexist")
@@ -262,9 +207,6 @@ def test_update_station(client):
     )
     assert rv.status_code == 200
 
-    # Cleanup
-    created_test_items["stations"].append(station_id)
-
 
 def test_get_nearby_stations(client):
     rv = client.get("/api/stations/nearby?lat=49.2827&lng=-123.1207&radius=2")
@@ -301,8 +243,6 @@ def test_create_user_and_delete(client):
         },
     )
     assert response.status_code == 201
-    user_id = response.get_json()["id"]
-    created_test_items["users"].append(user_id)
 
 
 def test_update_user(client):
@@ -339,7 +279,6 @@ def test_create_vessel_requires_max_capacity(client):
     assert body["chargerType"] == "Type 2 AC"
     assert body["capacity"] == 50.0
     assert body["maxCapacity"] == 100.0
-    created_test_items["vessels"].append(body["id"])
 
 
 def test_create_vessel_capacity_exceeds_max_fails(client):

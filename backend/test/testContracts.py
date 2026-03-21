@@ -154,7 +154,7 @@ class _StubDREventRepo:
 
 
 class TestAcceptContract:
-    def test_accept_pending_contract_transitions_to_active(self):
+    def test_accept_pending_contract_stays_pending_until_booking(self):
         repo = InMemoryContractRepo(
             [_make_contract(status="pending", vessel_id="vessel-abc")]
         )
@@ -171,7 +171,7 @@ class TestAcceptContract:
             acceptance_data={"committedPowerKw": 25},
         )
 
-        assert result["status"] == ContractStatus.ACTIVE.value
+        assert result["status"] == ContractStatus.PENDING.value
         assert result["committedPowerKw"] == 25
 
     def test_accept_rejects_when_vessel_not_owned(self):
@@ -408,6 +408,32 @@ class TestAcceptEndpoint:
         assert rv.status_code == 200
         assert rv.get_json()["contractsCreated"] == 1
 
+    def test_dispatch_rejects_vessel_operator_token(self, client):
+        rv = client.post(
+            "/api/drevents/dr-001/dispatch",
+            headers=_jwt_headers(user_id="user-vo-001", user_type=1),
+        )
+
+        assert rv.status_code == 403
+        assert "power operators" in rv.get_json()["error"].lower()
+
+    def test_create_drevent_rejects_vessel_operator_token(self, client):
+        rv = client.post(
+            "/api/drevents",
+            headers=_jwt_headers(user_id="user-vo-001", user_type=1),
+            json={
+                "stationId": "station-1",
+                "targetEnergyKwh": 100,
+                "pricePerKwh": 0.25,
+                "startTime": "2026-03-21T10:00:00+00:00",
+                "endTime": "2026-03-21T12:00:00+00:00",
+                "maxParticipants": 2,
+            },
+        )
+
+        assert rv.status_code == 403
+        assert "power operators" in rv.get_json()["error"].lower()
+
     def test_my_contracts_hides_pending_contracts_that_are_no_longer_eligible(
         self, client, monkeypatch
     ):
@@ -477,6 +503,59 @@ class TestAcceptEndpoint:
 
         assert rv.status_code == 409
         assert "outside operational range" in rv.get_json()["error"]
+
+    def test_resume_booking_context_returns_live_slots(self, client, monkeypatch):
+        import api.contracts as contracts_api
+
+        monkeypatch.setattr(
+            contracts_api,
+            "_get_owned_vessel_ids",
+            lambda user_id: ["vessel-abc"],
+        )
+        monkeypatch.setattr(
+            contracts_api.contract_service,
+            "get_contract",
+            lambda contract_id: {
+                **_make_contract(status="pending", vessel_id="vessel-abc"),
+                "acceptedAt": "2026-03-10T07:00:00+00:00",
+                "committedPowerKw": 25,
+            },
+        )
+        monkeypatch.setattr(
+            contracts_api.booking_service,
+            "get_station_availability",
+            lambda station_id, start_time_raw, end_time_raw: {
+                "stationId": "station-xyz",
+                "startTime": "2026-03-10T08:00:00+00:00",
+                "endTime": "2026-03-10T12:00:00+00:00",
+                "chargers": [
+                    {
+                        "chargerId": "charger-1",
+                        "chargerType": "Type 2 AC",
+                        "available": True,
+                    }
+                ],
+            },
+        )
+        monkeypatch.setattr(
+            contracts_api.contract_service.drevent_repository,
+            "get_event",
+            lambda event_id: {
+                "id": event_id,
+                "stationId": "station-xyz",
+            },
+        )
+
+        rv = client.get(
+            "/api/contracts/contract-001/booking-context",
+            headers=_jwt_headers(user_id="user-vo-001", user_type=1),
+        )
+
+        assert rv.status_code == 200
+        payload = rv.get_json()
+        assert payload["contract"]["id"] == "contract-001"
+        assert payload["bookingContext"]["stationId"] == "station-xyz"
+        assert payload["bookingContext"]["availableSlots"][0]["chargerId"] == "charger-1"
 
 
 # ---------------------------------------------------------------------------

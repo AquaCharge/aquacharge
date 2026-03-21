@@ -1,7 +1,9 @@
 from flask import Blueprint, jsonify, request
 from boto3.dynamodb.conditions import Key
 from db.dynamoClient import DynamoClient
-from middleware.auth import require_auth, require_role
+from middleware.auth import require_auth, require_role, require_user_type
+from models.user import UserType
+from services.bookings import BookingService, BookingServiceError
 from services.contracts import ContractService, ContractServiceError, convert_decimals
 from services.eligibility import EligibilityService
 import config
@@ -13,6 +15,7 @@ _vessels_client = DynamoClient(
 contracts_bp = Blueprint("contracts", __name__)
 contract_service = ContractService()
 eligibility_service = EligibilityService()
+booking_service = BookingService()
 
 
 def _get_current_user_id():
@@ -21,11 +24,27 @@ def _get_current_user_id():
     return None if user_id is None else str(user_id)
 
 
+def _get_current_vessel_id():
+    caller = request.current_user or {}
+    vessel_id = caller.get("currentVesselId")
+    return None if vessel_id is None else str(vessel_id)
+
+
 def _get_owned_vessel_ids(user_id: str):
-    vessels = _vessels_client.query_gsi(
-        index_name="userId-index",
-        key_condition_expression=Key("userId").eq(user_id),
-    )
+    try:
+        vessels = _vessels_client.query_gsi(
+            index_name="userId-index",
+            key_condition_expression=Key("userId").eq(user_id),
+        )
+    except Exception:
+        try:
+            vessels = [
+                vessel
+                for vessel in _vessels_client.scan_items()
+                if str(vessel.get("userId") or "") == user_id
+            ]
+        except Exception:
+            vessels = []
     return [v["id"] for v in vessels] if vessels else []
 
 
@@ -34,14 +53,54 @@ def _get_current_eligibility(contract):
     if not dr_event:
         return None
 
-    eligibility_result = eligibility_service.evaluate_vessels_for_event(
-        dr_event,
-        include_ineligible=True,
-    )
+    try:
+        eligibility_result = eligibility_service.evaluate_vessels_for_event(
+            dr_event,
+            include_ineligible=True,
+        )
+    except Exception:
+        return None
     for vessel_result in eligibility_result.get("vessels", []):
         if vessel_result.get("vesselId") == contract.get("vesselId"):
             return vessel_result
     return None
+
+
+def _resolve_caller_vessel_ids() -> list[str]:
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return []
+
+    vessel_ids = _get_owned_vessel_ids(user_id)
+    current_vessel_id = _get_current_vessel_id()
+    if current_vessel_id and current_vessel_id not in vessel_ids:
+        vessel_ids.append(current_vessel_id)
+    return vessel_ids
+
+
+def _build_booking_context(contract: dict) -> dict:
+    dr_event = contract_service.drevent_repository.get_event(contract.get("drEventId")) or {}
+
+    try:
+        booking_context = booking_service.get_station_availability(
+            station_id=str(dr_event.get("stationId") or ""),
+            start_time_raw=str(contract.get("startTime") or ""),
+            end_time_raw=str(contract.get("endTime") or ""),
+        )
+        return {
+            "stationId": booking_context["stationId"],
+            "startTime": booking_context["startTime"],
+            "endTime": booking_context["endTime"],
+            "availableSlots": booking_context["chargers"],
+        }
+    except Exception as error:
+        return {
+            "stationId": str(dr_event.get("stationId") or ""),
+            "startTime": str(contract.get("startTime") or ""),
+            "endTime": str(contract.get("endTime") or ""),
+            "availableSlots": [],
+            "warning": f"Availability lookup failed: {error}",
+        }
 
 
 @contracts_bp.route("", methods=["GET"])
@@ -193,12 +252,19 @@ def get_my_contracts():
         status_filter = request.args.get("status")
 
         vessel_ids = _get_owned_vessel_ids(user_id)
+        current_vessel_id = _get_current_vessel_id()
+        if current_vessel_id and current_vessel_id not in vessel_ids:
+            vessel_ids.append(current_vessel_id)
 
         all_contracts = []
         for vid in vessel_ids:
-            vessel_contracts = contract_service.list_contracts(
-                status_filter=status_filter, vessel_id=vid
-            )
+            try:
+                vessel_contracts = contract_service.list_contracts(
+                    status_filter=status_filter,
+                    vessel_id=vid,
+                )
+            except Exception:
+                continue
             all_contracts.extend(vessel_contracts)
 
         visible_contracts = []
@@ -208,14 +274,15 @@ def get_my_contracts():
                 continue
 
             eligibility = _get_current_eligibility(contract)
-            if not eligibility or not eligibility.get("eligible"):
+            if eligibility and not eligibility.get("eligible"):
                 continue
 
             contract_with_eligibility = dict(contract)
-            contract_with_eligibility["eligibility"] = eligibility
+            if eligibility:
+                contract_with_eligibility["eligibility"] = eligibility
             visible_contracts.append(contract_with_eligibility)
 
-        visible_contracts.sort(key=lambda c: c["createdAt"], reverse=True)
+        visible_contracts.sort(key=lambda c: str(c.get("createdAt") or ""), reverse=True)
         return jsonify(convert_decimals(visible_contracts)), 200
 
     except ContractServiceError as error:
@@ -229,18 +296,18 @@ def get_my_contracts():
 
 @contracts_bp.route("/<contract_id>/accept", methods=["POST"])
 @require_auth
+@require_user_type(UserType.VESSEL_OPERATOR, "Only vessel operators can accept contracts")
 def accept_contract(contract_id: str):
     """Accept a pending contract (vessel operator only)"""
     try:
-        user_id = _get_current_user_id()
-        if user_id is None:
+        if _get_current_user_id() is None:
             return jsonify({"error": "Authentication required"}), 401
-        vessel_ids = _get_owned_vessel_ids(user_id)
+        vessel_ids = _resolve_caller_vessel_ids()
 
         contract_snapshot = contract_service.get_contract(contract_id)
         eligibility = _get_current_eligibility(contract_snapshot)
-        if contract_snapshot.get("status") == "pending" and (
-            not eligibility or not eligibility.get("eligible")
+        if contract_snapshot.get("status") == "pending" and eligibility and (
+            not eligibility.get("eligible")
         ):
             reasons = eligibility.get("reasons") if eligibility else None
             reason_text = ", ".join(reasons) if reasons else "Vessel is no longer eligible"
@@ -251,12 +318,76 @@ def accept_contract(contract_id: str):
             vessel_ids,
             request.get_json(silent=True) or {},
         )
-        return jsonify(convert_decimals({"message": "Contract accepted successfully", "contract": contract})), 200
+        booking_context = _build_booking_context(contract)
+
+        return (
+            jsonify(
+                convert_decimals(
+                    {
+                        "message": "Contract accepted successfully",
+                        "contract": contract,
+                        "bookingContext": booking_context,
+                    }
+                )
+            ),
+            200,
+        )
 
     except ContractServiceError as error:
         return jsonify({"error": error.message}), error.status_code
+    except BookingServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
     except Exception as e:
         return jsonify({"error": "Failed to accept contract", "details": str(e)}), 500
+
+
+@contracts_bp.route("/<contract_id>/booking-context", methods=["GET"])
+@require_auth
+@require_user_type(
+    UserType.VESSEL_OPERATOR,
+    "Only vessel operators can resume contract booking",
+)
+def get_contract_booking_context(contract_id: str):
+    """Return live booking context for an accepted contract awaiting charger selection."""
+    try:
+        if _get_current_user_id() is None:
+            return jsonify({"error": "Authentication required"}), 401
+
+        vessel_ids = _resolve_caller_vessel_ids()
+        contract = contract_service.get_contract(contract_id)
+
+        if contract.get("vesselId") not in vessel_ids:
+            return jsonify({"error": "You do not own the vessel on this contract"}), 403
+
+        if contract.get("bookingId"):
+            return jsonify({"error": "This contract already has a booking"}), 409
+
+        booking_context = _build_booking_context(contract)
+        return (
+            jsonify(
+                convert_decimals(
+                    {
+                        "contract": contract,
+                        "bookingContext": booking_context,
+                    }
+                )
+            ),
+            200,
+        )
+    except ContractServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except BookingServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except Exception as error:
+        return (
+            jsonify(
+                {
+                    "error": "Failed to load contract booking context",
+                    "details": str(error),
+                }
+            ),
+            500,
+        )
 
 
 @contracts_bp.route("/<contract_id>/decline", methods=["POST"])

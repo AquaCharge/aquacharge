@@ -25,7 +25,8 @@ def pre_event_contract_validation(vessel: Vessel) -> bool:
 
     if not past_contracts:
         return True
-    failed    = [c for c in past_contracts if c.get("status") == "FAILED"]
+    
+    failed = [c for c in past_contracts if c.get("status") == "FAILED"]
     completed = [c for c in past_contracts if c.get("status") in ("COMPLETED", "FAILED")]
 
     if len(failed) >= MAX_FAILED_CONTRACTS:

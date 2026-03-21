@@ -202,7 +202,6 @@ class BookingService:
             "userId",
             "vesselId",
             "stationId",
-            "chargerId",
             "startTime",
             "endTime",
         ]
@@ -221,11 +220,23 @@ class BookingService:
         if end_time <= start_time:
             raise BookingServiceError("End time must be after start time", 400)
 
-        charger = self.charger_repository.get_charger(str(data["chargerId"]))
+        station_id = str(data["stationId"])
+        charger_id = str(data.get("chargerId") or "").strip()
+        if not charger_id:
+            charger_id = self._resolve_charger_id(
+                station_id=station_id,
+                charger_type=str(data.get("chargerType") or "").strip(),
+                start_time=start_time,
+                end_time=end_time,
+            )
+            if not charger_id:
+                raise BookingServiceError("chargerId is required", 400)
+            data["chargerId"] = charger_id
+
+        charger = self.charger_repository.get_charger(charger_id)
         if not charger:
             raise BookingServiceError("Charger not found", 404)
 
-        station_id = str(data["stationId"])
         charger_station_id = str(charger.get("chargingStationId") or "")
         if charger_station_id != station_id:
             raise BookingServiceError("Charger does not belong to the requested station", 400)
@@ -259,7 +270,7 @@ class BookingService:
             userId=str(data["userId"]),
             vesselId=str(data["vesselId"]),
             stationId=station_id,
-            chargerId=str(data["chargerId"]),
+            chargerId=charger_id,
             startTime=start_time,
             endTime=end_time,
             chargerType=str(charger.get("chargerType") or ""),
@@ -494,3 +505,27 @@ class BookingService:
             if str(contract.get("bookingId") or "") == booking_id:
                 return contract
         return None
+
+    def _resolve_charger_id(
+        self,
+        station_id: str,
+        charger_type: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> str:
+        for charger in self.charger_repository.list_station_chargers(station_id):
+            charger_id = str(charger.get("id") or "")
+            if not charger_id:
+                continue
+            if charger_type and str(charger.get("chargerType") or "") != charger_type:
+                continue
+            if not _is_active_charger(charger):
+                continue
+            if self._charger_has_conflict(
+                charger_id=charger_id,
+                start_time=start_time,
+                end_time=end_time,
+            ):
+                continue
+            return charger_id
+        return ""

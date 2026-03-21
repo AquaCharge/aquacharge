@@ -18,6 +18,7 @@ drevent_service = DREventService()
 eligibility_service = EligibilityService()
 booking_service = BookingService()
 
+
 @drevents_bp.route("", methods=["GET"])
 @require_auth
 def get_drevents():

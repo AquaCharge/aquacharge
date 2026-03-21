@@ -333,8 +333,6 @@ class ContractService:
         List of created contract public dicts.
         """
 
-        max_participants = int(dr_event.get("maxParticipants") or 0)
-        target_energy_kwh = float(dr_event.get("targetEnergyKwh") or 0)
         price_per_kwh = float(dr_event.get("pricePerKwh") or 0)
         start_time = dr_event.get("startTime", "")
         end_time = dr_event.get("endTime", "")

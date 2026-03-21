@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from models.vessel import Vessel
 from db.dynamoClient import DynamoClient
-from models import contract, drevent
+from models import contract
 from boto3.dynamodb.conditions import Key
 
 

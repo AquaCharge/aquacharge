@@ -267,6 +267,28 @@ const buildFinancials = (availableEvents, filters) => {
   }
 }
 
+// Returns weekly payout data for ALL DR events (last 7 days), bucketed by day of week.
+// Shape matches the VO weeklyEarnings object so WeeklyPayoutsCard can use identical rendering logic.
+export const getMockPSOWeeklyPayouts = () => {
+  const weekStartMs = NOW_REF.getTime() - 6 * 24 * 60 * 60 * 1000 // 7-day window: [NOW_REF-6d, NOW_REF]
+  const daily = [0, 0, 0, 0, 0, 0, 0] // Mon=0 … Sun=6
+
+  for (const c of MOCK_CONTRACTS) {
+    if (c.status !== 'completed') continue
+    const endMs = new Date(c.endTime).getTime()
+    if (endMs < weekStartMs || endMs > NOW_REF.getTime()) continue
+    const weekday = new Date(c.endTime).getUTCDay() // 0=Sun … 6=Sat
+    // Convert JS Sunday-first (0=Sun) to Mon-first (0=Mon)
+    const index = weekday === 0 ? 6 : weekday - 1
+    daily[index] = Number((daily[index] + Number(c.totalValue || 0)).toFixed(2))
+  }
+
+  return {
+    total: Number(daily.reduce((sum, v) => sum + v, 0).toFixed(2)),
+    dailyPayouts: daily,
+  }
+}
+
 export const getMockPSOAnalyticsSnapshot = (filters = {}) => {
   const regionQuery = String(filters.region || '').trim().toLowerCase()
   let availableEvents = SAMPLE_EVENTS

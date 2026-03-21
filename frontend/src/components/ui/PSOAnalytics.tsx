@@ -156,7 +156,7 @@ export function EnergyTrendChart({ series, grain, isLoading }: EnergyTrendChartP
     <Card>
       <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <CardTitle className="text-lg">
+          <CardTitle className="text-lg font-light">
             Energy Discharge Over Time
           </CardTitle>
         </div>
@@ -429,7 +429,7 @@ export function FinancialTrendChart({ series, grain, isLoading }: FinancialTrend
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Financial Payout Over Time</CardTitle>
+        <CardTitle className="text-lg font-light">Financial Payout Over Time</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (

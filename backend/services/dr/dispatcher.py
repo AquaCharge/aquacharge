@@ -4,6 +4,7 @@ from services.battery_model.battery import BESS
 from models.measurments import Measurement
 from datetime import datetime, timezone
 import time
+from services.contracts import validation as contract_validation
 from decimal import Decimal
 
 
@@ -112,3 +113,6 @@ def _dispatch_loop(
             break
 
         time.sleep(INTERVAL_SECONDS)
+
+    for c in valid_contracts:
+        contract_validation.post_event_contract_validation(c)

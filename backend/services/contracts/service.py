@@ -11,6 +11,7 @@ from models.contract import Contract, ContractStatus
 from models.vessel import Vessel
 from . import validation
 
+
 def convert_decimals(obj):
     """Convert Decimal objects to float for JSON serialization."""
     if isinstance(obj, list):

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from middleware.auth import require_auth, require_role, require_user_type
+from middleware.auth import require_auth, require_user_type
 from services.bookings import BookingService, BookingServiceError
 from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError

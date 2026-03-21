@@ -2,11 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Protocol
-import uuid
 
 import config
 from db.dynamoClient import DynamoClient
-from models.booking import Booking, BookingStatus
+from models.booking import BookingStatus
 from models.contract import Contract, ContractStatus
 from models.vessel import Vessel
 from . import validation

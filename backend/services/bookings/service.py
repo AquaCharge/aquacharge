@@ -16,7 +16,8 @@ class BookingServiceError(Exception):
 
 
 def parse_datetime_safe(dt_string: str) -> datetime:
-    dt = datetime.fromisoformat(dt_string)
+    normalized = str(dt_string).strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(normalized)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt

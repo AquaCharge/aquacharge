@@ -6,7 +6,7 @@ from services.contracts import ContractService
 from services.drevents import DREventService, DREventServiceError
 from services.eligibility import EligibilityService
 from services.dr.dispatcher import _dispatch_loop
-from models.drevent import DREvent, EventStatus
+from models.drevent import EventStatus
 from models.user import UserType
 from db.dynamoClient import DynamoClient
 import config
@@ -17,11 +17,6 @@ contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
 booking_service = BookingService()
-
-
-dynamoDB_client = DynamoClient(
-    table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
-)
 
 
 @drevents_bp.route("", methods=["GET"])
@@ -271,30 +266,37 @@ def update_drevent(event_id):
 def start_drevent(event_id):
     """Start dispatching a DR event"""
     try:
-
-        item = dynamoDB_client.get_item(key={"id": event_id})
-        if not item:
-            return jsonify({"error": "DR event not found"}), 404
-
-        drevent = DREvent.from_dict(item)
-
-        if drevent.status == EventStatus.CANCELLED.value:
-            return jsonify({"error": "Cannot start a cancelled event"}), 400
+        event = drevent_service.get_event(event_id)
+        if str(event.get("status") or "") != EventStatus.COMMITTED.value:
+            return jsonify({"error": "Only committed DR events can be started"}), 400
 
         contracts_client = DynamoClient(
             table_name=config.CONTRACTS_TABLE, region_name=config.AWS_REGION
         )
-        valid_contracts = contracts_client.scan_items()
         valid_contracts = [
-            c for c in valid_contracts if c.get("drEventId") == drevent.id
+            contract
+            for contract in contracts_client.scan_items()
+            if str(contract.get("drEventId") or "") == event_id
+            and str(contract.get("status") or "").lower() == "active"
+            and bool(str(contract.get("bookingId") or "").strip())
         ]
 
         if not valid_contracts:
-            return jsonify({"error": "No valid contracts found for this event"}), 404
+            return (
+                jsonify({"error": "No booked active contracts found for this event"}),
+                400,
+            )
 
-        _dispatch_loop(event_id, valid_contracts, dynamoDB_client)
+        drevent_service.update_event(event_id, {"status": EventStatus.ACTIVE.value})
+
+        event_client = DynamoClient(
+            table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
+        )
+        _dispatch_loop(event_id, valid_contracts, event_client)
 
         return jsonify({"message": f"Dispatch completed for event {event_id}"}), 200
 
+    except DREventServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
     except Exception as e:
         return jsonify({"error": "Failed to start DR event", "details": str(e)}), 500

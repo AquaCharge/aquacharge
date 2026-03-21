@@ -50,14 +50,14 @@ const MetricCard = ({ title, value, helper, icon: Icon, loading }) => (
 
 const Analytics = () => {
   const { user } = useAuth()
+  const mockAnalyticsEnabled =
+    String(import.meta.env.VITE_PSO_ANALYTICS_ENABLE_MOCK || '').toLowerCase() === 'true'
   const [filters, setFilters] = useState({
     eventId: '',
     periodHours: '168',
     grain: 'day',
   })
-  const [useMockData, setUseMockData] = useState(
-    import.meta.env.VITE_PSO_ANALYTICS_USE_MOCK !== 'false'
-  )
+  const [useMockData, setUseMockData] = useState(false)
   const [snapshot, setSnapshot] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -73,7 +73,7 @@ const Analytics = () => {
   }, [filters])
 
   const loadAnalytics = async () => {
-    if (useMockData) {
+    if (mockAnalyticsEnabled && useMockData) {
       setError('')
       setSnapshot(getMockPSOAnalyticsSnapshot(filters))
       setIsLoading(false)
@@ -153,18 +153,20 @@ const Analytics = () => {
             Event-level and fleet-level trends for dispatch outcomes, participation, and historical performance.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={useMockData ? 'default' : 'outline'}
-            onClick={() => {
-              setIsLoading(true)
-              setUseMockData((current) => !current)
-            }}
-          >
-            {useMockData ? 'Using sample data' : 'Use sample data'}
-          </Button>
-        </div>
+        {mockAnalyticsEnabled ? (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={useMockData ? 'default' : 'outline'}
+              onClick={() => {
+                setIsLoading(true)
+                setUseMockData((current) => !current)
+              }}
+            >
+              {useMockData ? 'Using sample data' : 'Use sample data'}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <Card>

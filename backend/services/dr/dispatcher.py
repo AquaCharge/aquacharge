@@ -41,15 +41,6 @@ def _dispatch_loop(
         bess_map[contract_id] = BESS(vessel)
         contract_map[contract_id] = c
 
-    # Update event status → ACTIVE
-    dynamo_client.update_item(
-        key={"id": event_id},
-        update_data={
-            "status": "ACTIVE",
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
-        },
-    )
-
     iteration = 0
 
     while iteration != 0 or any(not bess.at_floor for bess in bess_map.values()):

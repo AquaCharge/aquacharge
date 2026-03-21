@@ -273,6 +273,10 @@ def get_my_contracts():
                 visible_contracts.append(contract)
                 continue
 
+            if contract.get("acceptedAt") and not str(contract.get("bookingId") or "").strip():
+                visible_contracts.append(contract)
+                continue
+
             eligibility = _get_current_eligibility(contract)
             if eligibility and not eligibility.get("eligible"):
                 continue

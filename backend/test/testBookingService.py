@@ -53,14 +53,32 @@ class InMemoryChargerRepository(ChargerRepository):
 
 
 class InMemoryContractRepository(ContractRepository):
+    def __init__(self, contracts=None):
+        self.contracts = {contract["id"]: dict(contract) for contract in (contracts or [])}
+
     def get_contract(self, contract_id):
-        return None
+        return self.contracts.get(contract_id)
 
     def list_contracts(self):
-        return []
+        return list(self.contracts.values())
 
     def update_contract(self, contract_id, update_data):
-        raise AssertionError("Contract updates are not expected in these tests")
+        if contract_id not in self.contracts:
+            raise AssertionError("Unknown contract update")
+        self.contracts[contract_id].update(update_data)
+        return self.contracts[contract_id]
+
+
+class InMemoryDREventService:
+    def __init__(self, events=None):
+        self.events = {event["id"]: dict(event) for event in (events or [])}
+
+    def get_event(self, event_id):
+        return self.events[event_id]
+
+    def update_event(self, event_id, data):
+        self.events[event_id].update(data)
+        return self.events[event_id]
 
 
 def _build_service(bookings=None):
@@ -172,3 +190,63 @@ def test_list_upcoming_bookings_requires_user_id():
     except BookingServiceError as error:
         assert error.status_code == 400
         assert error.message == "userId parameter is required"
+
+
+def test_create_booking_transitions_accepted_event_to_committed():
+    contract_repository = InMemoryContractRepository(
+        [
+            {
+                "id": "contract-1",
+                "vesselId": "v-1",
+                "drEventId": "event-1",
+                "vesselName": "Sea Breeze",
+                "energyAmount": 100,
+                "pricePerKwh": 0.2,
+                "totalValue": 20,
+                "startTime": "2026-03-04T11:00:00+00:00",
+                "endTime": "2026-03-04T12:00:00+00:00",
+                "status": "pending",
+                "terms": "Standard terms",
+                "acceptedAt": "2026-03-03T08:00:00+00:00",
+                "createdAt": "2026-03-03T00:00:00+00:00",
+                "createdBy": "pso-1",
+                "bookingId": None,
+            }
+        ]
+    )
+    drevent_service = InMemoryDREventService(
+        [{"id": "event-1", "status": "Accepted"}]
+    )
+    service = BookingService(
+        repository=InMemoryBookingRepository(),
+        charger_repository=InMemoryChargerRepository(
+            [
+                {
+                    "id": "charger-1",
+                    "chargingStationId": "station-1",
+                    "chargerType": "Type 2 AC",
+                    "status": 1,
+                }
+            ]
+        ),
+        contract_repository=contract_repository,
+        drevent_service=drevent_service,
+        now_provider=lambda: datetime.fromisoformat("2026-03-01T00:00:00+00:00"),
+    )
+
+    booking = service.create_booking(
+        {
+            "userId": "u-1",
+            "vesselId": "v-1",
+            "stationId": "station-1",
+            "chargerId": "charger-1",
+            "startTime": "2026-03-04T11:00:00+00:00",
+            "endTime": "2026-03-04T12:00:00+00:00",
+            "contractId": "contract-1",
+        }
+    )
+
+    assert booking["chargerId"] == "charger-1"
+    assert contract_repository.get_contract("contract-1")["status"] == "active"
+    assert contract_repository.get_contract("contract-1")["bookingId"] == booking["id"]
+    assert drevent_service.get_event("event-1")["status"] == "Committed"

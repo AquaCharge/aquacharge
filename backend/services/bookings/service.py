@@ -6,6 +6,7 @@ import config
 from db.dynamoClient import DynamoClient
 from models.booking import Booking, BookingStatus
 from models.contract import ContractStatus
+from services.drevents import DREventService, DREventServiceError
 
 
 class BookingServiceError(Exception):
@@ -85,6 +86,14 @@ class ContractRepository(Protocol):
         pass
 
 
+class DREventLifecycleService(Protocol):
+    def get_event(self, event_id: str) -> Dict[str, Any]:
+        pass
+
+    def update_event(self, event_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
+
 class DynamoBookingRepository:
     def __init__(self, client: Optional[DynamoClient] = None):
         self.client = client or DynamoClient(
@@ -152,6 +161,7 @@ class BookingService:
     repository: BookingRepository
     charger_repository: ChargerRepository
     contract_repository: ContractRepository
+    drevent_service: DREventLifecycleService
     now_provider: Callable[[], datetime]
 
     def __init__(
@@ -159,11 +169,13 @@ class BookingService:
         repository: Optional[BookingRepository] = None,
         charger_repository: Optional[ChargerRepository] = None,
         contract_repository: Optional[ContractRepository] = None,
+        drevent_service: Optional[DREventLifecycleService] = None,
         now_provider: Optional[Callable[[], datetime]] = None,
     ):
         self.repository = repository or DynamoBookingRepository()
         self.charger_repository = charger_repository or DynamoChargerRepository()
         self.contract_repository = contract_repository or DynamoContractRepository()
+        self.drevent_service = drevent_service or DREventService()
         self.now_provider = now_provider or now_utc
 
     def list_bookings(
@@ -290,6 +302,7 @@ class BookingService:
                     "updatedAt": self.now_provider().isoformat(),
                 },
             )
+            self._transition_event_to_committed_if_ready(str(contract.get("drEventId") or ""))
 
         return booking_data
 
@@ -530,3 +543,29 @@ class BookingService:
                 continue
             return charger_id
         return ""
+
+    def _transition_event_to_committed_if_ready(self, dr_event_id: str) -> None:
+        if not dr_event_id:
+            return
+
+        try:
+            dr_event = self.drevent_service.get_event(dr_event_id)
+        except DREventServiceError:
+            return
+
+        if str(dr_event.get("status") or "") != "Accepted":
+            return
+
+        has_booked_active_contract = any(
+            str(contract.get("drEventId") or "") == dr_event_id
+            and str(contract.get("status") or "").lower() == ContractStatus.ACTIVE.value
+            and bool(str(contract.get("bookingId") or "").strip())
+            for contract in self.contract_repository.list_contracts()
+        )
+        if not has_booked_active_contract:
+            return
+
+        self.drevent_service.update_event(
+            dr_event_id,
+            {"status": "Committed"},
+        )

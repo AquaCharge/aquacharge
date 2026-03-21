@@ -18,13 +18,13 @@ _vessels_client = DynamoClient(
     table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
 _measurements_client = DynamoClient(
-    table_name="aquacharge-measurements-dev", region_name="us-east-1"
+    table_name=config.MEASUREMENTS_TABLE, region_name=config.AWS_REGION
 )
 _drevents_client = DynamoClient(
-    table_name="aquacharge-drevents-dev", region_name="us-east-1"
+    table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
 )
 _stations_client = DynamoClient(
-    table_name="aquacharge-stations-dev", region_name="us-east-1"
+    table_name=config.STATIONS_TABLE, region_name=config.AWS_REGION
 )
 contract_service = ContractService()
 

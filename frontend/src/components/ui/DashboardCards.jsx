@@ -5,6 +5,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { FileCheck, Zap, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -23,18 +24,29 @@ const buildSocPath = (points, width, height) => {
     .join(' ')
 }
 
-export const MetricCard = ({ title, value, helper, loading }) => (
-  <Card>
+export const MetricCard = ({
+  title,
+  value,
+  helper,
+  loading,
+  icon: Icon,
+  className,
+  titleClassName,
+  valueClassName,
+  helperClassName,
+}) => (
+  <Card className={className}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-      <CardTitle className="text-md font-light">{title}</CardTitle>
+      <CardTitle className={cn("text-md font-light", titleClassName)}>{title}</CardTitle>
+      {Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : null}
     </CardHeader>
     <CardContent>
       {loading ? (
         <Skeleton className="h-8 w-24" />
       ) : (
-        <div className="text-2xl font-bold">{value}</div>
+        <div className={cn("text-2xl font-bold", valueClassName)}>{value}</div>
       )}
-      <p className="text-xs text-muted-foreground">{helper}</p>
+      <p className={cn("text-xs text-muted-foreground", helperClassName)}>{helper}</p>
     </CardContent>
   </Card>
 )

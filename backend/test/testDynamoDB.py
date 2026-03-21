@@ -6,31 +6,11 @@ import uuid
 from datetime import datetime
 
 
-# Track created test items for cleanup
-test_item_ids = []
-
-
 @pytest.fixture
 def dynamo_client():
     """Fixture to provide DynamoDB client for testing"""
     client = DynamoClient(table_name=config.USERS_TABLE, region_name=config.AWS_REGION)
     yield client
-
-
-@pytest.fixture(autouse=True)
-def cleanup_test_items(dynamo_client):
-    """Automatically clean up test items after each test"""
-    yield  # Run the test first
-
-    # Cleanup: Delete all test items created during the test
-    if test_item_ids:
-        for item_id in test_item_ids:
-            try:
-                dynamo_client.delete_item(key={"id": item_id})
-                print(f"Cleaned up test item: {item_id}")
-            except Exception as e:
-                print(f"Cleanup failed for {item_id}: {e}")
-        test_item_ids.clear()
 
 
 # --- Connection Tests --- #
@@ -59,7 +39,6 @@ def test_dynamodb_table_exists(dynamo_client):
 def test_put_and_get_item(dynamo_client):
     """Test putting and getting an item"""
     test_id = f"test-{uuid.uuid4()}"
-    test_item_ids.append(test_id)
 
     test_item = {
         "id": test_id,
@@ -86,7 +65,6 @@ def test_put_and_get_item(dynamo_client):
 def test_update_item(dynamo_client):
     """Test updating an item"""
     test_id = f"test-{uuid.uuid4()}"
-    test_item_ids.append(test_id)
 
     # Create initial item
     test_item = {
@@ -150,7 +128,6 @@ def test_delete_item(dynamo_client):
 def test_query_gsi_email_index(dynamo_client):
     """Test querying using the email GSI"""
     test_id = f"test-{uuid.uuid4()}"
-    test_item_ids.append(test_id)
     test_email = f"test_{test_id}@example.com"
 
     # Create item
@@ -183,7 +160,6 @@ def test_batch_write_items(dynamo_client):
     test_items = []
     for i in range(5):
         test_id = f"test-batch-{uuid.uuid4()}"
-        test_item_ids.append(test_id)
         test_items.append(
             {
                 "id": test_id,
@@ -251,7 +227,6 @@ def test_batch_write_large_batch(dynamo_client):
     test_items = []
     for i in range(30):
         test_id = f"test-large-batch-{uuid.uuid4()}"
-        test_item_ids.append(test_id)
         test_items.append(
             {
                 "id": test_id,

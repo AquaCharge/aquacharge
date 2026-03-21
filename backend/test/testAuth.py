@@ -5,10 +5,6 @@ from api.auth import auth_bp
 from api.users import users_bp
 import config
 from db.dynamoClient import DynamoClient
-from boto3.dynamodb.conditions import Key
-
-# Track created test users for cleanup
-created_test_emails = []
 
 
 @pytest.fixture
@@ -21,35 +17,6 @@ def client():
         yield client
 
 
-@pytest.fixture(autouse=True)
-def cleanup_users():
-    """Automatically clean up test users after each test"""
-    yield  # Run the test first
-
-    # Cleanup: Delete all test users created during the test
-    # BUT never delete the admin user or other pre-existing users
-    if created_test_emails:
-        dynamo_client = DynamoClient(
-            table_name=config.USERS_TABLE, region_name=config.AWS_REGION
-        )
-        for email in created_test_emails:
-            # Skip admin and any other system users
-            if email in ["admin.jason@boats.com"]:
-                continue
-
-            try:
-                users = dynamo_client.query_gsi(
-                    index_name="email-index",
-                    key_condition_expression=Key("email").eq(email),
-                )
-                if users:
-                    dynamo_client.delete_item(key={"id": users[0]["id"]})
-                    print(f"Cleaned up test user: {email}")
-            except Exception as e:
-                print(f"Cleanup failed for {email}: {e}")
-        created_test_emails.clear()
-
-
 @pytest.fixture
 def auth_user_credentials(client):
     """Create an isolated auth user for login/token/password tests."""
@@ -57,7 +24,6 @@ def auth_user_credentials(client):
     email = f"auth_test_{timestamp}@example.com"
     password = "BoatAdmin#3232"
 
-    created_test_emails.append(email)
     rv = client.post(
         "/api/auth/register",
         json={
@@ -119,32 +85,9 @@ def test_register_success(client):
     """Test successful user registration"""
     import time
 
-    # Use timestamp to ensure uniqueness and make cleanup easier
-    timestamp = str(int(time.time() * 1000))  # milliseconds for uniqueness
+    timestamp = str(int(time.time() * 1000))
     test_email = f"test_{timestamp}@example.com"
     test_display_name = f"test_{timestamp}"
-
-    # Clean up any existing test user first (from failed previous runs)
-    dynamo_client = DynamoClient(
-        table_name=config.USERS_TABLE, region_name=config.AWS_REGION
-    )
-    try:
-        # Check by email using GSI
-        existing = dynamo_client.query_gsi(
-            index_name="email-index",
-            key_condition_expression=Key("email").eq(test_email),
-        )
-        if existing:
-            for user in existing:
-                dynamo_client.delete_item(key={"id": user["id"]})
-                print(
-                    f"Pre-test cleanup: removed existing user with email {test_email}"
-                )
-    except Exception as e:
-        print(f"Pre-test cleanup failed: {e}")
-
-    # Track this email for post-test cleanup
-    created_test_emails.append(test_email)
 
     rv = client.post(
         "/api/auth/register",

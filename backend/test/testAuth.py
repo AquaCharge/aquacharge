@@ -1,10 +1,12 @@
 import pytest
 import time
-from flask import Flask
+from flask import Flask, jsonify, Blueprint
 from api.auth import auth_bp
 from api.users import users_bp
 import config
 from db.dynamoClient import DynamoClient
+from middleware.auth import require_auth, require_role, require_user_type
+from models.user import UserType
 
 
 @pytest.fixture
@@ -347,6 +349,74 @@ def test_logout(client):
     assert rv.status_code == 200
     data = rv.get_json()
     assert "message" in data
+
+
+@pytest.fixture
+def cors_client():
+    """Minimal Flask app for testing CORS preflight behavior on stacked auth decorators.
+    Uses no real infrastructure — all routes return immediately for non-OPTIONS requests.
+    """
+    cors_bp = Blueprint("cors_test", __name__)
+
+    @cors_bp.route("/auth-only", methods=["GET", "OPTIONS"])
+    @require_auth
+    def auth_only_route():
+        return jsonify({"ok": True})
+
+    @cors_bp.route("/auth-role", methods=["GET", "OPTIONS"])
+    @require_auth
+    @require_role("ADMIN")
+    def auth_role_route():
+        return jsonify({"ok": True})
+
+    @cors_bp.route("/auth-user-type", methods=["GET", "OPTIONS"])
+    @require_auth
+    @require_user_type(UserType.VESSEL_OPERATOR)
+    def auth_user_type_route():
+        return jsonify({"ok": True})
+
+    app = Flask(__name__)
+    app.register_blueprint(cors_bp, url_prefix="/test")
+    app.config["TESTING"] = True
+    with app.test_client() as c:
+        yield c
+
+
+# --- CORS Preflight Tests --- #
+
+
+def test_options_preflight_auth_only(cors_client):
+    """OPTIONS on @require_auth endpoint succeeds without Authorization header."""
+    rv = cors_client.options("/test/auth-only")
+    assert rv.status_code == 204
+
+
+def test_options_preflight_auth_role_stacked(cors_client):
+    """OPTIONS on @require_auth + @require_role endpoint succeeds without Authorization header.
+    Regression: previously @require_auth called f() which passed control to @require_role,
+    which returned 401 because current_user was never set.
+    """
+    rv = cors_client.options("/test/auth-role")
+    assert rv.status_code == 204
+
+
+def test_options_preflight_auth_user_type_stacked(cors_client):
+    """OPTIONS on @require_auth + @require_user_type endpoint succeeds without Authorization header."""
+    rv = cors_client.options("/test/auth-user-type")
+    assert rv.status_code == 204
+
+
+def test_options_preflight_no_auth_header_required(cors_client):
+    """Preflight must not require an Authorization header — browsers never send one."""
+    rv = cors_client.options("/test/auth-role", headers={})
+    assert rv.status_code == 204
+    assert "error" not in (rv.get_json() or {})
+
+
+def test_options_preflight_does_not_block_normal_auth(cors_client):
+    """Normal GET on protected endpoint still returns 401 without a token."""
+    rv = cors_client.get("/test/auth-only")
+    assert rv.status_code == 401
 
 
 @pytest.mark.order_last

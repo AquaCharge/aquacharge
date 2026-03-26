@@ -24,7 +24,7 @@ def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if request.method == "OPTIONS":
-            return f(*args, **kwargs)
+            return "", 204
 
         # Get token from Authorization header
         auth_header = request.headers.get("Authorization")
@@ -56,6 +56,9 @@ def require_role(required_role):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return "", 204
+
             # Check if user is authenticated
             if not hasattr(request, "current_user"):
                 return jsonify({"error": "Authentication required"}), 401
@@ -94,6 +97,9 @@ def require_user_type(required_type: UserType, message: str | None = None):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return "", 204
+
             if not hasattr(request, "current_user"):
                 return jsonify({"error": "Authentication required"}), 401
 

@@ -289,8 +289,8 @@ class TestScheduleConflictOnAccept:
         )
         assert result["status"] == ContractStatus.PENDING.value
         assert result["committedPowerKw"] == 45
-        assert result["energyAmount"] == pytest.approx(180.0)
-        assert float(result["totalValue"]) == pytest.approx(32.4)
+        assert result["energyAmount"] == pytest.approx(45.0)
+        assert float(result["totalValue"]) == pytest.approx(8.1)
 
     def test_accept_succeeds_when_existing_booking_does_not_overlap(self):
         service = _make_service(

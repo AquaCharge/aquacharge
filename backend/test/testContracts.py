@@ -173,6 +173,8 @@ class TestAcceptContract:
 
         assert result["status"] == ContractStatus.PENDING.value
         assert result["committedPowerKw"] == 25
+        assert result["energyAmount"] == pytest.approx(25.0)
+        assert float(result["totalValue"]) == pytest.approx(3.75)
 
     def test_accept_rejects_when_vessel_not_owned(self):
         repo = InMemoryContractRepo(

@@ -725,8 +725,8 @@ existing `Contract` object model fields/status values.
 - Complete endpoint allows only contracts currently in `pending` or `active`.
 - Accept endpoint requires `committedPowerKw` and accepts optional `operatorNotes`.
 - Successful accept stores `committedPowerKw`, `operatorNotes`, and `acceptedAt`.
-- Successful accept derives `energyAmount` from `committedPowerKw * eventDurationHours`.
-- Successful accept recalculates `totalValue` from the committed energy contribution.
+- Successful accept stores the accepted commitment amount directly in `energyAmount`.
+- Successful accept recalculates `totalValue` as `energyAmount * pricePerKwh`.
 - Successful accept keeps the contract in `pending` until a booking is confirmed.
 - Successful accept transitions a DR event from `Dispatched` to `Accepted`.
 - Successful accept no longer auto-creates a booking. It returns booking context for the

@@ -437,7 +437,6 @@ class ContractService:
         duration_hours = (contract_end - contract_start).total_seconds() / 3600.0
         if duration_hours <= 0:
             raise ContractServiceError("Contract has invalid time window", 400)
-        committed_energy_kwh = round(committed_power_kw * duration_hours, 6)
 
         # --- schedule conflict check (vessel-level) ---
         for existing_booking in self.booking_repository.list_bookings():
@@ -503,9 +502,9 @@ class ContractService:
 
         # --- keep contract pending until the VO confirms a charger booking ---
         committed_power_decimal = Decimal(str(committed_power_kw))
-        committed_energy_decimal = Decimal(str(committed_energy_kwh))
+        committed_energy_decimal = committed_power_decimal
         total_value_decimal = Decimal(
-            str(round(committed_energy_kwh * float(contract.pricePerKwh), 6))
+            str(round(committed_power_kw * float(contract.pricePerKwh), 6))
         )
 
         contract.committedPowerKw = committed_power_decimal

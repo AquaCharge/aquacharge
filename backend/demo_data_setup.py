@@ -439,11 +439,6 @@ def _collect_cleanup_targets(
         if str(item.get("id") or "")
     }
     contract_ids.discard("")
-    contract_booking_ids = {
-        str(item.get("bookingId") or "")
-        for item in contracts
-        if str(item.get("id") or "") in contract_ids and str(item.get("bookingId") or "")
-    }
     dr_event_ids = {
         str(item.get("drEventId") or "")
         for item in contracts

@@ -9,12 +9,8 @@ import config
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Keep local/demo polling usable while retaining tighter production defaults.
-default_limits = (
-    ["200 per day", "50 per hour"]
-    if config.ENVIRONMENT.strip().lower() in {"prod", "production"}
-    else ["100000 per day", "5000 per hour"]
-)
+# Keep demo polling usable in production by matching the development defaults.
+default_limits = ["100000 per day", "5000 per hour"]
 
 limiter = Limiter(
     get_remote_address,

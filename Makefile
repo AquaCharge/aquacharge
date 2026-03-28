@@ -23,7 +23,7 @@ endif
 FRONTEND_DIR ?= frontend
 BACKEND_DIR ?= backend
 
-.PHONY: test build lint install run docker ci
+.PHONY: test build lint install run docker ci demo-data-dev
 
 
 test:
@@ -118,3 +118,10 @@ endif
 
 venv:
 	$(VENV_ACTIVATE)
+
+demo-data-dev:
+ifeq ($(OS),Windows_NT)
+	cd $(BACKEND_DIR) && .venv\Scripts\python.exe demo_data_setup.py $(ARGS)
+else
+	cd $(BACKEND_DIR) && .venv/bin/python demo_data_setup.py $(ARGS)
+endif

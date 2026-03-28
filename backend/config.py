@@ -16,6 +16,28 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 
+def _is_production_environment() -> bool:
+    return ENVIRONMENT.strip().lower() in {"prod", "production"}
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
 def _table(name: str) -> str:
     env_key = f"DYNAMODB_{name.upper()}_TABLE"
     return os.environ.get(env_key) or f"aquacharge-{name.lower()}-{ENVIRONMENT}"
@@ -31,6 +53,11 @@ PORTS_TABLE = _table("ports")
 DREVENTS_TABLE = _table("drevents")
 ORGS_TABLE = _table("orgs")
 MEASUREMENTS_TABLE = _table("measurements")
+DR_START_ASYNC = _env_bool("DR_START_ASYNC", default=not _is_production_environment())
+DR_DISPATCH_INTERVAL_SECONDS = _env_int(
+    "DR_DISPATCH_INTERVAL_SECONDS",
+    default=60 if _is_production_environment() else 10,
+)
 
 
 class Config:

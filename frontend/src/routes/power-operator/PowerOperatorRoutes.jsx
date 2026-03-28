@@ -5,7 +5,6 @@ import { PowerOperatorSidebar } from './PowerOperatorSidebar'
 // Power Operator specific pages
 import PowerDashboard from '../../pages/power-operator/PowerDashboard'
 import DREventsManagement from '../../pages/power-operator/DREventsManagement'
-import ContractsManagement from '../../pages/power-operator/ContractsManagement'
 import Analytics from '../../pages/power-operator/Analytics'
 import UserManagement from '../../pages/power-operator/UserManagement'
 
@@ -21,7 +20,6 @@ const PowerOperatorRoutes = () => {
           <Routes>
             <Route path="/" element={<PowerDashboard />} />
             <Route path="/dr-events" element={<DREventsManagement />} />
-            <Route path="/contracts" element={<ContractsManagement />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/profile" element={<Profile />} />

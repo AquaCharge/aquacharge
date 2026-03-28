@@ -85,6 +85,41 @@ def _parse_measurement_timestamp(item: Dict[str, Any]) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_latest_soc_for_vessel(vessel_id: str) -> float | None:
+    latest_timestamp = None
+    latest_soc = None
+
+    try:
+        measurements = _measurements_client.scan_items()
+    except Exception:
+        return None
+
+    for item in measurements:
+        if item.get("vesselId") != vessel_id:
+            continue
+
+        timestamp = _parse_measurement_timestamp(item)
+        if timestamp is None:
+            continue
+
+        soc = _to_float(item.get("currentSOC"))
+        if soc is None:
+            continue
+
+        if latest_timestamp is None or timestamp > latest_timestamp:
+            latest_timestamp = timestamp
+            latest_soc = soc
+
+    return latest_soc
+
+
 def _enrich_active_contract(payload: Dict[str, Any], raw_contract: Dict[str, Any]):
     """Add DR event details (location, energy progress) when the DR event is active."""
     try:
@@ -234,9 +269,14 @@ def get_vo_dashboard():
         if current_vessel_id and current_vessel_id in vessel_ids:
             vessel_data = _vessels_client.get_item(key={"id": current_vessel_id})
             if vessel_data:
-                cap = float(vessel_data.get("capacity") or 0)
                 max_cap = float(vessel_data.get("maxCapacity") or 0)
-                soc = (cap / max_cap * 100.0) if max_cap > 0 else None
+                latest_soc = _get_latest_soc_for_vessel(current_vessel_id)
+                if latest_soc is not None and max_cap > 0:
+                    soc = latest_soc
+                    cap = (max_cap * latest_soc) / 100.0
+                else:
+                    cap = float(vessel_data.get("capacity") or 0)
+                    soc = (cap / max_cap * 100.0) if max_cap > 0 else None
                 current_vessel_payload = {
                     "id": vessel_data.get("id"),
                     "displayName": vessel_data.get("displayName") or "",

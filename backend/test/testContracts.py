@@ -627,6 +627,8 @@ class TestAcceptEndpoint:
     def test_start_rejects_non_committed_event(self, client, monkeypatch):
         import api.drevents as drevents_api
 
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
         monkeypatch.setattr(
             drevents_api.drevent_service,
             "get_event",
@@ -645,6 +647,8 @@ class TestAcceptEndpoint:
         import api.drevents as drevents_api
 
         captured = {}
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
 
         class _FakeDynamoClient:
             def __init__(self, table_name, region_name):
@@ -683,12 +687,12 @@ class TestAcceptEndpoint:
         monkeypatch.setattr(drevents_api, "DynamoClient", _FakeDynamoClient)
         monkeypatch.setattr(
             drevents_api,
-            "_dispatch_loop",
-            lambda event_id, valid_contracts, dynamo_client: captured.update(
+            "_start_dispatch_loop_async",
+            lambda event_id, valid_contracts, stop_signal: captured.update(
                 {
                     "event_id": event_id,
                     "contracts": valid_contracts,
-                    "client": dynamo_client,
+                    "stop_signal_set": stop_signal.is_set(),
                 }
             ),
         )
@@ -698,14 +702,19 @@ class TestAcceptEndpoint:
             headers=_jwt_headers(user_id="power-001", user_type=2),
         )
 
-        assert rv.status_code == 200
+        assert rv.status_code == 202
         assert captured["event_id"] == "dr-001"
         assert [contract["id"] for contract in captured["contracts"]] == [
             "contract-active-booked"
         ]
+        assert captured["stop_signal_set"] is False
+        assert rv.get_json()["status"] == "Active"
 
     def test_start_rejects_when_no_booked_active_contracts_exist(self, client, monkeypatch):
         import api.drevents as drevents_api
+
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
 
         class _FakeDynamoClient:
             def __init__(self, table_name, region_name):
@@ -736,6 +745,113 @@ class TestAcceptEndpoint:
 
         assert rv.status_code == 400
         assert "booked active contracts" in rv.get_json()["error"].lower()
+
+    def test_start_rejects_duplicate_dispatch_for_same_event(self, client, monkeypatch):
+        import api.drevents as drevents_api
+
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
+
+        class _FakeDynamoClient:
+            def __init__(self, table_name, region_name):
+                self.table_name = table_name
+                self.region_name = region_name
+
+            def scan_items(self):
+                return [
+                    {
+                        **_make_contract(status="active", vessel_id="vessel-abc"),
+                        "id": "contract-active-booked",
+                        "bookingId": "booking-123",
+                    }
+                ]
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Committed"},
+        )
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "update_event",
+            lambda event_id, update_data: {"id": event_id, **update_data},
+        )
+        monkeypatch.setattr(drevents_api, "DynamoClient", _FakeDynamoClient)
+        monkeypatch.setattr(
+            drevents_api,
+            "_start_dispatch_loop_async",
+            lambda event_id, valid_contracts, stop_signal: None,
+        )
+
+        first_response = client.post(
+            "/api/drevents/dr-001/start",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+        second_response = client.post(
+            "/api/drevents/dr-001/start",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert first_response.status_code == 202
+        assert second_response.status_code == 409
+        assert "already running" in second_response.get_json()["error"].lower()
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
+
+    def test_end_rejects_non_active_event(self, client, monkeypatch):
+        import api.drevents as drevents_api
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Committed"},
+        )
+
+        rv = client.post(
+            "/api/drevents/dr-001/end",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert rv.status_code == 400
+        assert "active" in rv.get_json()["error"].lower()
+
+    def test_end_marks_event_completed_and_requests_dispatch_stop(
+        self, client, monkeypatch
+    ):
+        import api.drevents as drevents_api
+
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
+
+        updates = []
+        stop_signal = drevents_api.Event()
+        drevents_api._running_dispatch_event_ids.add("dr-001")
+        drevents_api._dispatch_stop_signals["dr-001"] = stop_signal
+
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "get_event",
+            lambda event_id: {"id": event_id, "status": "Active"},
+        )
+        monkeypatch.setattr(
+            drevents_api.drevent_service,
+            "update_event",
+            lambda event_id, update_data: updates.append((event_id, update_data))
+            or {"id": event_id, **update_data},
+        )
+
+        rv = client.post(
+            "/api/drevents/dr-001/end",
+            headers=_jwt_headers(user_id="power-001", user_type=2),
+        )
+
+        assert rv.status_code == 200
+        assert rv.get_json()["status"] == "Completed"
+        assert rv.get_json()["dispatchStopped"] is True
+        assert stop_signal.is_set() is True
+        assert updates == [("dr-001", {"status": "Completed"})]
+        drevents_api._running_dispatch_event_ids.clear()
+        drevents_api._dispatch_stop_signals.clear()
 
 
 # ---------------------------------------------------------------------------

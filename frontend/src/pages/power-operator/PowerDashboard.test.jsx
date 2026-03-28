@@ -77,6 +77,24 @@ const monitoringPayload = {
   updatedAt: '2026-03-07T11:56:00+00:00',
 }
 
+const committedPayload = {
+  ...monitoringPayload,
+  selectedEvent: {
+    ...monitoringPayload.selectedEvent,
+    status: 'Committed',
+  },
+  summary: {
+    ...monitoringPayload.summary,
+    eventStatus: 'Committed',
+  },
+  availableEvents: [
+    {
+      ...monitoringPayload.availableEvents[0],
+      status: 'Committed',
+    },
+  ],
+}
+
 describe('PowerDashboard', () => {
   beforeEach(() => {
     localStorage.setItem('auth-token', 'test-token')
@@ -173,5 +191,151 @@ describe('PowerDashboard', () => {
     expect(screen.getByText('Filtered to vessel-1')).toBeInTheDocument()
     expect(screen.getByText('Contract contract-1')).toBeInTheDocument()
     expect(screen.getAllByText('30.00 kWh').length).toBeGreaterThan(0)
+  })
+
+  test('shows start button only for committed selected events', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => committedPayload,
+      })
+    )
+
+    render(<PowerDashboard />)
+
+    expect(await screen.findByRole('button', { name: 'Start DR Event' })).toBeInTheDocument()
+  })
+
+  test('shows end button only for active selected events', async () => {
+    render(<PowerDashboard />)
+
+    expect(await screen.findByRole('button', { name: 'End DR Event' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start DR Event' })).not.toBeInTheDocument()
+  })
+
+  test('starts a committed event and refreshes the same dashboard view', async () => {
+    const user = userEvent.setup()
+    let monitoringRequests = 0
+    let started = false
+
+    global.fetch = vi.fn((url, options = {}) => {
+      if (String(url).includes('/api/drevents/monitoring')) {
+        monitoringRequests += 1
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            ...(started ? monitoringPayload : committedPayload),
+          }),
+        })
+      }
+
+      if (String(url).includes('/api/drevents/event-1/start')) {
+        started = true
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            message: 'Dispatch started for event event-1',
+            eventId: 'event-1',
+            status: 'Active',
+          }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch to ${url}`))
+    })
+
+    render(<PowerDashboard />)
+
+    const startButton = await screen.findByRole('button', { name: 'Start DR Event' })
+    await user.click(startButton)
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/drevents/event-1/start'),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('Dispatch started for event event-1')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Start DR Event' })).not.toBeInTheDocument()
+    })
+    expect(monitoringRequests).toBeGreaterThan(1)
+  })
+
+  test('ends an active event and refreshes the same dashboard view', async () => {
+    const user = userEvent.setup()
+    let monitoringRequests = 0
+    let ended = false
+
+    global.fetch = vi.fn((url, options = {}) => {
+      if (String(url).includes('/api/drevents/monitoring')) {
+        monitoringRequests += 1
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            ...(ended ? {
+              ...monitoringPayload,
+              selectedEvent: {
+                ...monitoringPayload.selectedEvent,
+                status: 'Completed',
+              },
+              summary: {
+                ...monitoringPayload.summary,
+                eventStatus: 'Completed',
+              },
+              availableEvents: [
+                {
+                  ...monitoringPayload.availableEvents[0],
+                  status: 'Completed',
+                },
+              ],
+            } : monitoringPayload),
+          }),
+        })
+      }
+
+      if (String(url).includes('/api/drevents/event-1/end')) {
+        ended = true
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            message: 'DR event event-1 ended successfully',
+            eventId: 'event-1',
+            status: 'Completed',
+          }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch to ${url}`))
+    })
+
+    render(<PowerDashboard />)
+
+    const endButton = await screen.findByRole('button', { name: 'End DR Event' })
+    await user.click(endButton)
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/drevents/event-1/end'),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token',
+          }),
+        })
+      )
+    })
+
+    expect(await screen.findByText('DR event event-1 ended successfully')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'End DR Event' })).not.toBeInTheDocument()
+    })
+    expect(monitoringRequests).toBeGreaterThan(1)
   })
 })

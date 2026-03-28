@@ -4,7 +4,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from api import register_blueprints
 from monitoring import record_request_end, record_request_start, setup_logging
-import config
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})

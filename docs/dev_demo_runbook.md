@@ -1,6 +1,6 @@
 # Dev Demo Runbook
 
-## Demo data command
+## Demo data commands
 
 Preview the exact shared dev-table mutations:
 
@@ -14,12 +14,32 @@ Apply the scoped cleanup and reseed:
 make demo-data-dev ARGS="--apply"
 ```
 
+Preview the exact shared prod-table mutations:
+
+```bash
+make demo-data-prod
+```
+
+Apply the scoped cleanup and reseed to prod:
+
+```bash
+make demo-data-prod ARGS="--apply --confirm-production"
+```
+
 Safety notes:
 
-- This command is limited to `ENVIRONMENT=dev`.
+- `make demo-data-dev` runs with `ENVIRONMENT=dev`.
+- `make demo-data-prod` runs with `ENVIRONMENT=prod`.
 - It does not delete or recreate tables.
 - It performs item-level cleanup only.
-- For demo consistency, it treats the shared dev operational tables (`stations`, `chargers`, `drevents`, `contracts`, `bookings`, `measurements`) as seed-owned.
+- For demo consistency, it treats the shared demo operational tables (`stations`, `chargers`, `drevents`, `contracts`, `bookings`, `measurements`) as seed-owned.
+- Production apply requires the explicit `--confirm-production` flag.
+- The current demo-account expectations are:
+  - Dev VO: `sarah.chen@bayshipping.com`
+  - Dev PSO: `robert.wilson@gridoperator.com`
+  - Prod VO: `sarah.chen@aquacharge.demo`
+  - Prod PSO: `alex.rivera@aquacharge.demo`
+- Marco Rossi remains untouched by the current seed; the historical/live demo path is centered on Sarah Chen.
 
 ## Seeded scenario
 

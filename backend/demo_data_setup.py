@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a repeatable AquaCharge demo dataset in shared *-dev tables."""
+"""Prepare a repeatable AquaCharge demo dataset in shared environment tables."""
 
 from __future__ import annotations
 
@@ -22,8 +22,16 @@ from models.measurments import Measurement
 from models.station import Station, StationStatus
 from models.vessel import Vessel
 
-SARAH_EMAIL = "sarah.chen@bayshipping.com"
-ROBERT_EMAIL = "robert.wilson@gridoperator.com"
+DEMO_ACCOUNTS = {
+    "dev": {
+        "vo_email": "sarah.chen@bayshipping.com",
+        "pso_email": "robert.wilson@gridoperator.com",
+    },
+    "prod": {
+        "vo_email": "sarah.chen@aquacharge.demo",
+        "pso_email": "alex.rivera@aquacharge.demo",
+    },
+}
 
 DEMO_STATION_IDS = {
     "moncton": "demo-station-moncton",
@@ -125,6 +133,24 @@ class MutationPlan:
     deletes: Dict[str, List[str]]
     puts: Dict[str, List[Dict[str, Any]]]
     user_updates: List[Dict[str, Any]]
+
+
+def _normalize_environment_name(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"prod", "production"}:
+        return "prod"
+    if normalized in {"dev", "development"}:
+        return "dev"
+    return normalized
+
+
+def _demo_accounts_for_environment(environment_name: str) -> Dict[str, str]:
+    accounts = DEMO_ACCOUNTS.get(environment_name)
+    if not accounts:
+        raise RuntimeError(
+            f"No demo account mapping exists for environment {environment_name!r}."
+        )
+    return accounts
 
 
 def _build_demo_stations() -> List[Dict[str, Any]]:
@@ -413,14 +439,19 @@ def _collect_cleanup_targets(
     stations_client: DynamoClient,
     chargers_client: DynamoClient,
 ) -> MutationPlan:
-    sarah_user = _find_user_by_email(users_client, SARAH_EMAIL)
-    robert_user = _find_user_by_email(users_client, ROBERT_EMAIL)
+    environment_name = _normalize_environment_name(config.ENVIRONMENT)
+    account_config = _demo_accounts_for_environment(environment_name)
+    vo_email = account_config["vo_email"]
+    pso_email = account_config["pso_email"]
+
+    sarah_user = _find_user_by_email(users_client, vo_email)
+    robert_user = _find_user_by_email(users_client, pso_email)
     if not sarah_user or not robert_user:
         missing = []
         if not sarah_user:
-            missing.append(SARAH_EMAIL)
+            missing.append(vo_email)
         if not robert_user:
-            missing.append(ROBERT_EMAIL)
+            missing.append(pso_email)
         raise RuntimeError(f"Required demo users were not found: {', '.join(missing)}")
 
     sarah_user_id = str(sarah_user["id"])
@@ -430,7 +461,7 @@ def _collect_cleanup_targets(
     vessel_ids = {str(item.get("id") or "") for item in sarah_vessels if item.get("id")}
     vessel_ids.add(DEMO_VESSEL_ID)
 
-    # In shared dev we want the demo reseed to fully own the operational DR tables so
+    # For the shared demo environment we want the reseed to fully own the operational DR tables so
     # no stale Created/Dispatched/Active records remain visible in the UI.
     contracts = contracts_client.scan_items()
     contract_ids = {
@@ -473,7 +504,7 @@ def _collect_cleanup_targets(
     measurement_ids.discard("")
 
     stations = stations_client.scan_items()
-    # In shared dev we want the station selector to show only the curated demo set.
+    # We want the station selector to show only the curated demo set.
     station_ids = {
         str(item.get("id") or "")
         for item in stations
@@ -593,19 +624,48 @@ def _apply_plan(plan: MutationPlan) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Clean and reseed a safe AquaCharge demo scenario in shared dev tables."
+        description="Clean and reseed a safe AquaCharge demo scenario in shared tables."
+    )
+    parser.add_argument(
+        "--target-environment",
+        choices=("dev", "prod"),
+        default=_normalize_environment_name(config.ENVIRONMENT),
+        help=(
+            "Environment dataset to target. This must match ENVIRONMENT so the "
+            "resolved table names are correct."
+        ),
     )
     parser.add_argument(
         "--apply",
         action="store_true",
         help="Apply the planned mutations. Without this flag the command runs in dry-run mode.",
     )
+    parser.add_argument(
+        "--confirm-production",
+        action="store_true",
+        help="Required together with --apply when targeting production tables.",
+    )
     args = parser.parse_args()
 
-    if config.ENVIRONMENT.strip().lower() not in {"dev", "development"}:
+    resolved_environment = _normalize_environment_name(config.ENVIRONMENT)
+    if args.target_environment not in {"dev", "prod"}:
         print(
             f"Refusing to run against ENVIRONMENT={config.ENVIRONMENT!r}. "
-            "This command is limited to shared dev tables.",
+            "Only dev and prod environments are supported.",
+            file=sys.stderr,
+        )
+        return 2
+    if resolved_environment != args.target_environment:
+        print(
+            "Refusing to run because the requested target environment does not match "
+            f"ENVIRONMENT={config.ENVIRONMENT!r}. Export ENVIRONMENT={args.target_environment} "
+            "so the script resolves the correct DynamoDB tables.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.target_environment == "prod" and args.apply and not args.confirm_production:
+        print(
+            "Refusing to apply production mutations without --confirm-production.",
             file=sys.stderr,
         )
         return 2
@@ -632,11 +692,15 @@ def main() -> int:
     _print_plan(plan)
 
     if not args.apply:
-        print("\nDry run only. Re-run with --apply to mutate the shared dev tables.")
+        print(
+            "\nDry run only. Re-run with --apply"
+            + (" --confirm-production" if args.target_environment == "prod" else "")
+            + f" to mutate the shared {args.target_environment} tables."
+        )
         return 0
 
     _apply_plan(plan)
-    print("\nDemo data apply complete.")
+    print(f"\nDemo data apply complete for shared {args.target_environment} tables.")
     return 0
 
 

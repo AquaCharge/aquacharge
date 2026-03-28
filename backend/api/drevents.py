@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from threading import Event, Lock, Thread
 
 from middleware.auth import require_auth, require_user_type
 from services.bookings import BookingService, BookingServiceError
@@ -17,6 +18,85 @@ contract_service = ContractService()
 drevent_service = DREventService()
 eligibility_service = EligibilityService()
 booking_service = BookingService()
+_dispatch_lock = Lock()
+_running_dispatch_event_ids: set[str] = set()
+_dispatch_stop_signals: dict[str, Event] = {}
+
+
+def _mark_dispatch_running(event_id: str) -> Event | None:
+    with _dispatch_lock:
+        if event_id in _running_dispatch_event_ids:
+            return None
+        _running_dispatch_event_ids.add(event_id)
+        stop_signal = Event()
+        _dispatch_stop_signals[event_id] = stop_signal
+        return stop_signal
+
+
+def _request_dispatch_stop(event_id: str) -> bool:
+    with _dispatch_lock:
+        stop_signal = _dispatch_stop_signals.get(event_id)
+        if not stop_signal:
+            return False
+        stop_signal.set()
+        return True
+
+
+def _clear_dispatch_running(event_id: str) -> None:
+    with _dispatch_lock:
+        _running_dispatch_event_ids.discard(event_id)
+        _dispatch_stop_signals.pop(event_id, None)
+
+
+def _complete_event_if_still_active(
+    event_id: str, event_client: DynamoClient
+) -> None:
+    event = event_client.get_item(key={"id": event_id}) or {}
+    if str(event.get("status") or "") != EventStatus.ACTIVE.value:
+        return
+
+    event_client.update_item(
+        key={"id": event_id},
+        update_data={"status": EventStatus.COMPLETED.value},
+    )
+
+
+def _dispatch_event_runner(
+    event_id: str,
+    valid_contracts: list[dict],
+    event_client: DynamoClient,
+    stop_signal: Event,
+) -> None:
+    try:
+        _dispatch_loop(
+            event_id,
+            valid_contracts,
+            event_client,
+            stop_signal=stop_signal,
+        )
+        _complete_event_if_still_active(event_id, event_client)
+    finally:
+        _clear_dispatch_running(event_id)
+
+
+def _start_dispatch_loop_async(
+    event_id: str, valid_contracts: list[dict], stop_signal: Event
+):
+    event_client = DynamoClient(
+        table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
+    )
+    if config.DR_START_ASYNC:
+        thread = Thread(
+            target=_dispatch_event_runner,
+            args=(event_id, valid_contracts, event_client, stop_signal),
+            daemon=True,
+            name=f"dr-dispatch-{event_id}",
+        )
+        thread.start()
+        return thread
+
+    _dispatch_event_runner(event_id, valid_contracts, event_client, stop_signal)
+    return None
 
 
 @drevents_bp.route("", methods=["GET"])
@@ -287,16 +367,68 @@ def start_drevent(event_id):
                 400,
             )
 
+        stop_signal = _mark_dispatch_running(event_id)
+        if not stop_signal:
+            return jsonify({"error": "DR event is already running"}), 409
+
         drevent_service.update_event(event_id, {"status": EventStatus.ACTIVE.value})
 
-        event_client = DynamoClient(
-            table_name=config.DREVENTS_TABLE, region_name=config.AWS_REGION
-        )
-        _dispatch_loop(event_id, valid_contracts, event_client)
+        try:
+            _start_dispatch_loop_async(event_id, valid_contracts, stop_signal)
+        except Exception:
+            _clear_dispatch_running(event_id)
+            try:
+                drevent_service.update_event(
+                    event_id, {"status": EventStatus.COMMITTED.value}
+                )
+            except Exception:
+                pass
+            raise
 
-        return jsonify({"message": f"Dispatch completed for event {event_id}"}), 200
+        return (
+            jsonify(
+                {
+                    "message": f"Dispatch started for event {event_id}",
+                    "eventId": event_id,
+                    "status": EventStatus.ACTIVE.value,
+                    "contractsStarted": len(valid_contracts),
+                    "async": bool(config.DR_START_ASYNC),
+                }
+            ),
+            202,
+        )
 
     except DREventServiceError as error:
         return jsonify({"error": error.message}), error.status_code
     except Exception as e:
         return jsonify({"error": "Failed to start DR event", "details": str(e)}), 500
+
+
+@drevents_bp.route("/<event_id>/end", methods=["POST"])
+@require_auth
+@require_user_type(UserType.POWER_OPERATOR, "Only power operators can end DR events")
+def end_drevent(event_id):
+    """End an active DR event and stop its live dispatch loop."""
+    try:
+        event = drevent_service.get_event(event_id)
+        if str(event.get("status") or "") != EventStatus.ACTIVE.value:
+            return jsonify({"error": "Only active DR events can be ended"}), 400
+
+        dispatch_stopped = _request_dispatch_stop(event_id)
+        drevent_service.update_event(event_id, {"status": EventStatus.COMPLETED.value})
+
+        return (
+            jsonify(
+                {
+                    "message": f"DR event {event_id} ended successfully",
+                    "eventId": event_id,
+                    "status": EventStatus.COMPLETED.value,
+                    "dispatchStopped": dispatch_stopped,
+                }
+            ),
+            200,
+        )
+    except DREventServiceError as error:
+        return jsonify({"error": error.message}), error.status_code
+    except Exception as error:
+        return jsonify({"error": "Failed to end DR event", "details": str(error)}), 500

@@ -62,6 +62,8 @@ const formatDateRange = (start, end) => {
 }
 
 const clampPercent = (value) => Math.max(0, Math.min(100, Number(value || 0)))
+const canStartEvent = (event) => String(event?.status || '') === 'Committed'
+const canEndEvent = (event) => String(event?.status || '') === 'Active'
 
 const getSeriesValue = (point) =>
   Number(
@@ -115,7 +117,15 @@ const DashboardKeyStat = ({ label, value, secondary }) => (
   </div>
 )
 
-const EventSummaryCard = ({ selectedEvent, summary, loading }) => {
+const EventSummaryCard = ({
+  selectedEvent,
+  summary,
+  loading,
+  onStart,
+  onEnd,
+  startPending,
+  endPending,
+}) => {
   const targetEnergy = Number(summary.targetEnergyKwh ?? selectedEvent?.targetEnergyKwh ?? 0)
   const progressPercent = clampPercent(summary.progressPercent)
 
@@ -149,6 +159,27 @@ const EventSummaryCard = ({ selectedEvent, summary, loading }) => {
               <Badge className={STATUS_TONES[selectedEvent.status] || STATUS_TONES.Created}>
                 {selectedEvent.status}
               </Badge>
+              {canStartEvent(selectedEvent) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onStart?.(selectedEvent)}
+                  disabled={startPending}
+                >
+                  {startPending ? 'Starting…' : 'Start DR Event'}
+                </Button>
+              ) : null}
+              {canEndEvent(selectedEvent) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => onEnd?.(selectedEvent)}
+                  disabled={endPending}
+                >
+                  {endPending ? 'Ending…' : 'End DR Event'}
+                </Button>
+              ) : null}
             </div>
             <div className="mt-4 grid gap-6 sm:grid-cols-2">
               <div>
@@ -339,6 +370,12 @@ const PowerDashboard = () => {
   const [snapshot, setSnapshot] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [startError, setStartError] = useState('')
+  const [startSuccess, setStartSuccess] = useState('')
+  const [startPendingEventId, setStartPendingEventId] = useState('')
+  const [endError, setEndError] = useState('')
+  const [endSuccess, setEndSuccess] = useState('')
+  const [endPendingEventId, setEndPendingEventId] = useState('')
   const [selectedCurveId, setSelectedCurveId] = useState('all')
 
   const authToken = localStorage.getItem('auth-token')
@@ -385,6 +422,72 @@ const PowerDashboard = () => {
       setError(loadError.message || 'Failed to load monitoring dashboard.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleStartEvent = async (event) => {
+    if (!event?.id || !authToken) return
+
+    setStartError('')
+    setStartSuccess('')
+    setEndError('')
+    setEndSuccess('')
+    setStartPendingEventId(event.id)
+
+    try {
+      const response = await fetch(getApiEndpoint(`/api/drevents/${event.id}/start`), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || payload.details || 'Failed to start DR event')
+      }
+
+      const payload = await response.json().catch(() => ({}))
+      setStartSuccess(payload.message || `Dispatch started for event ${event.id}`)
+      setIsLoading(true)
+      await loadDashboard()
+    } catch (startEventError) {
+      setStartError(startEventError.message || 'Failed to start DR event.')
+    } finally {
+      setStartPendingEventId('')
+    }
+  }
+
+  const handleEndEvent = async (event) => {
+    if (!event?.id || !authToken) return
+
+    setStartError('')
+    setStartSuccess('')
+    setEndError('')
+    setEndSuccess('')
+    setEndPendingEventId(event.id)
+
+    try {
+      const response = await fetch(getApiEndpoint(`/api/drevents/${event.id}/end`), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || payload.details || 'Failed to end DR event')
+      }
+
+      const payload = await response.json().catch(() => ({}))
+      setEndSuccess(payload.message || `DR event ${event.id} ended successfully`)
+      setIsLoading(true)
+      await loadDashboard()
+    } catch (endEventError) {
+      setEndError(endEventError.message || 'Failed to end DR event.')
+    } finally {
+      setEndPendingEventId('')
     }
   }
 
@@ -495,6 +598,38 @@ const PowerDashboard = () => {
         </Card>
       ) : null}
 
+      {startError ? (
+        <Card className="border-destructive bg-destructive/5">
+          <CardContent className="pt-4">
+            <p className="text-sm text-destructive">{startError}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {startSuccess ? (
+        <Card className="border-emerald-200 bg-emerald-50/80">
+          <CardContent className="pt-4">
+            <p className="text-sm text-emerald-700">{startSuccess}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {endError ? (
+        <Card className="border-destructive bg-destructive/5">
+          <CardContent className="pt-4">
+            <p className="text-sm text-destructive">{endError}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {endSuccess ? (
+        <Card className="border-blue-200 bg-blue-50/80">
+          <CardContent className="pt-4">
+            <p className="text-sm text-blue-700">{endSuccess}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader className="flex flex-col gap-3 pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1.5">
@@ -534,7 +669,15 @@ const PowerDashboard = () => {
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(320px,1fr)]">
-        <EventSummaryCard selectedEvent={selectedEvent} summary={summary} loading={isLoading} />
+        <EventSummaryCard
+          selectedEvent={selectedEvent}
+          summary={summary}
+          loading={isLoading}
+          onStart={handleStartEvent}
+          onEnd={handleEndEvent}
+          startPending={startPendingEventId === selectedEvent?.id}
+          endPending={endPendingEventId === selectedEvent?.id}
+        />
         <EventDetailsCard selectedEvent={selectedEvent} summary={summary} loading={isLoading} />
       </div>
 

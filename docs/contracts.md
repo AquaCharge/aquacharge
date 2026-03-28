@@ -269,6 +269,7 @@ Error JSON schema:
 - Model fields: `chargerType` (string), `capacity` (float, kWh), `maxCapacity` (float, kWh).
 - Validation: `capacity` must never exceed `maxCapacity` on create or update.
 - Required fields for create: `userId`, `displayName`, `vesselType`, `chargerType`, `capacity`, `maxCapacity`.
+- `GET /api/vessels` and `GET /api/vessels/{vesselId}` enrich vessel payloads with `currentSoc` when newer measurement telemetry exists for that vessel. In that case, `capacity` is normalized to the telemetry-backed current stored charge in kWh so VO vessel cards and dashboard metrics stay aligned.
 ## DR Events Endpoints
 
 ### `GET /api/drevents`
@@ -359,7 +360,7 @@ Power-operator monitoring snapshot for the dashboard.
 
 Query parameters:
 
-- `eventId` (optional): filter to a specific DR event
+- `eventId` (optional): filter to a specific DR event. Omit it to aggregate across all matching events in the selected window.
 - `region` (optional): substring match against station `city`, `provinceOrState`, or `country`
 - `periodHours` (optional, default `24`): lookback window in hours, clamped to `1..168`
 
@@ -547,6 +548,7 @@ Success response `200`:
 Analytics rules:
 
 - Uses measurement telemetry (`energyKwh`, `powerKw`, `timestamp`) as source of truth for historical trends.
+- When `eventId` is omitted, the response aggregates across all matching events and `selectedEvent` is `null`.
 - `timeSeries` is rolled up by `grain` (`hour` or `day`) for charting.
 - `completionRatePercent = completedContracts / finalizedContracts * 100`, where finalized contracts are `completed|failed|cancelled`.
 - `participationRatePercent = uniqueMeasuredVessels / sum(maxParticipants for filtered events) * 100`.
@@ -610,7 +612,7 @@ Success response `200`:
 
 Semantics:
 
-- `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` is computed as `(capacity / maxCapacity) * 100` when `maxCapacity > 0`. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
+- `currentVessel` is derived from the authenticated user’s `currentVesselId`; null if not set or vessel not found. `socPercent` uses the latest measurement telemetry for that vessel when available, and falls back to `(capacity / maxCapacity) * 100` only when telemetry is missing. `capacityKwh` follows the same source of truth so VO dashboard and vessel detail surfaces remain consistent. `dischargeRateKw` is the vessel’s `maxDischargeRate`.
 - `metrics` are over all of the VO’s vessels (contracts completed, total kWh from completed/active contracts, total earnings from completed contracts).
 - `activeContract` is the first contract with status `active` and `endTime` after now; `timeRemainingSeconds` is seconds until that `endTime`. When the linked DR event is in `Active` status, the response is enriched with `drEventStatus`, `station` (location from DREvent → Station), `committedPowerKw`, `energyDeliveredKwh` (sum of measurements), and `energyRemainingKwh`. These fields are absent when no DR event is actively running.
 - `weeklyEarnings`: current week (Monday–Sunday UTC). `dailyEarnings` is 7 values for Mon..Sun from completed contracts whose `endTime` falls in that week; `todayIndex` is 0–6 (Mon=0, Sun=6).
@@ -807,14 +809,60 @@ Rules:
 - Only events currently in `Committed` may be started.
 - Only contracts with status `active` and a non-empty `bookingId` participate in discharge.
 - Starting is rejected when no booked active contracts exist for the event.
+- Starting is asynchronous in development/demo mode: the endpoint updates the event to `Active`,
+  returns immediately, and the dispatch loop continues in the background.
+- Starting is rejected with `409` when the same event is already running.
 - Post-event validation writes contract settlement statuses using the contract schema’s
   lowercase values (`completed` or `failed`).
+
+Success response `202`:
+
+```json
+{
+  "message": "Dispatch started for event string",
+  "eventId": "string",
+  "status": "Active",
+  "contractsStarted": 0,
+  "async": true
+}
+```
 
 Error responses:
 
 - `400`: invalid lifecycle state for start or no booked active contracts
+- `409`: event is already running
 - `404`: DR event not found
 - `500`: dispatch loop failure
+
+### `POST /api/drevents/{eventId}/end`
+
+Ends an `Active` DR event from the PSO side and requests the live dispatch loop to stop.
+This is intended for demo/dev operator control where the real event would otherwise run
+until vessels reach their SOC floor.
+
+Success response `200`:
+
+```json
+{
+  "message": "DR event string ended successfully",
+  "eventId": "string",
+  "status": "Completed",
+  "dispatchStopped": true
+}
+```
+
+Notes:
+
+- The event is marked `Completed` immediately.
+- `dispatchStopped` reports whether an in-process dispatch runner was found and signaled.
+- The dispatch runner will also auto-complete an `Active` event when it exhausts all
+  participating vessels naturally.
+
+Error responses:
+
+- `400`: event is not `Active`
+- `404`: DR event not found
+- `500`: end failure
 
 ### `POST /api/contracts/{contractId}/accept`
 

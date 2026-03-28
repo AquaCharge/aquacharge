@@ -101,12 +101,6 @@ const Analytics = () => {
 
       const payload = await response.json()
       setSnapshot(payload)
-      if (!filters.eventId && payload.filters?.eventId) {
-        setFilters((current) => ({
-          ...current,
-          eventId: payload.filters.eventId,
-        }))
-      }
     } catch (loadError) {
       setError(loadError.message || 'Failed to load analytics.')
     } finally {
@@ -185,7 +179,7 @@ const Analytics = () => {
               value={filters.eventId}
               onChange={(event) => setFilters((current) => ({ ...current, eventId: event.target.value }))}
             >
-              <option value="">All matching events</option>
+              <option value="">Aggregate across all DR events</option>
               {availableEvents.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.id} · {event.status} · {event.regionLabel || event.stationId}

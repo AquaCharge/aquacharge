@@ -1,16 +1,83 @@
-from flask import Blueprint, jsonify, request
-from models.vessel import Vessel
-from datetime import datetime
-from db.dynamoClient import DynamoClient
-from boto3.dynamodb.conditions import Key
 import decimal
+from datetime import datetime, timezone
+
+from boto3.dynamodb.conditions import Key
+from flask import Blueprint, jsonify, request
+
 import config
+from db.dynamoClient import DynamoClient
+from models.vessel import Vessel
 
 dynamoDB_client = DynamoClient(
     table_name=config.VESSELS_TABLE, region_name=config.AWS_REGION
 )
+_measurements_client = DynamoClient(
+    table_name=config.MEASUREMENTS_TABLE, region_name=config.AWS_REGION
+)
 
 vessels_bp = Blueprint("vessels", __name__)
+
+
+def _parse_measurement_timestamp(item: dict):
+    raw = item.get("timestamp") or item.get("createdAt")
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_soc_by_vessel_id() -> dict:
+    latest_soc = {}
+    try:
+        measurements = _measurements_client.scan_items()
+    except Exception:
+        return latest_soc
+
+    for measurement in measurements:
+        vessel_id = measurement.get("vesselId")
+        if not vessel_id:
+            continue
+
+        soc = _to_float(measurement.get("currentSOC"))
+        if soc is None:
+            continue
+
+        timestamp = _parse_measurement_timestamp(measurement)
+        if timestamp is None:
+            continue
+
+        current_best = latest_soc.get(vessel_id)
+        if current_best is None or timestamp > current_best["timestamp"]:
+            latest_soc[vessel_id] = {"timestamp": timestamp, "soc": soc}
+
+    return {
+        vessel_id: payload["soc"] for vessel_id, payload in latest_soc.items()
+    }
+
+
+def _enrich_vessel_payload(vessel: dict, latest_soc_lookup: dict) -> dict:
+    enriched = dict(vessel)
+    latest_soc = latest_soc_lookup.get(enriched.get("id"))
+    if latest_soc is None:
+        return enriched
+
+    enriched["currentSoc"] = round(latest_soc, 2)
+
+    max_capacity = _to_float(enriched.get("maxCapacity"))
+    if max_capacity is not None and max_capacity > 0:
+        enriched["capacity"] = round((max_capacity * latest_soc) / 100.0, 4)
+
+    return enriched
 
 
 @vessels_bp.route("", methods=["GET"])
@@ -26,6 +93,12 @@ def get_vessels():
     else:
         vessels = dynamoDB_client.scan_items()
 
+    latest_soc_lookup = _latest_soc_by_vessel_id()
+    vessels = [
+        _enrich_vessel_payload(vessel, latest_soc_lookup)
+        for vessel in vessels
+    ]
+
     return jsonify(vessels), 200
 
 
@@ -35,6 +108,8 @@ def get_vessel(vessel_id: str):
     vessel = dynamoDB_client.get_item({"id": vessel_id})
     if not vessel:
         return jsonify({"error": "Vessel not found"}), 404
+
+    vessel = _enrich_vessel_payload(vessel, _latest_soc_by_vessel_id())
 
     return jsonify(vessel), 200
 

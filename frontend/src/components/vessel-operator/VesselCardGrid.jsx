@@ -15,10 +15,16 @@ function parseVessel(v) {
   const maxCapacity = parseFloat(v.maxCapacity) || 0
   const explicitSoc = parseFloat(v.currentSoc ?? v.soc)
   const derivedSoc = maxCapacity > 0 ? (capacity / maxCapacity) * 100 : 0
+  const resolvedSoc = Number.isFinite(explicitSoc)
+    ? explicitSoc
+    : Math.max(0, Math.min(100, derivedSoc))
+  const currentChargeKwh = maxCapacity > 0
+    ? (maxCapacity * resolvedSoc) / 100
+    : capacity
 
   return {
     ...v,
-    capacity,
+    capacity: currentChargeKwh,
     maxCapacity,
     maxChargeRate:    parseFloat(v.maxChargeRate)     || 0,
     minChargeRate:    parseFloat(v.minChargeRate)     || 0,
@@ -26,9 +32,7 @@ function parseVessel(v) {
     rangeMeters:      parseFloat(v.rangeMeters)       || 0,
     latitude:         parseFloat(v.latitude)          || 0,
     longitude:        parseFloat(v.longitude)         || 0,
-    soc:              Number.isFinite(explicitSoc)
-      ? explicitSoc
-      : Math.max(0, Math.min(100, derivedSoc)),
+    soc:              resolvedSoc,
   };
 }
 
@@ -77,7 +81,8 @@ function DetailPanel({ vessel, onClose }) {
     ["Vessel ID",           <span className="font-mono text-xs break-all">{vessel.id}</span>],
     ["Vessel Type",         vessel.vesselType],
     ["Charger Type",        vessel.chargerType],
-    ["Battery Capacity",    `${vessel.capacity.toFixed(1)} kWh`],
+    ["Battery Capacity",    `${vessel.maxCapacity.toFixed(1)} kWh`],
+    ["Current Charge",      `${vessel.capacity.toFixed(1)} kWh`],
     ["Max Charge Rate",     `${vessel.maxChargeRate} kW`],
     ["Min Charge Rate",     `${vessel.minChargeRate} kW`],
     ["Max Discharge Rate",  `${vessel.maxDischargeRate} kW`],
@@ -208,7 +213,7 @@ function VesselCard({ vessel, onSelect }) {
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
           <div>
             <p className="text-xs text-muted-foreground mb-0.5">Battery Capacity</p>
-            <p className="text-sm font-semibold text-gray-800">{vessel.capacity.toFixed(1)} kWh</p>
+            <p className="text-sm font-semibold text-gray-800">{vessel.maxCapacity.toFixed(1)} kWh</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground mb-0.5">Range</p>

@@ -6,15 +6,22 @@ from datetime import datetime, timezone
 import time
 from services.contracts import validation as contract_validation
 from decimal import Decimal
+from threading import Event
 
 
-INTERVAL_SECONDS = 1 * 60  # 1 minutes
-INTERVAL_HOURS = INTERVAL_SECONDS / 3600.0
+def get_dispatch_interval_seconds() -> int:
+    return max(1, int(getattr(config, "DR_DISPATCH_INTERVAL_SECONDS", 60)))
 
 
 def _dispatch_loop(
-    event_id: str, valid_contracts: list[dict], dynamo_client: DynamoClient
+    event_id: str,
+    valid_contracts: list[dict],
+    dynamo_client: DynamoClient,
+    stop_signal: Event | None = None,
 ):
+    if stop_signal and stop_signal.is_set():
+        print(f"[DR {event_id}] Stop requested before dispatch began.")
+        return
 
     # Prepare clients for vessels and measurements
     vessels_client = DynamoClient(
@@ -44,11 +51,19 @@ def _dispatch_loop(
     iteration = 0
 
     while iteration != 0 or any(not bess.at_floor for bess in bess_map.values()):
+        if stop_signal and stop_signal.is_set():
+            print(f"[DR {event_id}] Stop requested. Ending dispatch loop.")
+            break
+
         iteration += 1
         now = datetime.now(timezone.utc)
         active_vessels = 0
+        interval_seconds = get_dispatch_interval_seconds()
+        interval_hours = interval_seconds / 3600.0
 
         for contract_id, bess in bess_map.items():
+            if stop_signal and stop_signal.is_set():
+                break
 
             # Skip if vessel has hit the SOC floor
             if bess.at_floor:
@@ -57,9 +72,9 @@ def _dispatch_loop(
             active_vessels += 1
 
             # Calculate discharge for this interval
-            transfer = bess.determine_energy_transfer(INTERVAL_HOURS, "discharge")
+            transfer = bess.determine_energy_transfer(interval_hours, "discharge")
             energy_delivered = abs(transfer)  # kWh delivered to grid (positive)
-            discharge_setpoint = energy_delivered / INTERVAL_HOURS  # kW
+            discharge_setpoint = energy_delivered / interval_hours  # kW
 
             # Apply transfer to in-memory battery state
             bess.apply_transfer(transfer)
@@ -103,7 +118,10 @@ def _dispatch_loop(
             )
             break
 
-        time.sleep(INTERVAL_SECONDS)
+        time.sleep(interval_seconds)
 
     for c in valid_contracts:
-        contract_validation.post_event_contract_validation(c)
+        try:
+            contract_validation.post_event_contract_validation(c)
+        except ValueError as error:
+            print(f"[DR {event_id}] Contract validation skipped: {error}")

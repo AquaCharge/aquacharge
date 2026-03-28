@@ -2,6 +2,7 @@ import pytest
 from flask import Flask
 import jwt
 from datetime import datetime, timedelta
+import api.vessels as vessels_api
 from api.bookings import bookings_bp
 from api.chargers import chargers_bp
 from api.stations import stations_bp
@@ -347,6 +348,60 @@ def test_update_vessel_max_capacity(client):
     )
     assert rv2.status_code == 400
     assert "capacity must not exceed maxCapacity" in rv2.get_json()["error"]
+
+
+def test_get_vessels_prefers_latest_measured_soc(client, monkeypatch):
+    vessel = {
+        "id": "vessel-telemetry-001",
+        "userId": "user-telemetry-001",
+        "displayName": "Telemetry Ferry",
+        "vesselType": "ferry",
+        "chargerType": "CCS",
+        "capacity": decimal.Decimal("96.0"),
+        "maxCapacity": decimal.Decimal("120.0"),
+    }
+
+    measurements = [
+        {
+            "id": "measurement-old",
+            "vesselId": "vessel-telemetry-001",
+            "currentSOC": decimal.Decimal("80.0"),
+            "timestamp": "2026-03-27T12:00:00+00:00",
+        },
+        {
+            "id": "measurement-new",
+            "vesselId": "vessel-telemetry-001",
+            "currentSOC": decimal.Decimal("44.0"),
+            "timestamp": "2026-03-28T12:00:00+00:00",
+        },
+    ]
+
+    class _FakeVesselsClient:
+        def query_gsi(self, index_name, key_condition_expression):
+            return [dict(vessel)]
+
+        def scan_items(self):
+            return [dict(vessel)]
+
+        def get_item(self, key):
+            if key == {"id": vessel["id"]}:
+                return dict(vessel)
+            return {}
+
+    class _FakeMeasurementsClient:
+        def scan_items(self):
+            return [dict(item) for item in measurements]
+
+    monkeypatch.setattr(vessels_api, "dynamoDB_client", _FakeVesselsClient())
+    monkeypatch.setattr(vessels_api, "_measurements_client", _FakeMeasurementsClient())
+
+    rv = client.get("/api/vessels?userId=user-telemetry-001")
+
+    assert rv.status_code == 200
+    body = rv.get_json()
+    assert len(body) == 1
+    assert body[0]["currentSoc"] == 44.0
+    assert body[0]["capacity"] == pytest.approx(52.8)
 
 
 # --- Role-Based Route Separation Tests --- #

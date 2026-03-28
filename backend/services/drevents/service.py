@@ -573,6 +573,7 @@ class DREventService:
             filtered_events.append({**event, "station": station or {}})
 
         event_ids = {event.get("id") for event in filtered_events if event.get("id")}
+        explicit_event_id = (event_id or "").strip()
         selected_event = None
         if event_id:
             selected_event = next(
@@ -580,13 +581,6 @@ class DREventService:
             )
             if selected_event is None:
                 raise DREventServiceError("DR event not found", 404)
-        elif filtered_events:
-            selected_event = sorted(
-                filtered_events,
-                key=lambda item: parse_datetime(item.get("startTime"))
-                or datetime.min.replace(tzinfo=timezone.utc),
-                reverse=True,
-            )[0]
 
         selected_event_id = selected_event.get("id") if selected_event else None
 
@@ -869,7 +863,7 @@ class DREventService:
         return convert_decimals(
             {
                 "filters": {
-                    "eventId": selected_event_id,
+                    "eventId": explicit_event_id or "",
                     "region": region or "",
                     "periodHours": period_hours,
                     "grain": normalized_grain,

@@ -21,7 +21,7 @@ vi.mock('@/components/ui/PSOAnalytics', () => ({
 
 const analyticsPayload = {
   filters: {
-    eventId: 'event-1',
+    eventId: '',
     region: '',
     periodHours: 168,
     grain: 'day',
@@ -113,6 +113,7 @@ describe('Analytics', () => {
 
     expect(screen.getByText('Historical Analytics')).toBeInTheDocument()
     expect(screen.getByText('DispatchHeatmap')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Aggregate across all DR events' })).toBeInTheDocument()
     expect(
       screen.getByRole('option', {
         name: 'event-1 · Active · Halifax, NS, Canada',

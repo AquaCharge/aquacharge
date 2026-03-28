@@ -1,4 +1,4 @@
-import { Home, BarChart3, Users, FileText, LogOut, User, CalendarPlus } from "lucide-react"
+import { Home, BarChart3, Users, LogOut, User, CalendarPlus } from "lucide-react"
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -22,11 +22,6 @@ const powerOperatorItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
-  },
-  {
-    title: "Smart Contracts",
-    url: "/contracts",
-    icon: FileText,
   },
   {
     title: "DR Events",

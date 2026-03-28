@@ -1,6 +1,6 @@
 # AquaCharge
 
-A minimal React + Flask starter for **AquaCharge** — an application exploring EV V2G booking and monitoring.
+AquaCharge is a React + Flask application for managing EV V2G charging, DR event dispatch, contract booking, and live monitoring for vessel operators and power system operators.
 
 ---
 
@@ -18,6 +18,8 @@ A minimal React + Flask starter for **AquaCharge** — an application exploring 
 
 - **Frontend:** React (Vite), Yarn
 - **Backend:** Python, Flask, Flask-CORS
+- **Data:** AWS DynamoDB
+- **Infrastructure:** AWS CDK
 - **Dev Proxy:** Vite → Flask (`/api` proxied to `http://localhost:5050`)
 - **Tooling:** Git, virtualenv, Node.js/Yarn
 
@@ -72,6 +74,52 @@ Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite
 
 ---
 
+## 🎬 Demo Data Seeding
+
+For presentation rehearsal and dashboard population, the repo includes a shared dev-data setup command that resets the shared dev operational dataset and reseeds a realistic historical DR scenario.
+
+### Preview the dev-table mutations
+
+```bash
+make demo-data-dev
+```
+
+### Apply the reseed
+
+```bash
+make demo-data-dev ARGS="--apply"
+```
+
+### What the demo seed does
+
+- Creates demo stations in Moncton, Saint John, and Halifax
+- Creates chargers for each seeded station
+- Sets Sarah Chen’s current vessel to the Halifax demo vessel
+- Seeds six finalized historical DR events across the previous week (`Completed` / `Archived`) with bookings, contracts, and measurements
+- Leaves a clean live-demo path so you can create, dispatch, accept, book, start, monitor, and end a new DR event manually
+- Fills the PSO Analytics aggregate 7-day view with enough historical activity to make the charts readable without hand-entering data
+
+### Safety notes
+
+- The command is intended for the shared `*-dev` tables only
+- Dry-run is the default behavior
+- Cleanup is item-level only; it does not recreate or truncate tables
+- It treats the shared dev demo operational tables (`stations`, `chargers`, `drevents`, `contracts`, `bookings`, `measurements`) as seed-owned for rehearsal consistency
+- Full rehearsal instructions are in `docs/dev_demo_runbook.md`
+
+## 🧪 Demo-Critical Flow
+
+The current presentation-ready flow is:
+
+1. PSO reviews seeded history on `Dashboard` and `Analytics`
+2. PSO creates and dispatches a new DR event
+3. VO accepts the contract and books a charger
+4. PSO starts the committed event from the PSO dashboard
+5. Live measurements stream to the PSO and VO dashboards
+6. PSO can end the active event manually for demo timing control
+
+---
+
 ## 🤝 How to Contribute (Branch Flow)
 
 1. **Sync main**
@@ -81,7 +129,7 @@ Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite
    ```
 2. **Create a feature branch**
    ```bash
-   git checkout -b feature/<short-description>
+   git checkout -b ticket/<short-description>
    ```
 3. **Commit regularly**
    ```bash
@@ -90,7 +138,7 @@ Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite
    ```
 4. **Push and open a PR**
    ```bash
-   git push -u origin feature/<short-description>
+   git push -u origin ticket/<short-description>
    # then open a Pull Request in GitHub from your branch → main
    ```
 5. **Reviews & merge**
@@ -104,15 +152,22 @@ Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite
 ```
 aquacharge/
 ├─ backend/
-│  ├─ app.py                 # Flask app: /api/health, /api/sites
+│  ├─ app.py                 # Flask app entrypoint
+│  ├─ api/                   # Backend API routes
+│  ├─ services/              # Domain services and dispatch logic
+│  ├─ models/                # Data models
+│  ├─ test/                  # Backend test suite
 │  └─ requirements.txt
 ├─ frontend/
 │  ├─ index.html
 │  ├─ package.json           # Yarn
 │  ├─ vite.config.js         # Proxies /api → http://localhost:5050
 │  └─ src/
-│     ├─ main.jsx
-│     └─ App.jsx
+│     ├─ components/
+│     ├─ contexts/
+│     └─ pages/
+├─ infra/                    # AWS CDK infrastructure
+├─ docs/                     # Contracts, runbooks, and implementation notes
 ├─ .gitignore
 └─ README.md
 ```

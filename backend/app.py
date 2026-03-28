@@ -4,16 +4,22 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from api import register_blueprints
 from monitoring import record_request_end, record_request_start, setup_logging
+import config
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Configure rate limiting to prevent abuse
-# Default: 200 requests per day, 50 per hour
+# Keep local/demo polling usable while retaining tighter production defaults.
+default_limits = (
+    ["200 per day", "50 per hour"]
+    if config.ENVIRONMENT.strip().lower() in {"prod", "production"}
+    else ["100000 per day", "5000 per hour"]
+)
+
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=default_limits,
     storage_uri="memory://",
     strategy="fixed-window",
 )

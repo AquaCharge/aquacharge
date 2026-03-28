@@ -76,7 +76,7 @@ Vite proxies **/api** to **http://localhost:5050** (configured in `frontend/vite
 
 ## 🎬 Demo Data Seeding
 
-For presentation rehearsal and dashboard population, the repo includes a shared dev-data setup command that resets the shared dev operational dataset and reseeds a realistic historical DR scenario.
+For presentation rehearsal and dashboard population, the repo includes shared demo-data setup commands for both `-dev` and `-prod` tables. Both commands use the same seed logic and produce the same curated station/charger/vessel/history dataset.
 
 ### Preview the dev-table mutations
 
@@ -90,6 +90,18 @@ make demo-data-dev
 make demo-data-dev ARGS="--apply"
 ```
 
+### Preview the prod-table mutations
+
+```bash
+make demo-data-prod
+```
+
+### Apply the prod reseed
+
+```bash
+make demo-data-prod ARGS="--apply --confirm-production"
+```
+
 ### What the demo seed does
 
 - Creates demo stations in Moncton, Saint John, and Halifax
@@ -101,10 +113,18 @@ make demo-data-dev ARGS="--apply"
 
 ### Safety notes
 
-- The command is intended for the shared `*-dev` tables only
 - Dry-run is the default behavior
 - Cleanup is item-level only; it does not recreate or truncate tables
-- It treats the shared dev demo operational tables (`stations`, `chargers`, `drevents`, `contracts`, `bookings`, `measurements`) as seed-owned for rehearsal consistency
+- It treats the shared demo operational tables (`stations`, `chargers`, `drevents`, `contracts`, `bookings`, `measurements`) as seed-owned for rehearsal consistency
+- `make demo-data-dev` runs with `ENVIRONMENT=dev`
+- `make demo-data-prod` runs with `ENVIRONMENT=prod`
+- Production apply is blocked unless `--confirm-production` is provided
+- Dev seed expects existing users:
+  - VO: `sarah.chen@bayshipping.com`
+  - PSO: `robert.wilson@gridoperator.com`
+- Prod seed expects existing users:
+  - VO: `sarah.chen@aquacharge.demo`
+  - PSO: `alex.rivera@aquacharge.demo`
 - Full rehearsal instructions are in `docs/dev_demo_runbook.md`
 
 ## 🧪 Demo-Critical Flow

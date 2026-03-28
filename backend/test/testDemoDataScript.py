@@ -14,12 +14,13 @@ def _client(table_name: str) -> DynamoClient:
 
 
 def _seed_demo_users():
+    dev_accounts = demo_script._demo_accounts_for_environment("dev")
     users_client = _client(config.USERS_TABLE)
     users_client.put_item(
         {
             "id": "user-sarah-demo",
             "displayName": "Sarah Chen",
-            "email": demo_script.SARAH_EMAIL,
+            "email": dev_accounts["vo_email"],
             "passwordHash": "hash",
             "role": 2,
             "type": 1,
@@ -31,7 +32,7 @@ def _seed_demo_users():
         {
             "id": "user-robert-demo",
             "displayName": "Robert Wilson",
-            "email": demo_script.ROBERT_EMAIL,
+            "email": dev_accounts["pso_email"],
             "passwordHash": "hash",
             "role": 2,
             "type": 2,
@@ -266,3 +267,45 @@ def test_demo_data_apply_reseeds_history_and_updates_dashboards(monkeypatch):
     assert analytics["summary"]["eventsConsidered"] == len(demo_script.DEMO_EVENT_IDS)
     assert len(analytics["timeSeries"]) >= 5
     assert len(analytics["financials"]["timeSeries"]) >= 5
+
+
+def test_demo_data_rejects_prod_apply_without_confirmation(monkeypatch):
+    monkeypatch.setattr(demo_script.config, "ENVIRONMENT", "prod")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "setup_demo_data.py",
+            "--target-environment",
+            "prod",
+            "--apply",
+        ],
+    )
+
+    exit_code = demo_script.main()
+
+    assert exit_code == 2
+
+
+def test_demo_data_rejects_when_target_environment_mismatches_runtime(monkeypatch):
+    monkeypatch.setattr(demo_script.config, "ENVIRONMENT", "dev")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "setup_demo_data.py",
+            "--target-environment",
+            "prod",
+        ],
+    )
+
+    exit_code = demo_script.main()
+
+    assert exit_code == 2
+
+
+def test_demo_data_uses_prod_account_mapping():
+    prod_accounts = demo_script._demo_accounts_for_environment("prod")
+
+    assert prod_accounts["vo_email"] == "sarah.chen@aquacharge.demo"
+    assert prod_accounts["pso_email"] == "alex.rivera@aquacharge.demo"

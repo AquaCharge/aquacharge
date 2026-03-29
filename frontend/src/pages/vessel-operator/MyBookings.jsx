@@ -29,6 +29,11 @@ const mapStatus = (value) => {
   return STATUS_LABELS[value] || 'pending'
 }
 
+const toFiniteNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const getStatusColors = (status) => {
   switch (status) {
     case 'confirmed':
@@ -50,6 +55,7 @@ const MyBookings = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [highlightedBookingId, setHighlightedBookingId] = useState(null)
+  const [selectedBookingId, setSelectedBookingId] = useState(null)
   const bookingRefs = useRef({})
   const highlightTimeout = useRef(null)
 
@@ -103,8 +109,8 @@ const MyBookings = () => {
             vessel: booking.vesselId || '—',
             chargerType: booking.chargerType || '—',
             location: locationParts.join(', ') || '—',
-            lat: typeof station.latitude === 'number' ? station.latitude : null,
-            lng: typeof station.longitude === 'number' ? station.longitude : null,
+            lat: toFiniteNumber(station.latitude),
+            lng: toFiniteNumber(station.longitude),
             country: station.country || '',
             durationHours
           }
@@ -147,6 +153,7 @@ const MyBookings = () => {
 
   const handleBookingFocus = (bookingId) => {
     if (!bookingId) return
+    setSelectedBookingId(bookingId)
     if (highlightTimeout.current) {
       clearTimeout(highlightTimeout.current)
     }
@@ -156,6 +163,11 @@ const MyBookings = () => {
       node.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
     highlightTimeout.current = setTimeout(() => setHighlightedBookingId(null), 3000)
+  }
+
+  const handleBookingSelect = (bookingId) => {
+    if (!bookingId) return
+    handleBookingFocus(bookingId)
   }
 
   const renderStatValue = (value, suffix = '') => {
@@ -235,6 +247,8 @@ const MyBookings = () => {
                 {bookings.map((booking) => (
                   <div
                     key={booking.id}
+                    role="button"
+                    tabIndex={0}
                     ref={(node) => {
                       if (node) {
                         bookingRefs.current[booking.id] = node
@@ -242,9 +256,16 @@ const MyBookings = () => {
                         delete bookingRefs.current[booking.id]
                       }
                     }}
+                    onClick={() => handleBookingSelect(booking.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        handleBookingSelect(booking.id)
+                      }
+                    }}
                     className={`border rounded-lg p-4 transition-colors ${
                       highlightedBookingId === booking.id
-                        ? 'ring-2 ring-primary ring-offset-2'
+                        ? 'ring-2 ring-primary ring-offset-2 bg-primary/5'
                         : 'hover:bg-gray-50'
                     }`}
                   >
@@ -315,7 +336,12 @@ const MyBookings = () => {
           </CardContent>
         </Card>
 
-        <PortMapCard bookings={bookings} isLoading={isLoading} onBookingFocus={handleBookingFocus} />
+        <PortMapCard
+          bookings={bookings}
+          isLoading={isLoading}
+          onBookingFocus={handleBookingFocus}
+          selectedBookingId={selectedBookingId}
+        />
       </div>
     </div>
   )

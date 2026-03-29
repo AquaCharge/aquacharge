@@ -1,11 +1,45 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, Popup, TileLayer, useMapEvents } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getApiEndpoint } from '@/config/api'
 
 const DEFAULT_CENTER = [20, 0]
 const DEFAULT_ZOOM = 2
 const MIN_DISCOVERY_ZOOM = 5
+
+const createWaypointIcon = ({ isFocused, bookingCount }) => {
+  const fillColor = isFocused ? '#f59e0b' : '#10b981'
+  const markerLabel = Number.isFinite(bookingCount) ? bookingCount : ''
+
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        background-color: ${fillColor};
+        width: 40px;
+        height: 40px;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <span style="
+          transform: rotate(45deg);
+          color: white;
+          font-weight: bold;
+          font-size: 14px;
+        ">${markerLabel}</span>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40]
+  })
+}
 
 const MapBoundsTracker = ({ onViewportChange }) => {
   const map = useMapEvents({
@@ -31,6 +65,76 @@ const MapBoundsTracker = ({ onViewportChange }) => {
   return null
 }
 
+const FocusedBookingPopupController = ({
+  bookingPorts,
+  focusedBookingId,
+  markerRefs,
+  programmaticPopupPortRef,
+  focusZoom
+}) => {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!focusedBookingId) {
+      return
+    }
+
+    const focusedPort = bookingPorts.find((port) =>
+      port.bookings.some((booking) => booking.id === focusedBookingId)
+    )
+    if (!focusedPort) {
+      return
+    }
+
+    let marker = markerRefs.current[focusedPort.id]
+    if (!marker) {
+      const retryId = setTimeout(() => {
+        marker = markerRefs.current[focusedPort.id]
+        if (!marker) {
+          return
+        }
+
+        programmaticPopupPortRef.current = focusedPort.id
+        const targetZoom = Math.max(map.getZoom(), focusZoom)
+        const openPopup = () => {
+          marker.openPopup()
+        }
+
+        map.once('moveend', openPopup)
+        map.flyTo([focusedPort.lat, focusedPort.lng], targetZoom, {
+          animate: true,
+          duration: 0.5
+        })
+
+        setTimeout(openPopup, 700)
+      }, 120)
+
+      return () => clearTimeout(retryId)
+    }
+
+    programmaticPopupPortRef.current = focusedPort.id
+    const targetZoom = Math.max(map.getZoom(), focusZoom)
+    const openPopup = () => {
+      marker.openPopup()
+    }
+
+    map.once('moveend', openPopup)
+    map.flyTo([focusedPort.lat, focusedPort.lng], targetZoom, {
+      animate: true,
+      duration: 0.5
+    })
+
+    // Fallback for cases where moveend does not fire as expected.
+    const timeoutId = setTimeout(openPopup, 700)
+    return () => {
+      map.off('moveend', openPopup)
+      clearTimeout(timeoutId)
+    }
+  }, [bookingPorts, focusedBookingId, map, markerRefs, programmaticPopupPortRef, focusZoom])
+
+  return null
+}
+
 /**
  * Single child component for MapContainer so the context provider
  * receives exactly one child (avoids "context consumer" / render2 errors
@@ -42,59 +146,109 @@ const MapLayers = ({
   shouldShowNearbyMarkers,
   filteredNearbyPorts,
   handleViewportChange,
-  handleMarkerClick,
-  onBookingFocus
-}) => (
-  <>
+  onBookingFocus,
+  focusedBookingId,
+  focusZoom
+}) => {
+  const markerRefs = useRef({})
+  const programmaticPopupPortRef = useRef(null)
+  const [manualPopupPortId, setManualPopupPortId] = useState(null)
+
+  return (
+    <>
     <TileLayer
       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
     />
     <MapBoundsTracker onViewportChange={handleViewportChange} />
+    <FocusedBookingPopupController
+      bookingPorts={bookingPorts}
+      focusedBookingId={focusedBookingId}
+      markerRefs={markerRefs}
+      programmaticPopupPortRef={programmaticPopupPortRef}
+      focusZoom={focusZoom}
+    />
 
     {viewMode === 'bookings' &&
-      bookingPorts.map((port) => (
-        <CircleMarker
-          key={`booking-${port.id}`}
-          center={[port.lat, port.lng]}
-          radius={10}
-          pathOptions={{
-            color: '#0f172a',
-            weight: 2,
-            fillColor: '#0ea5e9',
-            fillOpacity: 0.9
-          }}
-          eventHandlers={{
-            click: () => handleMarkerClick(port)
-          }}
-        >
-          <Popup>
-            <div className="space-y-2">
-              <div>
-                <p className="font-semibold">{port.name}</p>
-                {port.country && (
-                  <p className="text-sm text-muted-foreground">{port.country}</p>
+      bookingPorts.map((port) => {
+        const focusedBooking = port.bookings.find((booking) => booking.id === focusedBookingId) || null
+        const isManualPopupForPort = manualPopupPortId === port.id
+        const shouldShowBookingList = isManualPopupForPort || !focusedBooking
+
+        return (
+          <Marker
+            key={`booking-${port.id}`}
+            position={[port.lat, port.lng]}
+            ref={(node) => {
+              if (node) {
+                markerRefs.current[port.id] = node
+              } else {
+                delete markerRefs.current[port.id]
+              }
+            }}
+            icon={createWaypointIcon({
+              isFocused: Boolean(focusedBooking),
+              bookingCount: port.bookings.length
+            })}
+            eventHandlers={{
+              popupopen: () => {
+                if (programmaticPopupPortRef.current === port.id) {
+                  programmaticPopupPortRef.current = null
+                  setManualPopupPortId(null)
+                  return
+                }
+
+                setManualPopupPortId(port.id)
+              },
+              popupclose: () => {
+                setManualPopupPortId((current) => (current === port.id ? null : current))
+              }
+            }}
+          >
+            <Popup closeOnClick={false} autoClose={false}>
+              <div className="space-y-3 min-w-[220px]">
+                <div>
+                  <p className="font-semibold">{port.name}</p>
+                  {port.country && (
+                    <p className="text-sm text-muted-foreground">{port.country}</p>
+                  )}
+                </div>
+                {focusedBooking && !shouldShowBookingList && (
+                  <div className="rounded-md border bg-slate-50 p-2 text-xs space-y-1">
+                    <p className="font-semibold text-slate-800">Selected Booking</p>
+                    <p className="text-slate-700">{focusedBooking.formattedDate} • {focusedBooking.formattedTime}</p>
+                    <p className="text-slate-700">Status: {focusedBooking.status}</p>
+                    <p className="text-slate-700">Vessel: {focusedBooking.vessel}</p>
+                    <p className="text-slate-700">Type: {focusedBooking.chargerType}</p>
+                  </div>
+                )}
+                {shouldShowBookingList && (
+                  <div className="space-y-1">
+                    {port.bookings.map((booking) => (
+                      <button
+                        key={booking.id}
+                        type="button"
+                        className={`w-full rounded-md border px-2 py-1 text-left text-sm transition-colors ${
+                          focusedBookingId === booking.id ? 'bg-muted border-slate-400' : 'hover:bg-muted'
+                        }`}
+                        onClick={() => {
+                          setManualPopupPortId(null)
+                          onBookingFocus(booking.id)
+                        }}
+                      >
+                        <p className="font-medium">{booking.stationName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {booking.formattedDate} • {booking.formattedTime}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-              <div className="space-y-1">
-                {port.bookings.map((booking) => (
-                  <button
-                    key={booking.id}
-                    type="button"
-                    className="w-full rounded-md border px-2 py-1 text-left text-sm hover:bg-muted"
-                    onClick={() => onBookingFocus(booking.id)}
-                  >
-                    <p className="font-medium">{booking.stationName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {booking.formattedDate} • {booking.formattedTime}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
+            </Popup>
+          </Marker>
+        )
+      })}
 
     {shouldShowNearbyMarkers &&
       filteredNearbyPorts.map((port) => (
@@ -119,13 +273,16 @@ const MapLayers = ({
           </Popup>
         </CircleMarker>
       ))}
-  </>
-)
+    </>
+  )
+}
 
 const PortMap = ({
   bookings = [],
   viewMode = 'both',
   onBookingFocus = () => {},
+  focusedBookingId = null,
+  focusZoom = 11,
   defaultCenter = DEFAULT_CENTER,
   defaultZoom = DEFAULT_ZOOM
 }) => {
@@ -140,6 +297,10 @@ const PortMap = ({
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    setCurrentZoom(defaultZoom)
+  }, [defaultZoom])
 
   const bookingPorts = useMemo(() => {
     const grouped = {}
@@ -169,6 +330,15 @@ const PortMap = ({
     () => new Set(bookingPorts.map((port) => `${port.lat.toFixed(4)}-${port.lng.toFixed(4)}`)),
     [bookingPorts]
   )
+
+  const visibleBookingPorts = useMemo(() => {
+    if (!focusedBookingId) {
+      return bookingPorts
+    }
+    return bookingPorts.filter((port) =>
+      port.bookings.some((booking) => booking.id === focusedBookingId)
+    )
+  }, [bookingPorts, focusedBookingId])
 
   const shouldShowNearbyMarkers = viewMode === 'nearby' && currentZoom >= MIN_DISCOVERY_ZOOM
 
@@ -229,15 +399,6 @@ const PortMap = ({
     return () => clearTimeout(timeout)
   }, [pendingBounds, fetchPorts])
 
-  const handleMarkerClick = useCallback(
-    (port) => {
-      if (port.bookings?.length) {
-        onBookingFocus(port.bookings[0].id)
-      }
-    },
-    [onBookingFocus]
-  )
-
   const mapKey = `${defaultCenter[0]}-${defaultCenter[1]}-${defaultZoom}`
   const shouldShowZoomHint =
     viewMode === 'nearby' &&
@@ -266,12 +427,13 @@ const PortMap = ({
       >
         <MapLayers
           viewMode={viewMode}
-          bookingPorts={bookingPorts}
+          bookingPorts={visibleBookingPorts}
           shouldShowNearbyMarkers={shouldShowNearbyMarkers}
           filteredNearbyPorts={filteredNearbyPorts}
           handleViewportChange={handleViewportChange}
-          handleMarkerClick={handleMarkerClick}
           onBookingFocus={onBookingFocus}
+          focusedBookingId={focusedBookingId}
+          focusZoom={focusZoom}
         />
       </MapContainer>
 

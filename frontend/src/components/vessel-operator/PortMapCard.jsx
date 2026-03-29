@@ -8,7 +8,12 @@ const viewModes = [
   { value: 'nearby', label: 'Nearby' }
 ]
 
-const PortMapCard = ({ bookings = [], isLoading = false, onBookingFocus = () => {} }) => {
+const PortMapCard = ({
+  bookings = [],
+  isLoading = false,
+  onBookingFocus = () => {},
+  selectedBookingId = null
+}) => {
   const [viewMode, setViewMode] = useState('bookings')
 
   const bookingsWithCoords = useMemo(
@@ -26,7 +31,13 @@ const PortMapCard = ({ bookings = [], isLoading = false, onBookingFocus = () => 
   }, [bookingsWithCoords])
 
   const defaultCenter = upcomingBooking ? [upcomingBooking.lat, upcomingBooking.lng] : [20, 0]
-  const defaultZoom = upcomingBooking ? 5 : 2
+  const defaultZoom = upcomingBooking ? 6 : 2
+  const focusedBooking = useMemo(
+    () => bookingsWithCoords.find((booking) => booking.id === selectedBookingId) ?? null,
+    [bookingsWithCoords, selectedBookingId]
+  )
+  const mapCenter = focusedBooking ? [focusedBooking.lat, focusedBooking.lng] : defaultCenter
+  const mapZoom = focusedBooking ? 11 : defaultZoom
 
   return (
     <Card className="h-full">
@@ -60,8 +71,9 @@ const PortMapCard = ({ bookings = [], isLoading = false, onBookingFocus = () => 
           bookings={bookingsWithCoords}
           onBookingFocus={onBookingFocus}
           viewMode={viewMode}
-          defaultCenter={defaultCenter}
-          defaultZoom={defaultZoom}
+          defaultCenter={mapCenter}
+          defaultZoom={mapZoom}
+          focusedBookingId={selectedBookingId}
         />
         {!bookingsWithCoords.length && !isLoading && (
           <p className="mt-3 text-sm text-muted-foreground">

@@ -1,11 +1,45 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, Popup, TileLayer, useMapEvents } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getApiEndpoint } from '@/config/api'
 
 const DEFAULT_CENTER = [20, 0]
 const DEFAULT_ZOOM = 2
 const MIN_DISCOVERY_ZOOM = 5
+
+const createWaypointIcon = ({ isFocused, bookingCount }) => {
+  const fillColor = isFocused ? '#f59e0b' : '#10b981'
+  const markerLabel = Number.isFinite(bookingCount) ? bookingCount : ''
+
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        background-color: ${fillColor};
+        width: 40px;
+        height: 40px;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <span style="
+          transform: rotate(45deg);
+          color: white;
+          font-weight: bold;
+          font-size: 14px;
+        ">${markerLabel}</span>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40]
+  })
+}
 
 const MapBoundsTracker = ({ onViewportChange }) => {
   const map = useMapEvents({
@@ -43,7 +77,8 @@ const MapLayers = ({
   filteredNearbyPorts,
   handleViewportChange,
   handleMarkerClick,
-  onBookingFocus
+  onBookingFocus,
+  focusedBookingId
 }) => (
   <>
     <TileLayer
@@ -54,16 +89,13 @@ const MapLayers = ({
 
     {viewMode === 'bookings' &&
       bookingPorts.map((port) => (
-        <CircleMarker
+        <Marker
           key={`booking-${port.id}`}
-          center={[port.lat, port.lng]}
-          radius={10}
-          pathOptions={{
-            color: '#0f172a',
-            weight: 2,
-            fillColor: '#0ea5e9',
-            fillOpacity: 0.9
-          }}
+          position={[port.lat, port.lng]}
+          icon={createWaypointIcon({
+            isFocused: port.bookings.some((booking) => booking.id === focusedBookingId),
+            bookingCount: port.bookings.length
+          })}
           eventHandlers={{
             click: () => handleMarkerClick(port)
           }}
@@ -93,7 +125,7 @@ const MapLayers = ({
               </div>
             </div>
           </Popup>
-        </CircleMarker>
+        </Marker>
       ))}
 
     {shouldShowNearbyMarkers &&
@@ -126,6 +158,7 @@ const PortMap = ({
   bookings = [],
   viewMode = 'both',
   onBookingFocus = () => {},
+  focusedBookingId = null,
   defaultCenter = DEFAULT_CENTER,
   defaultZoom = DEFAULT_ZOOM
 }) => {
@@ -140,6 +173,10 @@ const PortMap = ({
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    setCurrentZoom(defaultZoom)
+  }, [defaultZoom])
 
   const bookingPorts = useMemo(() => {
     const grouped = {}
@@ -169,6 +206,15 @@ const PortMap = ({
     () => new Set(bookingPorts.map((port) => `${port.lat.toFixed(4)}-${port.lng.toFixed(4)}`)),
     [bookingPorts]
   )
+
+  const visibleBookingPorts = useMemo(() => {
+    if (!focusedBookingId) {
+      return bookingPorts
+    }
+    return bookingPorts.filter((port) =>
+      port.bookings.some((booking) => booking.id === focusedBookingId)
+    )
+  }, [bookingPorts, focusedBookingId])
 
   const shouldShowNearbyMarkers = viewMode === 'nearby' && currentZoom >= MIN_DISCOVERY_ZOOM
 
@@ -266,12 +312,13 @@ const PortMap = ({
       >
         <MapLayers
           viewMode={viewMode}
-          bookingPorts={bookingPorts}
+          bookingPorts={visibleBookingPorts}
           shouldShowNearbyMarkers={shouldShowNearbyMarkers}
           filteredNearbyPorts={filteredNearbyPorts}
           handleViewportChange={handleViewportChange}
           handleMarkerClick={handleMarkerClick}
           onBookingFocus={onBookingFocus}
+          focusedBookingId={focusedBookingId}
         />
       </MapContainer>
 

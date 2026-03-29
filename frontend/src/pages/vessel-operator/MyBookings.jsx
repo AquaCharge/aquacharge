@@ -153,6 +153,7 @@ const MyBookings = () => {
 
   const handleBookingFocus = (bookingId) => {
     if (!bookingId) return
+    setSelectedBookingId(bookingId)
     if (highlightTimeout.current) {
       clearTimeout(highlightTimeout.current)
     }
@@ -166,7 +167,6 @@ const MyBookings = () => {
 
   const handleBookingSelect = (bookingId) => {
     if (!bookingId) return
-    setSelectedBookingId(bookingId)
     handleBookingFocus(bookingId)
   }
 

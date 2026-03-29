@@ -73,6 +73,7 @@ const PortMapCard = ({
           viewMode={viewMode}
           defaultCenter={mapCenter}
           defaultZoom={mapZoom}
+          focusZoom={mapZoom}
           focusedBookingId={selectedBookingId}
         />
         {!bookingsWithCoords.length && !isLoading && (
